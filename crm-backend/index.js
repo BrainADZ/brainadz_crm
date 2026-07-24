@@ -37,7 +37,7 @@ const parseAllowedOrigins = (value) =>
         'http://localhost:5174',
         'https://democrm.brainadzlive.in',
         'http://democrm.brainadzlive.in',
-        'https://crm.brainadz.com/',
+        'https://crm.brainadz.com',
       ];
 
 const allowedOrigins = parseAllowedOrigins(process.env.CLIENT_ORIGINS);
