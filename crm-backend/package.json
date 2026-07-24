@@ -1,0 +1,37 @@
+{
+  "name": "crm-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "seed:admin": "node scripts/addAdminUser.js",
+    "migrate:rbac": "node scripts/migrateRbac.js",
+    "migrate:organization-access": "node scripts/migrateOrganizationAccess.js",
+    "setup:quotations": "node scripts/ensureQuotationPermissions.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "crm-backend": "file:",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "jwt-decode": "^4.0.0",
+    "mongodb": "^6.11.0",
+    "mongoose": "^8.19.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^9.0.3",
+    "pdfkit": "^0.19.1",
+    "prop-types": "^15.8.1",
+    "socket.io": "^4.7.5",
+    "xlsx": "^0.18.5"
+  },
+  "description": ""
+}

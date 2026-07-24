@@ -1,0 +1,16 @@
+{
+  "name": "company-crm",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names backend,dashboard --prefix-colors blue,green \"npm run dev:backend\" \"npm run dev:dashboard\"",
+    "dev:backend": "npm --prefix crm-backend run dev",
+    "dev:dashboard": "npm --prefix crm-dashboard run dev",
+    "format": "prettier --write crm-dashboard/src crm-dashboard/scripts crm-dashboard/index.html crm-dashboard/eslint.config.js crm-dashboard/vite.config.js crm-dashboard/package.json crm-dashboard/tsconfig.json crm-backend package.json README.md --ignore-unknown",
+    "format:check": "prettier --check crm-dashboard/src crm-dashboard/scripts crm-dashboard/index.html crm-dashboard/eslint.config.js crm-dashboard/vite.config.js crm-dashboard/package.json crm-dashboard/tsconfig.json crm-backend package.json README.md --ignore-unknown"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "prettier": "^3.9.5"
+  }
+}
