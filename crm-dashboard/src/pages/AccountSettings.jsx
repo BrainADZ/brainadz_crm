@@ -4,8 +4,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import PasswordInput from '../components/PasswordInput';
 import { API_BASE_URL } from '../config/api';
 import { clearAuthToken, getValidToken } from '../utils/auth';
+import { applyTheme, getStoredTheme } from '../utils/theme';
 
 const sections = [
+  { id: 'appearance', label: 'Appearance & Theme' },
   { id: 'personal', label: 'Personal Information' },
   { id: 'advanced', label: 'Advanced User Details' },
   { id: 'password', label: 'Change My Password' },
@@ -212,6 +214,7 @@ const AccountSettings = ({ role }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [theme, setTheme] = useState(getStoredTheme);
 
   const tokenKey = getTokenKey(role);
 
@@ -979,7 +982,83 @@ const AccountSettings = ({ role }) => {
     </SectionPanel>
   );
 
+  const renderAppearance = () => {
+    const themeOptions = [
+      {
+        id: 'light',
+        title: 'Light sidebar',
+        description: 'Clean white navigation with blue highlights.',
+      },
+      {
+        id: 'dark',
+        title: 'Dark sidebar',
+        description: 'Deep blue navigation with bright controls.',
+      },
+    ];
+
+    return (
+      <SectionPanel title="Appearance & Theme" help={false}>
+        <div className="p-5 sm:p-7">
+          <div className="max-w-3xl">
+            <h3 className="text-base font-bold text-slate-950">Sidebar appearance</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Choose how the CRM navigation looks. Your preference is saved on this device.
+            </p>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {themeOptions.map((option) => {
+                const selected = theme === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setTheme(applyTheme(option.id))}
+                    className={`overflow-hidden rounded-xl border-2 bg-white text-left transition ${
+                      selected
+                        ? 'border-blue-600 shadow-[0_0_0_3px_rgba(37,99,235,0.1)]'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="flex h-32 bg-[#f7f9fd] p-3">
+                      <span
+                        className={`h-full w-16 rounded-lg ${
+                          option.id === 'dark' ? 'bg-[#0b3690]' : 'border bg-white'
+                        }`}
+                      />
+                      <span className="flex-1 p-3">
+                        <span className="block h-3 w-2/3 rounded bg-slate-200" />
+                        <span className="mt-3 block h-12 rounded-lg border border-slate-200 bg-white" />
+                        <span className="mt-2 block h-7 rounded-lg border border-slate-200 bg-white" />
+                      </span>
+                    </span>
+                    <span className="flex items-start justify-between gap-3 border-t border-slate-200 p-4">
+                      <span>
+                        <span className="block text-sm font-bold text-slate-900">{option.title}</span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {option.description}
+                        </span>
+                      </span>
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                          selected ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
+                        }`}
+                      >
+                        {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </SectionPanel>
+    );
+  };
+
   const content = {
+    appearance: renderAppearance,
     personal: renderPersonalInformation,
     advanced: renderAdvancedDetails,
     password: renderPassword,

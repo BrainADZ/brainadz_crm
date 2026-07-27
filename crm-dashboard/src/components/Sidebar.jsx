@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Building2,
   FileText,
   FolderKanban,
   FolderOpen,
@@ -150,34 +149,25 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-blue-950/10 bg-[#123985] text-white shadow-xl transition-all duration-300 ${
+      className={`app-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-sm transition-all duration-300 ${
         collapsed ? 'w-16' : 'w-56'
       }`}
     >
       {/* Logo Area */}
-      <div className="flex h-16 items-center justify-between border-b border-white/10 px-3">
+      <div className="app-sidebar-border flex h-20 items-center justify-between border-b px-3">
         <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#123985] shadow-sm">
-            <Building2 size={21} strokeWidth={1.8} />
-          </span>
-
-          {!collapsed && (
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold tracking-wide">
-                Company CRM
-              </span>
-              <span className="mt-0.5 block truncate text-xs text-blue-100/75">
-                Super Admin Workspace
-              </span>
-            </span>
-          )}
+          <img
+            src="/main-logo.png"
+            alt="BrainADZ"
+            className={`app-sidebar-logo object-contain object-left ${collapsed ? 'h-9 w-10' : 'h-14 w-40'}`}
+          />
         </Link>
 
         {!collapsed && (
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-100 transition hover:bg-white/10 hover:text-white"
+            className="app-sidebar-muted app-sidebar-hover flex h-8 w-8 items-center justify-center rounded-lg transition"
             title="Collapse sidebar"
           >
             <ChevronLeft size={18} strokeWidth={1.8} />
@@ -188,7 +178,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-2 py-5">
         {!collapsed && (
-          <p className="px-3 pb-3 text-[11px] font-medium uppercase tracking-[0.16em] text-blue-100/55">
+          <p className="app-sidebar-muted px-3 pb-3 text-[11px] font-medium uppercase tracking-[0.16em]">
             Workspace
           </p>
         )}
@@ -219,8 +209,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                       collapsed ? 'justify-center' : 'gap-3'
                     } ${
                       groupActive || groupOpen
-                        ? 'bg-white/10 text-white'
-                        : 'text-blue-100/85 hover:bg-white/10 hover:text-white'
+                        ? 'app-nav-active'
+                        : 'app-sidebar-muted app-sidebar-hover'
                     }`}
                   >
                     <Icon size={19} strokeWidth={1.7} className="shrink-0 text-current" />
@@ -249,15 +239,15 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                             to={child.to}
                             className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                               childActive
-                                ? 'bg-white text-[#123985] shadow-sm'
-                                : 'text-blue-100/80 hover:bg-white/10 hover:text-white'
+                                ? 'app-nav-active shadow-sm'
+                                : 'app-sidebar-muted app-sidebar-hover'
                             }`}
                           >
                             <ChildIcon
                               size={17}
                               strokeWidth={1.7}
                               className={`shrink-0 ${
-                                childActive ? 'text-[#123985]' : 'text-current'
+                                childActive ? 'text-blue-600' : 'text-current'
                               }`}
                             />
                             <span className="truncate">{child.label}</span>
@@ -281,14 +271,14 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                   collapsed ? 'justify-center' : 'gap-3'
                 } ${
                   active
-                    ? 'bg-white text-[#123985] shadow-sm'
-                    : 'text-blue-100/85 hover:bg-white/10 hover:text-white'
+                    ? 'app-nav-active shadow-sm'
+                    : 'app-sidebar-muted app-sidebar-hover'
                 }`}
               >
                 <Icon
                   size={19}
                   strokeWidth={1.7}
-                  className={`shrink-0 ${active ? 'text-[#123985]' : 'text-current'}`}
+                  className={`shrink-0 ${active ? 'text-blue-600' : 'text-current'}`}
                 />
 
                 {!collapsed && <span className="truncate">{item.label}</span>}
@@ -304,7 +294,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
           <button
             type="button"
             onClick={() => setCollapsed(false)}
-            className="flex h-10 w-full items-center justify-center rounded-xl bg-white/10 text-blue-100 transition hover:bg-white/15 hover:text-white"
+            className="app-sidebar-muted app-sidebar-hover flex h-10 w-full items-center justify-center rounded-xl transition"
             title="Expand sidebar"
           >
             <ChevronRight size={18} strokeWidth={1.8} />
@@ -313,20 +303,20 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       )}
 
       {/* User Section */}
-      <div className="border-t border-white/10 p-2.5">
+      <div className="app-sidebar-border border-t p-2.5">
         <div
-          className={`flex items-center rounded-xl bg-white/10 p-2 ${
+          className={`app-security-card flex items-center rounded-xl border p-2 ${
             collapsed ? 'justify-center' : 'gap-3'
           }`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-bold text-[#123985]">
-            A
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+            <ShieldCheck size={18} />
           </span>
 
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold">Super Admin</span>
-              <span className="block truncate text-xs text-blue-100/70">Full Access</span>
+              <span className="block truncate text-xs font-semibold">Enterprise Security</span>
+              <span className="app-sidebar-muted block truncate text-[10px]">Role-based access</span>
             </span>
           )}
         </div>

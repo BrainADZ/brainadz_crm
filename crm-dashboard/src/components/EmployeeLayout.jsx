@@ -92,8 +92,8 @@ const EmployeeLayout = () => {
               : 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-50 flex w-20 flex-col bg-slate-950 text-white shadow-xl lg:w-64">
+    <div className="app-shell min-h-screen bg-[#f7f9fd] text-slate-900">
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-50 flex w-20 flex-col border-r shadow-sm lg:w-64">
         <Link
           to="/employee-dashboard"
           className="flex h-16 items-center gap-3 border-b border-white/10 px-4 lg:px-5"

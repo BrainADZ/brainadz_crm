@@ -3,22 +3,22 @@ import NotificationBell from './NotificationBell';
 import UserProfileMenu from './UserProfileMenu';
 
 const WorkspaceTopbar = ({ title, role, showSearch = true }) => (
-  <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur sm:px-6">
-    <div className="min-w-0">
-      <h1 className="truncate text-lg font-semibold text-slate-950">{title}</h1>
+  <header className="app-topbar sticky top-0 z-40 flex h-20 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-7">
+    <div className="min-w-0 sm:w-32">
+      <h1 className="truncate text-sm font-semibold text-slate-500">{title}</h1>
     </div>
 
-    <div className="ml-auto flex items-center gap-2">
+    <div className="ml-auto flex items-center gap-3 sm:ml-0 sm:flex-1 sm:justify-end">
       {showSearch && (
-        <label className="relative hidden sm:block">
+        <label className="relative mr-auto hidden sm:block sm:w-full sm:max-w-md">
           <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
             <Search size={16} strokeWidth={1.8} />
           </span>
 
           <input
             type="search"
-            placeholder="Search records"
-            className="w-44 rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 lg:w-72"
+            placeholder="Search records, people, projects..."
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           />
         </label>
       )}
