@@ -87,7 +87,11 @@ const PERMISSION_RESOURCES = [
 const MODULES = [
   { key: 'dashboard', label: 'Dashboard', resources: ['dashboard'] },
   { key: 'business_os', label: 'Business OS', resources: ['business_os'] },
-  { key: 'sales', label: 'Sales / Clients', resources: ['leads'] },
+  {
+    key: 'sales',
+    label: 'Sales / Clients',
+    resources: ['sales_crm', 'leads', 'clients', 'follow_ups', 'proposals', 'pipelines'],
+  },
   { key: 'quotations', label: 'Quotations', resources: ['quotations'] },
   { key: 'communication', label: 'Communication', resources: ['communication'] },
   { key: 'marketing', label: 'Marketing', resources: ['campaigns'] },

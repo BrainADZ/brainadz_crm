@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { getAdminHeaders } from './businessApi';
+import { getValidToken } from '../utils/auth';
 
 export const getRoles = async () => {
   const response = await axios.get(`${API_BASE_URL}/api/roles`, { headers: getAdminHeaders() });
@@ -66,13 +67,20 @@ export const getPermissionWorkspace = async () => {
 };
 
 let myAccessRequest;
+let myAccessToken;
 export const getMyAccess = async ({ refresh = false } = {}) => {
-  if (!myAccessRequest || refresh) {
+  // Access must never be reused after logout/login in the same browser tab.
+  // A cached Super Admin response would otherwise make the next employee see
+  // every sidebar module.
+  const sessionToken = getValidToken('admin') || getValidToken('employee') || '';
+  if (!myAccessRequest || refresh || myAccessToken !== sessionToken) {
+    myAccessToken = sessionToken;
     myAccessRequest = axios
       .get(`${API_BASE_URL}/api/permissions/me`, { headers: getAdminHeaders() })
       .then((response) => response.data)
       .catch((error) => {
         myAccessRequest = undefined;
+        myAccessToken = undefined;
         throw error;
       });
   }

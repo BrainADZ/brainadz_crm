@@ -264,6 +264,25 @@ const resolveUserAccess = async (userId) => {
       : [];
   }
 
+  // A role defines what a person can do. A department defines which CRM modules
+  // are relevant there. Apply both, so one shared "Manager" role can be used for
+  // Sales, Development, etc. without exposing unrelated modules.
+  const assignmentDepartmentIds = assignments
+    .map((assignment) => assignment.departmentId && String(assignment.departmentId))
+    .filter(Boolean);
+  const assignedDepartments = assignmentDepartmentIds.length
+    ? await Department.find({ _id: { $in: assignmentDepartmentIds }, status: 'active' }).lean()
+    : [];
+  const departmentModuleKeys = new Set(
+    assignedDepartments.flatMap((department) => department.defaultModuleIds || []),
+  );
+  const hasDepartmentModuleRestriction = assignmentDepartmentIds.length > 0;
+  const allowedResources = new Set(
+    MODULES.filter(
+      (module) => !hasDepartmentModuleRestriction || departmentModuleKeys.has(module.key),
+    ).flatMap((module) => module.resources),
+  );
+
   const permissionMap = mergePermissions(
     assignments.map((assignment) => ({
       permissions: (assignment.roleId?.permissions || []).map((permission) => ({
@@ -313,6 +332,11 @@ const resolveUserAccess = async (userId) => {
     permission.actions = permission.actions.filter(
       (action) => !permission.deniedActions.includes(action),
     );
+    // Resources which belong to an unselected department module must not be
+    // callable directly by URL/API either.
+    if (PERMISSION_RESOURCES.includes(permission.resource) && !allowedResources.has(permission.resource)) {
+      permission.actions = [];
+    }
   });
 
   const modules = await AccessModule.find({ status: 'active' }).lean();
@@ -329,9 +353,10 @@ const resolveUserAccess = async (userId) => {
       ),
     ],
     teamIds: [...new Set(assignments.flatMap((item) => (item.teamIds || []).map(String)))],
-    permissions,
+    permissions: permissions.filter((permission) => permission.actions.length),
     visibleModules: modules
       .filter((module) =>
+        (!hasDepartmentModuleRestriction || departmentModuleKeys.has(module.moduleKey)) &&
         module.resources.some((resource) =>
           permissions.some(
             (permission) => permission.resource === resource && permission.actions.includes('view'),
