@@ -24,7 +24,7 @@ const getPageTitle = (pathname) => {
   return 'CRM Admin';
 };
 
-const Navbar = () => {
+const Navbar = ({ role = 'admin' }) => {
   const location = useLocation();
 
   const title = getPageTitle(location.pathname);
@@ -32,7 +32,7 @@ const Navbar = () => {
   const showSearch =
     location.pathname !== '/dashboard' && !location.pathname.startsWith('/dashboard/settings');
 
-  return <WorkspaceTopbar title={title} role="admin" showSearch={showSearch} />;
+  return <WorkspaceTopbar title={title} role={role} showSearch={showSearch} />;
 };
 
 export default Navbar;

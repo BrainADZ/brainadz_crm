@@ -78,7 +78,7 @@ const UserProfileMenu = ({ role }) => {
 
   const openSettings = () => {
     setIsDropdownOpen(false);
-    navigate(role === 'admin' ? '/dashboard/settings' : '/employee-dashboard/settings');
+    navigate('/dashboard/settings');
   };
 
   const avatarUrl = getAssetUrl(profile?.imageUrl);

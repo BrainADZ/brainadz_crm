@@ -91,7 +91,9 @@ const Login = () => {
         response.data.token,
       );
       localStorage.setItem('currentUser', JSON.stringify(response.data.user || {}));
-      navigate(workspace === 'admin' ? '/dashboard' : '/employee-dashboard', { replace: true });
+      // Both admins and employees use the same CRM shell. The sidebar is filtered
+      // from their resolved role permissions after sign-in.
+      navigate('/dashboard', { replace: true });
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
