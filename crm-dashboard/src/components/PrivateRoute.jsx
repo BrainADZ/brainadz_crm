@@ -6,7 +6,7 @@ const PrivateRoute = ({ children, role, roles }) => {
   const token = allowedRoles.map((item) => getValidToken(item)).find(Boolean);
 
   if (!token) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

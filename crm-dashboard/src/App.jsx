@@ -1,4 +1,10 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
 import DashboardLayout from './components/DashboardLayout';
 import Clients from './pages/Clients';
 import ClientDatasetDetail from './pages/ClientDatasetDetail';
@@ -21,12 +27,14 @@ import Quotations from './pages/Quotations';
 import TeamWorkload from './pages/TeamWorkload';
 import { getAuthenticatedRole } from './utils/auth';
 
-const App = () => {
+const AppRoutes = () => {
+  // Re-render the auth gates after login/logout navigation. Reading the role in
+  // the outer App component left it frozen at the value from the first page load.
+  useLocation();
   const authenticatedRole = getAuthenticatedRole();
 
   return (
-    <Router>
-      <Routes>
+    <Routes>
         {/* Default route to handle login redirection */}
         <Route
           path="/"
@@ -194,9 +202,14 @@ const App = () => {
 
         {/* Catch-all Route for Undefined Paths */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    </Routes>
   );
 };
+
+const App = () => (
+  <Router>
+    <AppRoutes />
+  </Router>
+);
 
 export default App;

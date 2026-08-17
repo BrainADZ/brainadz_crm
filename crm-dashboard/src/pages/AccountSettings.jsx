@@ -240,7 +240,7 @@ const AccountSettings = ({ role }) => {
       const authHeaders = headers();
       if (!authHeaders) {
         clearAuthToken(role);
-        navigate('/');
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -254,7 +254,7 @@ const AccountSettings = ({ role }) => {
         if (!ignore) {
           if ([401, 403].includes(requestError.response?.status)) {
             clearAuthToken(role);
-            navigate('/');
+            navigate('/login', { replace: true });
             return;
           }
           setError(requestError.response?.data?.message || 'Unable to load settings');

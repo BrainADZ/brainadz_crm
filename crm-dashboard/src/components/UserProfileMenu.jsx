@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { clearAuthToken } from '../utils/auth';
+import { clearAllAuthTokens } from '../utils/auth';
 import { API_BASE_URL, getAssetUrl } from '../config/api';
 
 const getInitials = (name = '') =>
@@ -36,8 +36,9 @@ const UserProfileMenu = ({ role }) => {
         if (!ignore) setProfile(response.data.user);
       } catch (requestError) {
         if (!ignore && [401, 403].includes(requestError.response?.status)) {
-          clearAuthToken(role);
-          navigate('/');
+          clearAllAuthTokens();
+          localStorage.removeItem('currentUser');
+          navigate('/login', { replace: true });
         }
       } finally {
         if (!ignore) setIsLoading(false);
@@ -72,8 +73,10 @@ const UserProfileMenu = ({ role }) => {
   }, [isDropdownOpen]);
 
   const handleSignOut = () => {
-    clearAuthToken(role);
-    navigate('/');
+    setIsDropdownOpen(false);
+    clearAllAuthTokens();
+    localStorage.removeItem('currentUser');
+    navigate('/login', { replace: true });
   };
 
   const openSettings = () => {

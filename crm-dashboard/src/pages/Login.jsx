@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import PasswordInput from '../components/PasswordInput';
 import { API_BASE_URL } from '../config/api';
+import { clearAllAuthTokens } from '../utils/auth';
 
 // Replace this path with your imported BrainADZ logo when the asset is ready.
 const brainAdzLogo = '/main-logo.png';
@@ -83,8 +84,7 @@ const Login = () => {
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, { email, password });
       if (!response.data?.token) throw new Error('Missing login token');
 
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('employeeToken');
+      clearAllAuthTokens();
       const workspace = response.data.workspace === 'admin' ? 'admin' : 'employee';
       localStorage.setItem(
         workspace === 'admin' ? 'adminToken' : 'employeeToken',

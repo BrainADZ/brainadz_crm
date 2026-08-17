@@ -276,7 +276,10 @@ const resolveUserAccess = async (userId) => {
   const departmentModuleKeys = new Set(
     assignedDepartments.flatMap((department) => department.defaultModuleIds || []),
   );
-  const hasDepartmentModuleRestriction = assignmentDepartmentIds.length > 0;
+  // Assignments always have a department. If an old/incomplete assignment has
+  // no active department, fail closed instead of accidentally showing the role's
+  // complete module set.
+  const hasDepartmentModuleRestriction = true;
   const allowedResources = new Set(
     MODULES.filter(
       (module) => !hasDepartmentModuleRestriction || departmentModuleKeys.has(module.key),
