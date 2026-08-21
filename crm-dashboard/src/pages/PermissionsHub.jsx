@@ -437,8 +437,8 @@ const PermissionsHub = () => {
     );
 
   const OrganizationTab = () => (
-    <div className="grid min-h-[40rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[18rem_1fr]">
-      <aside className="border-b border-slate-200 bg-slate-50/70 lg:border-b-0 lg:border-r">
+    <div className="ui-surface grid min-h-[40rem] overflow-hidden rounded-2xl border shadow-sm lg:grid-cols-[18rem_1fr]">
+      <aside className="ui-surface-soft border-b ui-border lg:border-b-0 lg:border-r">
         <div className="border-b border-slate-200 p-4">
           <h2 className="text-sm font-semibold text-slate-900">Organization</h2>
           <p className="mt-1 text-xs text-slate-500">Company → Business Unit → Department → Team</p>

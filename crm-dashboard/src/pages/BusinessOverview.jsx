@@ -161,7 +161,7 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <section className="ui-surface flex flex-col gap-4 rounded-2xl border p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
             <BriefcaseBusiness size={22} strokeWidth={1.9} />

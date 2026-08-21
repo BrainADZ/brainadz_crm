@@ -76,8 +76,8 @@
   }
 
   html[data-theme='dark'] .app-sidebar {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: linear-gradient(165deg, #0c3b98 0%, #082d78 100%);
+    border-color: rgba(170, 200, 245, 0.14);
+    background: linear-gradient(165deg, #0b3a90 0%, #08285f 100%);
     color: white;
   }
 

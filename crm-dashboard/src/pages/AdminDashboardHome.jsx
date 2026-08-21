@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { API_BASE_URL, getAssetUrl } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 import BusinessOverview from './BusinessOverview';
 
 const getAdminHeaders = () => ({
@@ -114,7 +114,6 @@ const AdminDashboardHome = () => {
     [taskSummary.employees],
   );
 
-  const avatarUrl = getAssetUrl(profile?.imageUrl);
   const todayLabel = new Intl.DateTimeFormat('en-IN', {
     weekday: 'long',
     day: 'numeric',
@@ -175,21 +174,10 @@ const AdminDashboardHome = () => {
 
   return (
     <div className="w-full space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-white via-white to-blue-50 p-6 shadow-sm">
-        <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100 blur-3xl" />
+      <section className="ui-hero relative overflow-hidden rounded-2xl border ui-border p-6 shadow-sm">
+        <span className="dashboard-hero-glow absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" />
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-4">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-lg font-bold text-white shadow-lg ring-4 ring-white">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={profile?.name || 'Admin'}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                getInitials(profile?.name)
-              )}
-            </span>
+          <div className="flex items-center">
             <div>
               <p className="text-xs font-semibold text-blue-600">{todayLabel}</p>
               <h1 className="mt-1 text-2xl font-semibold text-slate-950">
