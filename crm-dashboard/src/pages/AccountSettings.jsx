@@ -986,12 +986,12 @@ const AccountSettings = ({ role }) => {
     const themeOptions = [
       {
         id: 'light',
-        title: 'Light sidebar',
+        title: 'Light Theme',
         description: 'Clean white navigation with blue highlights.',
       },
       {
         id: 'dark',
-        title: 'Dark sidebar',
+        title: 'Dark Theme',
         description: 'Deep blue navigation with bright controls.',
       },
     ];
