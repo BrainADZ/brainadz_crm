@@ -29,8 +29,7 @@ const Navbar = ({ role = 'admin' }) => {
 
   const title = getPageTitle(location.pathname);
 
-  const showSearch =
-    location.pathname !== '/dashboard' && !location.pathname.startsWith('/dashboard/settings');
+  const showSearch = !location.pathname.startsWith('/dashboard/settings');
 
   return <WorkspaceTopbar title={title} role={role} showSearch={showSearch} />;
 };

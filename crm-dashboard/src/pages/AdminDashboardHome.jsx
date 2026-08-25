@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { API_BASE_URL, getAssetUrl } from '../config/api';
+import { CalendarDays, Database, UsersRound } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 import BusinessOverview from './BusinessOverview';
 
 const getAdminHeaders = () => ({
@@ -37,8 +38,8 @@ const getInitials = (name = '') =>
     .slice(0, 2)
     .toUpperCase() || 'AD';
 
-const StatCard = ({ label, value, note, tone, icon }) => (
-  <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+const StatCard = ({ label, value, note, tone, icon, to, action, loading }) => (
+  <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-px hover:border-blue-200 hover:shadow-md">
     <div className="flex items-start justify-between gap-4">
       <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${tone}`}>
         <svg
@@ -51,13 +52,40 @@ const StatCard = ({ label, value, note, tone, icon }) => (
           {icon}
         </svg>
       </span>
-      <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500">
-        {note}
-      </span>
     </div>
-    <p className="mt-5 text-3xl font-semibold text-slate-950">{value}</p>
-    <p className="mt-1 text-sm font-medium text-slate-600">{label}</p>
+    {loading ? (
+      <div className="mt-4 space-y-2" aria-label={`Loading ${label}`}>
+        <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
+        <div className="h-4 w-28 animate-pulse rounded bg-slate-100" />
+      </div>
+    ) : (
+      <>
+        <p className="mt-4 text-[1.75rem] font-semibold leading-none text-slate-950">{value}</p>
+        <p className="mt-2 text-sm font-semibold text-slate-700">{label}</p>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <p className="truncate text-xs text-slate-500">{note}</p>
+          <Link to={to} className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-800">
+            {action} →
+          </Link>
+        </div>
+      </>
+    )}
   </article>
+);
+
+const EmptyState = ({ icon: Icon, title, copy, to, action }) => (
+  <div className="flex flex-col items-center px-5 py-7 text-center">
+    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+      <Icon size={19} strokeWidth={1.8} />
+    </span>
+    <p className="mt-3 text-sm font-semibold text-slate-800">{title}</p>
+    <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">{copy}</p>
+    {to && (
+      <Link to={to} className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-800">
+        {action} →
+      </Link>
+    )}
+  </div>
 );
 
 const AdminDashboardHome = () => {
@@ -103,7 +131,7 @@ const AdminDashboardHome = () => {
     const today = new Date().toISOString().slice(0, 10);
     return (taskSummary.meetings || [])
       .filter((meeting) => meeting.meetingDate >= today)
-      .slice(0, 6);
+      .slice(0, 3);
   }, [taskSummary.meetings]);
 
   const busiestEmployees = useMemo(
@@ -114,7 +142,6 @@ const AdminDashboardHome = () => {
     [taskSummary.employees],
   );
 
-  const avatarUrl = getAssetUrl(profile?.imageUrl);
   const todayLabel = new Intl.DateTimeFormat('en-IN', {
     weekday: 'long',
     day: 'numeric',
@@ -134,6 +161,8 @@ const AdminDashboardHome = () => {
           <path d="M10 4v16" />
         </>
       ),
+      to: '/dashboard/clients',
+      action: 'View data',
     },
     {
       label: 'Assigned data',
@@ -146,6 +175,8 @@ const AdminDashboardHome = () => {
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </>
       ),
+      to: '/dashboard/tasks',
+      action: 'View tasks',
     },
     {
       label: 'Follow ups',
@@ -159,6 +190,8 @@ const AdminDashboardHome = () => {
           <path d="M12 7v5l3 2" />
         </>
       ),
+      to: '/dashboard/tasks',
+      action: 'Review',
     },
     {
       label: 'Pending calls',
@@ -170,26 +203,17 @@ const AdminDashboardHome = () => {
           <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.7a16 16 0 0 0 6.3 6.3l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z" />
         </>
       ),
+      to: '/dashboard/tasks',
+      action: 'Review',
     },
   ];
 
   return (
-    <div className="w-full space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-white via-white to-blue-50 p-6 shadow-sm">
-        <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100 blur-3xl" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-4">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-lg font-bold text-white shadow-lg ring-4 ring-white">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={profile?.name || 'Admin'}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                getInitials(profile?.name)
-              )}
-            </span>
+    <div className="w-full space-y-4">
+      <section className="ui-hero relative overflow-hidden rounded-2xl border ui-border p-5 shadow-sm">
+        <span className="dashboard-hero-glow absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" />
+        <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center">
             <div>
               <p className="text-xs font-semibold text-blue-600">{todayLabel}</p>
               <h1 className="mt-1 text-2xl font-semibold text-slate-950">
@@ -205,7 +229,7 @@ const AdminDashboardHome = () => {
             <button
               type="button"
               onClick={refreshDashboard}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-blue-700"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -218,13 +242,13 @@ const AdminDashboardHome = () => {
             </button>
             <Link
               to="/dashboard/clients"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
               Upload data
             </Link>
             <Link
               to="/dashboard/tasks"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
             >
               View tasks
             </Link>
@@ -238,17 +262,17 @@ const AdminDashboardHome = () => {
         </p>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <StatCard key={stat.label} {...stat} value={isLoading ? '-' : stat.value} />
+          <StatCard key={stat.label} {...stat} loading={isLoading} />
         ))}
       </section>
 
       <BusinessOverview embedded refreshToken={businessRefreshToken} />
 
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-5">
+          <div className="border-b border-slate-200 px-5 py-4">
             <h2 className="text-base font-semibold text-slate-950">Employee workload</h2>
             <p className="mt-1 text-sm text-slate-500">
               Assigned rows, follow-ups, pending calls, and meetings.
@@ -299,8 +323,14 @@ const AdminDashboardHome = () => {
                 ))}
                 {!isLoading && busiestEmployees.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-5 py-12 text-center text-sm text-slate-500">
-                      No employee workload found.
+                    <td colSpan="5">
+                      <EmptyState
+                        icon={UsersRound}
+                        title="No employee workload yet"
+                        copy="Employee assignments and follow-ups will appear here."
+                        to="/dashboard/employees"
+                        action="View employees"
+                      />
                     </td>
                   </tr>
                 )}
@@ -310,13 +340,13 @@ const AdminDashboardHome = () => {
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 p-5">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
               <h2 className="text-base font-semibold text-slate-950">Upcoming meetings</h2>
               <p className="mt-1 text-sm text-slate-500">Next meetings from employee tasks.</p>
             </div>
             <Link
-              to="/dashboard/tasks"
+              to="/dashboard/meetings"
               className="text-xs font-semibold text-blue-600 hover:text-blue-800"
             >
               View all
@@ -347,14 +377,20 @@ const AdminDashboardHome = () => {
               </div>
             ))}
             {!isLoading && upcomingMeetings.length === 0 && (
-              <p className="px-5 py-12 text-center text-sm text-slate-500">No upcoming meetings.</p>
+              <EmptyState
+                icon={CalendarDays}
+                title="No upcoming meetings"
+                copy="Scheduled client and team meetings will appear here."
+                to="/dashboard/meetings"
+                action="View meetings"
+              />
             )}
           </div>
         </article>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-950">Recent uploaded data</h2>
             <p className="mt-1 text-sm text-slate-500">Latest Excel datasets available in CRM.</p>
@@ -400,8 +436,14 @@ const AdminDashboardHome = () => {
               ))}
               {!isLoading && datasets.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-5 py-12 text-center text-sm text-slate-500">
-                    No uploaded datasets yet.
+                  <td colSpan="5">
+                    <EmptyState
+                      icon={Database}
+                      title="No uploaded datasets yet"
+                      copy="Upload client data to start tracking assignments and activity."
+                      to="/dashboard/clients"
+                      action="Manage data"
+                    />
                   </td>
                 </tr>
               )}

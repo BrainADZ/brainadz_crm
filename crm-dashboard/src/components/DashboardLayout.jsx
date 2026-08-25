@@ -1,19 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Outlet } from 'react-router-dom';
+
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
-import { Outlet } from 'react-router-dom';
 import { getAuthenticatedRole } from '../utils/auth';
+import { applyTheme, getStoredTheme } from '../utils/theme';
 
 const DashboardLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
+
+  const [theme, setTheme] = useState(getStoredTheme);
+
   const role = getAuthenticatedRole() || 'employee';
 
-  return (
-    <div className="app-shell min-h-screen bg-[#f7f9fd] text-slate-900">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+  // Apply theme globally to the complete dashboard.
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
-      <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'pl-16' : 'pl-56'}`}>
-        <Navbar role={role} />
+  useEffect(() => {
+    const syncTheme = (event) => setTheme(event.detail);
+    window.addEventListener('crm-theme-change', syncTheme);
+    return () => window.removeEventListener('crm-theme-change', syncTheme);
+  }, []);
+
+  return (
+    <div
+      className="app-shell min-h-screen"
+      data-theme={theme}
+    >
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        theme={theme}
+        setTheme={setTheme}
+      />
+
+      <div
+        className={`min-h-screen transition-all duration-300 ${
+          collapsed ? 'pl-16' : 'pl-56'
+        }`}
+      >
+        <Navbar
+          role={role}
+          theme={theme}
+          setTheme={setTheme}
+        />
 
         <main className="w-full p-4 sm:p-5 lg:p-7">
           <Outlet />

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BarChart3,
   BriefcaseBusiness,
-  FileText,
-  FolderKanban,
-  MessageSquareText,
-  ReceiptText,
+  CalendarDays,
+  Database,
+  FileCheck2,
   RefreshCw,
   Target,
   Users,
@@ -26,13 +24,10 @@ const StatCard = ({ label, value, note, icon: Icon, tone = 'blue' }) => {
   };
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-px hover:border-blue-200 hover:shadow-md">
+      <div className="flex items-start gap-3">
         <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${tones[tone]}`}>
           <Icon size={20} strokeWidth={1.9} />
-        </span>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-          Live DB
         </span>
       </div>
       <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
@@ -42,19 +37,19 @@ const StatCard = ({ label, value, note, icon: Icon, tone = 'blue' }) => {
   );
 };
 
-const RecentList = ({ title, rows, empty, renderRow, to }) => (
+const RecentList = ({ title, description, rows, empty, renderRow, to }) => (
   <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="flex items-center justify-between gap-3 border-b border-slate-300 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
       <div>
         <h2 className="text-base font-bold text-slate-950">{title}</h2>
-        <p className="mt-1 text-xs font-medium text-slate-500">Latest records from MongoDB.</p>
+        <p className="mt-1 text-xs font-medium text-slate-500">{description}</p>
       </div>
       {to && (
         <Link
           to={to}
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
         >
-          Open
+          View all →
         </Link>
       )}
     </div>
@@ -62,7 +57,10 @@ const RecentList = ({ title, rows, empty, renderRow, to }) => (
       {rows?.length ? (
         rows.map(renderRow)
       ) : (
-        <p className="px-4 py-10 text-center text-sm font-semibold text-slate-500">{empty}</p>
+        <div className="px-4 py-7 text-center">
+          <p className="text-sm font-semibold text-slate-700">{empty}</p>
+          <p className="mt-1 text-xs text-slate-500">New activity will appear here automatically.</p>
+        </div>
       )}
     </div>
   </section>
@@ -91,9 +89,8 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
 
   const stats = useMemo(() => {
     const sales = summary?.sales || {};
-    const marketing = summary?.marketing || {};
-    const accounting = summary?.accounting || {};
-    const projects = summary?.projects || {};
+    const meetings = summary?.meetingStats || {};
+    const quotations = summary?.quotationStats || {};
 
     return [
       {
@@ -111,34 +108,49 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
         tone: 'green',
       },
       {
-        label: 'Campaign ROI',
-        value: `${Number(marketing.avgRoi || 0).toFixed(1)}x`,
-        note: `${money(marketing.spend)} spend, ${marketing.leads || 0} leads`,
-        icon: BarChart3,
+        label: 'Conversion rate',
+        value: `${sales.conversionRate || 0}%`,
+        note: `${sales.converted || 0} converted accounts`,
+        icon: Target,
         tone: 'violet',
       },
       {
-        label: 'Pending collection',
-        value: money(accounting.pending),
-        note: `${accounting.invoices || 0} invoices, ${money(accounting.overdue)} overdue`,
-        icon: ReceiptText,
-        tone: accounting.overdue > 0 ? 'rose' : 'amber',
+        label: 'Quotation value',
+        value: money(quotations.value),
+        note: `${quotations.accepted || 0} accepted of ${quotations.total || 0}`,
+        icon: FileCheck2,
+        tone: 'amber',
       },
       {
-        label: 'Active projects',
-        value: projects.active || 0,
-        note: `${projects.overdueTasks || 0} overdue tasks`,
-        icon: FolderKanban,
-        tone: projects.overdueTasks > 0 ? 'rose' : 'green',
+        label: 'Upcoming meetings',
+        value: meetings.upcoming || 0,
+        note: `${meetings.today || 0} scheduled today`,
+        icon: CalendarDays,
+        tone: 'green',
       },
       {
-        label: 'Documents',
-        value: summary?.documents || 0,
-        note: `${summary?.communications || 0} communication logs`,
-        icon: FileText,
+        label: 'Datasets',
+        value: summary?.datasets || 0,
+        note: `${sales.assigned || 0} assigned rows`,
+        icon: Database,
         tone: 'slate',
       },
     ];
+  }, [summary]);
+
+  const pipeline = useMemo(() => {
+    const sales = summary?.sales || {};
+    const total = Number(sales.total || 0);
+    return [
+      ['Total accounts', total],
+      ['Interested', Number(sales.interested || 0)],
+      ['Follow-ups', Number(sales.followUps || 0)],
+      ['Converted', Number(sales.converted || 0)],
+    ].map(([label, value]) => ({
+      label,
+      value,
+      width: total ? Math.max((value / total) * 100, value ? 4 : 0) : 0,
+    }));
   }, [summary]);
 
   if (isLoading) {
@@ -161,7 +173,7 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <section className="ui-surface flex flex-col gap-4 rounded-2xl border p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
             <BriefcaseBusiness size={22} strokeWidth={1.9} />
@@ -204,23 +216,73 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
         ))}
       </section>
 
+      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Sales pipeline</h2>
+              <p className="mt-1 text-xs text-slate-500">Current account status distribution</p>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">
+              {summary?.sales?.conversionRate || 0}% conversion
+            </span>
+          </div>
+          <div className="space-y-3">
+            {pipeline.map((stage) => (
+              <div key={stage.label} className="grid grid-cols-[6rem_1fr_2.5rem] items-center gap-3">
+                <span className="text-xs font-semibold text-slate-600">{stage.label}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <span
+                    className="block h-full rounded-full bg-blue-600 transition-all duration-500"
+                    style={{ width: `${Math.min(stage.width, 100)}%` }}
+                  />
+                </span>
+                <span className="text-right text-xs font-bold text-slate-800">{stage.value}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">Quotation performance</h2>
+          <p className="mt-1 text-xs text-slate-500">Accepted value from current quotations</p>
+          <p className="mt-5 text-2xl font-bold text-slate-950">
+            {money(summary?.quotationStats?.acceptedValue)}
+          </p>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+            <span
+              className="block h-full rounded-full bg-blue-600"
+              style={{
+                width: `${summary?.quotationStats?.value
+                  ? Math.min((summary.quotationStats.acceptedValue / summary.quotationStats.value) * 100, 100)
+                  : 0}%`,
+              }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            {summary?.quotationStats?.accepted || 0} accepted · {summary?.quotationStats?.sent || 0} sent
+          </p>
+        </article>
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-2">
         <RecentList
-          title="Recent Projects"
-          rows={summary?.recent?.projects || []}
-          empty="No projects yet."
-          to="/dashboard/projects"
-          renderRow={(project) => (
-            <div key={project._id} className="px-4 py-3">
+          title="Recent quotations"
+          description="Latest quotation activity"
+          rows={summary?.recent?.quotations || []}
+          empty="No quotations yet"
+          to="/dashboard/quotations"
+          renderRow={(quotation) => (
+            <div key={quotation._id} className="px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold text-slate-900">{project.name}</p>
+                  <p className="font-bold text-slate-900">{quotation.subject || quotation.quotationNumber}</p>
                   <p className="mt-1 text-xs font-medium text-slate-500">
-                    {project.client} - {project.stage}
+                    {quotation.clientName || 'Client'} · {quotation.status || 'Draft'}
                   </p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
-                  {project.progress || 0}%
+                  {money(quotation.grandTotal)}
                 </span>
               </div>
             </div>
@@ -228,19 +290,22 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
         />
 
         <RecentList
-          title="Recent Communications"
-          rows={summary?.recent?.communications || []}
-          empty="No communications logged yet."
-          to="/dashboard/communication"
+          title="Upcoming meetings"
+          description="Next scheduled client and team meetings"
+          rows={summary?.recent?.meetings || []}
+          empty="No upcoming meetings"
+          to="/dashboard/meetings"
           renderRow={(item) => (
             <div key={item._id} className="flex items-start gap-3 px-4 py-3">
               <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-                <MessageSquareText size={16} strokeWidth={1.9} />
+                <CalendarDays size={16} strokeWidth={1.9} />
               </span>
               <div className="min-w-0">
-                <p className="truncate font-bold text-slate-900">{item.clientName}</p>
+                <p className="truncate font-bold text-slate-900">
+                  {item.title || item.clientName || 'Scheduled meeting'}
+                </p>
                 <p className="mt-1 truncate text-xs font-medium text-slate-500">
-                  {item.channel} - {item.type} - {item.message}
+                  {item.meetingDate} · {item.meetingTime || 'Time not set'} · {item.meetingMode || 'Meeting'}
                 </p>
               </div>
             </div>

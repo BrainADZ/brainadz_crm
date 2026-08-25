@@ -91,7 +91,7 @@ const UserProfileMenu = ({ role }) => {
 
   const avatarMarkup = (sizeClass = 'h-10 w-10', textClass = 'text-sm') => (
     <span
-      className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-slate-900 to-teal-700 font-bold text-white shadow-sm ring-2 ring-white`}
+      className={`profile-avatar flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-sm ring-2`}
     >
       {avatarUrl ? (
         <img
@@ -113,22 +113,22 @@ const UserProfileMenu = ({ role }) => {
         aria-haspopup="menu"
         aria-expanded={isDropdownOpen}
         onClick={() => setIsDropdownOpen((visible) => !visible)}
-        className="ml-1 flex h-10 w-10 items-center justify-center rounded-full bg-white p-0.5 text-sm font-bold text-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
+        className="profile-trigger ml-1 flex h-10 w-10 items-center justify-center rounded-full p-0.5 text-sm font-bold text-white shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2"
       >
         {avatarMarkup('h-9 w-9', 'text-xs')}
       </button>
 
       {isDropdownOpen && (
-        <div className="absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
-          <span className="absolute right-5 top-[-7px] h-3.5 w-3.5 rotate-45 border-l border-t border-slate-200 bg-white" />
+        <div className="profile-menu absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border shadow-2xl shadow-slate-900/10">
+          <span className="profile-menu-arrow absolute right-5 top-[-7px] h-3.5 w-3.5 rotate-45 border-l border-t" />
 
-          <div className="relative bg-gradient-to-br from-slate-50 via-white to-teal-50/70 px-4 pb-4 pt-4">
+          <div className="profile-menu-header relative px-4 pb-4 pt-4">
             <div className="flex items-center gap-3">
               {avatarMarkup('h-12 w-12', 'text-base')}
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-slate-950">{displayName}</p>
                 <p className="mt-0.5 truncate text-xs font-medium text-slate-500">{displayEmail}</p>
-                <span className="mt-2 inline-flex rounded-full border border-teal-100 bg-white/80 px-2 py-0.5 text-[11px] font-bold capitalize text-teal-700">
+                <span className="profile-role-badge mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize">
                   {displayRole} account
                 </span>
               </div>

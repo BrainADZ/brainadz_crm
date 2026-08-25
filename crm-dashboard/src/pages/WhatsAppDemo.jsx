@@ -160,7 +160,7 @@ const WhatsAppDemo = () => {
 
   return (
     <div className="w-full space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-r from-white via-white to-emerald-50 p-6 shadow-sm">
+      <section className="ui-whatsapp-hero relative overflow-hidden rounded-2xl border p-6 shadow-sm">
         <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-emerald-200/70 blur-3xl" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>

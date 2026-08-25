@@ -76,9 +76,9 @@
   }
 
   html[data-theme='dark'] .app-sidebar {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: linear-gradient(165deg, #0c3b98 0%, #082d78 100%);
-    color: white;
+    border-color: #334155;
+    background: #172033;
+    color: #cbd5e1;
   }
 
   html[data-theme='dark'] .app-sidebar-logo {
@@ -86,30 +86,30 @@
   }
 
   html[data-theme='dark'] .app-sidebar-border {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: #334155;
   }
 
   html[data-theme='dark'] .app-sidebar-muted {
-    color: rgba(219, 234, 254, 0.82);
+    color: #a1aec0;
   }
 
   html[data-theme='dark'] .app-sidebar-hover:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
+    background: #1e293b;
+    color: #f1f5f9;
   }
 
   html[data-theme='dark'] .app-nav-active {
-    background: linear-gradient(90deg, #2563eb 0%, #2f5ff2 100%);
-    color: white;
-    box-shadow: none;
+    background: rgba(37, 99, 235, 0.18);
+    color: #f1f5f9;
+    box-shadow: inset 3px 0 0 #2563eb;
   }
 
   html[data-theme='dark'] .app-nav-active svg {
-    color: white;
+    color: #38bdf8;
   }
 
   html[data-theme='dark'] .app-security-card {
-    border-color: rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: #334155;
+    background: #1e293b;
   }
 }
