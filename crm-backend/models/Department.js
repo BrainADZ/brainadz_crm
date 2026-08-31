@@ -10,6 +10,7 @@ const departmentSchema = new mongoose.Schema(
     isCompanyWide: { type: Boolean, default: false },
     businessUnitIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'BusinessUnit' }],
     defaultModuleIds: [{ type: String, trim: true }],
+    moduleDefaultsInitialized: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },

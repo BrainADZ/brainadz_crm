@@ -58,6 +58,19 @@ export const getAuthenticatedUser = () => {
   return decodeJwtPayload(adminToken || employeeToken || '')?.user || null;
 };
 
+export const isSalesRoleKey = (value) => {
+  const roleKey = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  return roleKey === 'sales' || roleKey.startsWith('sales_');
+};
+
+export const isSalesSession = () => {
+  const user = getAuthenticatedUser();
+  return isSalesRoleKey(user?.roleKey || user?.crmRole);
+};
+
 export const isSuperAdminSession = () => {
   const user = getAuthenticatedUser();
   return (

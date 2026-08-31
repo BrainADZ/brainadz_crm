@@ -18,7 +18,10 @@ const {
 } = require('../config/accessControl');
 const { normalizePermission } = require('../services/accessControlService');
 const { canGrantPermission } = require('../services/accessControlService');
-const { ensureAccessFoundation } = require('../services/organizationAccessService');
+const {
+  ensureAccessFoundation,
+  materializeRoleTemplate,
+} = require('../services/organizationAccessService');
 const { writeAuditLog } = require('../services/auditService');
 
 const router = express.Router();
@@ -48,22 +51,43 @@ const normalizeRolePayload = (body) => ({
 });
 
 const withCounts = async (roles) => {
-  const [assignmentCounts, legacyCounts] = await Promise.all([
+  const [assignmentUsers, users] = await Promise.all([
     UserAccessAssignment.aggregate([
       { $match: { status: 'active' } },
-      { $group: { _id: '$roleId', count: { $sum: 1 } } },
+      { $group: { _id: '$roleId', userIds: { $addToSet: '$userId' } } },
     ]),
-    User.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
-      { $group: { _id: '$roleKey', count: { $sum: 1 } } },
-    ]),
+    User.find({ isDeleted: { $ne: true } }).select('_id roleKey').lean(),
   ]);
-  const assignmentMap = new Map(assignmentCounts.map((item) => [String(item._id), item.count]));
-  const legacyMap = new Map(legacyCounts.map((item) => [item._id, item.count]));
+  const activeUserIds = new Set(users.map((user) => String(user._id)));
+  const roleKeyById = new Map(roles.map((role) => [String(role._id), role.roleKey]));
+  const usersByRole = new Map(roles.map((role) => [role.roleKey, new Set()]));
+  assignmentUsers.forEach((item) => {
+    const roleKey = roleKeyById.get(String(item._id));
+    if (!roleKey) return;
+    item.userIds
+      .map(String)
+      .filter((userId) => activeUserIds.has(userId))
+      .forEach((userId) => usersByRole.get(roleKey).add(userId));
+  });
+  users.forEach((user) => usersByRole.get(user.roleKey)?.add(String(user._id)));
   return roles.map((role) => ({
     ...role,
-    userCount: (assignmentMap.get(String(role._id)) || 0) + (legacyMap.get(role.roleKey) || 0),
+    userCount: usersByRole.get(role.roleKey)?.size || 0,
   }));
+};
+
+const invalidateRoleSessions = async (role) => {
+  const assignedUserIds = await UserAccessAssignment.distinct('userId', {
+    roleId: role._id,
+    status: 'active',
+  });
+  await User.updateMany(
+    {
+      $or: [{ roleKey: role.roleKey }, { _id: { $in: assignedUserIds } }],
+      isDeleted: { $ne: true },
+    },
+    { $inc: { sessionVersion: 1 } },
+  );
 };
 
 router.get('/', requirePermission('roles', 'view'), async (req, res, next) => {
@@ -101,6 +125,8 @@ router.post(
           .status(400)
           .json({ message: 'Role key must use lowercase letters, numbers and underscores' });
       if (!payload.roleLabel) return res.status(400).json({ message: 'Role name is required' });
+      if (!payload.allowedUserTypes.length)
+        return res.status(400).json({ message: 'Select at least one allowed user type' });
       const existing = await RolePermission.findOne({ roleKey: payload.roleKey });
       if (existing && !existing.legacy) {
         return res.status(409).json({
@@ -210,12 +236,13 @@ router.post(
         return res.status(400).json({ message: 'No system default exists for this role' });
       if (template.roleKey === 'super_admin')
         return res.status(403).json({ message: 'Super Admin is already locked to full access' });
+      const roleDefaults = await materializeRoleTemplate(template);
       const role = await RolePermission.findOneAndUpdate(
         { roleKey: template.roleKey },
-        { $set: { ...template, updatedBy: req.user._id } },
+        { $set: { ...roleDefaults, legacy: false, updatedBy: req.user._id } },
         { new: true, upsert: true, runValidators: true },
       );
-      await User.updateMany({ roleKey: role.roleKey }, { $inc: { sessionVersion: 1 } });
+      await invalidateRoleSessions(role);
       await writeAuditLog({
         req,
         action: 'role_reset_default',
@@ -252,6 +279,14 @@ router.put(
         return res.status(403).json({ message: 'Super Admin permissions cannot be modified' });
       const previousValue = role.toObject();
       const payload = normalizeRolePayload({ ...req.body, roleKey: role.roleKey });
+      if (!payload.allowedUserTypes.length)
+        return res.status(400).json({ message: 'Select at least one allowed user type' });
+      if (role.systemRole) {
+        payload.roleLabel = role.roleLabel;
+        payload.hierarchyLevel = role.hierarchyLevel;
+        payload.allowedUserTypes = role.allowedUserTypes;
+        payload.active = true;
+      }
       const savedRole = await RolePermission.findOneAndUpdate(
         { _id: role._id, roleKey: role.roleKey },
         {
@@ -265,7 +300,7 @@ router.put(
         },
         { new: true, runValidators: true },
       );
-      await User.updateMany({ roleKey: savedRole.roleKey }, { $inc: { sessionVersion: 1 } });
+      await invalidateRoleSessions(savedRole);
       await writeAuditLog({
         req,
         action: 'role_updated',

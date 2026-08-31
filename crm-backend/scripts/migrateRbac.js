@@ -19,6 +19,7 @@ const {
   COMMUNITY_KEYS,
   MODULES,
 } = require('../config/accessControl');
+const { ensureAccessFoundation } = require('../services/organizationAccessService');
 
 dotenv.config();
 
@@ -40,13 +41,9 @@ const inferCommunity = (value = '') => {
 };
 
 const migrateRoles = async () => {
-  for (const template of ROLE_TEMPLATES) {
-    await RolePermission.updateOne(
-      { roleKey: template.roleKey },
-      { $set: { ...template, systemRole: true } },
-      { upsert: true, runValidators: true },
-    );
-  }
+  // Foundation sync restores canonical/legacy roles without overwriting
+  // permissions that an administrator has already customized.
+  await ensureAccessFoundation();
   await RolePermission.deleteOne({ roleKey: 'admin' });
 };
 

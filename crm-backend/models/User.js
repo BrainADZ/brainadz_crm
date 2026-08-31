@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema(
     isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     sessionVersion: { type: Number, default: 0 },
+    accessAssignmentsInitialized: { type: Boolean, default: false, index: true },
 
     department: { type: String, default: 'Sales', trim: true },
     officeModule: { type: String, default: 'Sales', trim: true, index: true },

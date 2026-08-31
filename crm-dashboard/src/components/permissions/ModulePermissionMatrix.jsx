@@ -8,8 +8,15 @@ const MATRIX_ACTIONS = [
   ['delete', 'Delete'],
   ['assign', 'Assign'],
   ['import', 'Import'],
+  ['approve', 'Approve'],
+  ['reject', 'Reject'],
+  ['comment', 'Comment'],
+  ['upload', 'Upload'],
+  ['download', 'Download'],
   ['export', 'Export'],
   ['manage', 'Manage'],
+  ['reopen', 'Reopen'],
+  ['close', 'Close'],
 ];
 
 const RESOURCE_LABELS = {
@@ -111,7 +118,7 @@ const ModulePermissionMatrix = ({ modules, permissions, onChange, locked = false
         )}
       </div>
       <div className="max-h-[38rem] overflow-auto rounded-xl border border-slate-200">
-        <div className="sticky top-0 z-20 grid min-w-[64rem] grid-cols-[minmax(14rem,1fr)_repeat(8,5rem)] bg-slate-100 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="sticky top-0 z-20 grid min-w-[112rem] grid-cols-[minmax(14rem,1fr)_repeat(15,6rem)] bg-slate-100 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <span>Module</span>
           {MATRIX_ACTIONS.map(([action, label]) => (
             <span key={action} className="text-center">
@@ -122,9 +129,9 @@ const ModulePermissionMatrix = ({ modules, permissions, onChange, locked = false
         {filtered.map((module) => (
           <div
             key={module.moduleKey || module.key}
-            className="min-w-[64rem] border-t border-slate-200"
+            className="min-w-[112rem] border-t border-slate-200"
           >
-            <div className="grid grid-cols-[minmax(14rem,1fr)_repeat(8,5rem)] items-center px-3 py-3">
+            <div className="grid grid-cols-[minmax(14rem,1fr)_repeat(15,6rem)] items-center px-3 py-3">
               <button
                 type="button"
                 onClick={() =>
@@ -164,7 +171,7 @@ const ModulePermissionMatrix = ({ modules, permissions, onChange, locked = false
                 {module.resources.map((resource) => (
                   <div
                     key={resource}
-                    className="grid grid-cols-[minmax(14rem,1fr)_repeat(8,5rem)] items-center border-t border-slate-100 px-3 py-2"
+                    className="grid grid-cols-[minmax(14rem,1fr)_repeat(15,6rem)] items-center border-t border-slate-100 px-3 py-2"
                   >
                     <span className="pl-6 text-xs font-medium text-slate-600">
                       {title(resource)}

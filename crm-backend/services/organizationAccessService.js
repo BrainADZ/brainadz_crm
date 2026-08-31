@@ -11,6 +11,7 @@ const {
   DEPARTMENT_SEEDS,
   MODULES,
   ROLE_TEMPLATES,
+  ROLE_DEPARTMENT_SLUGS,
   ACTIONS,
   PERMISSION_RESOURCES,
 } = require('../config/accessControl');
@@ -19,6 +20,47 @@ const DEFAULT_TEAMS = {
   creative: ['Graphic Design Team', 'Video Editing Team', 'Content Team'],
   development: ['Frontend Team', 'Backend Team', 'Full Stack Team', 'QA Team'],
   sales: ['Marketing Sales Team', 'Live Sales Team', 'Exhibits Sales Team'],
+};
+const SCOPE_RANK = {
+  none: 0,
+  self: 1,
+  OWN: 1,
+  linked: 1,
+  assigned: 2,
+  ASSIGNED: 2,
+  team: 3,
+  TEAM: 3,
+  MULTIPLE_TEAMS: 4,
+  department: 5,
+  DEPARTMENT: 5,
+  community: 6,
+  BUSINESS_UNIT: 6,
+  MULTIPLE_BUSINESS_UNITS: 7,
+  all: 8,
+  COMPANY: 8,
+};
+
+const effectiveAssignmentScope = (assignment, permissionScope = null) => {
+  const roleScope =
+    permissionScope || assignment.roleId?.defaultDataScope || assignment.roleId?.defaultScope;
+  const requestedScope = assignment.dataScope || roleScope || 'ASSIGNED';
+  if (!roleScope) return requestedScope;
+  return (SCOPE_RANK[requestedScope] || 0) <= (SCOPE_RANK[roleScope] || 0)
+    ? requestedScope
+    : roleScope;
+};
+
+const materializeRoleTemplate = async (template, departments = null) => {
+  const departmentSlugs = ROLE_DEPARTMENT_SLUGS[template.roleKey] || [];
+  if (!departmentSlugs.length) return { ...template };
+  const availableDepartments =
+    departments || (await Department.find({ slug: { $in: departmentSlugs } }).lean());
+  return {
+    ...template,
+    assignableDepartmentIds: availableDepartments
+      .filter((department) => departmentSlugs.includes(department.slug))
+      .map((department) => department._id),
+  };
 };
 
 const ensureAccessFoundation = async () => {
@@ -54,11 +96,19 @@ const ensureAccessFoundation = async () => {
           status: 'active',
           isCompanyWide: Boolean(seed.isCompanyWide),
           businessUnitIds,
-          defaultModuleIds: [],
+          defaultModuleIds: seed.defaultModuleKeys || [],
+          moduleDefaultsInitialized: true,
         },
       },
       { upsert: true },
     );
+    const department = await Department.findOne({ slug: seed.slug });
+    if (department && !department.moduleDefaultsInitialized) {
+      if (!department.defaultModuleIds?.length)
+        department.defaultModuleIds = seed.defaultModuleKeys || [];
+      department.moduleDefaultsInitialized = true;
+      await department.save();
+    }
   }
 
   const departments = await Department.find({ status: 'active' });
@@ -101,28 +151,35 @@ const ensureAccessFoundation = async () => {
     { $set: { legacy: true } },
   );
   for (const template of ROLE_TEMPLATES) {
+    const roleDefaults = await materializeRoleTemplate(template, departments);
     if (template.roleKey === 'super_admin') {
       await RolePermission.updateOne(
         { roleKey: template.roleKey },
-        { $set: { ...template, legacy: false, locked: true, active: true } },
+        { $set: { ...roleDefaults, legacy: false, locked: true, active: true } },
         { upsert: true, runValidators: true, setDefaultsOnInsert: true },
       );
       continue;
     }
     const existing = await RolePermission.findOneAndUpdate(
       { roleKey: template.roleKey },
-      { $setOnInsert: { ...template, legacy: false } },
+      { $setOnInsert: { ...roleDefaults, legacy: false } },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     const missingHierarchy =
       existing.hierarchyLevel === undefined ||
       existing.hierarchyLevel === null ||
       existing.hierarchyLevel === 0;
-    if (missingHierarchy || existing.legacy) {
+    const needsCanonicalPromotion = !existing.systemRole;
+    if (missingHierarchy || existing.legacy || needsCanonicalPromotion) {
       await RolePermission.updateOne(
         { _id: existing._id },
-        { $set: { ...template, legacy: false } },
+        { $set: { ...roleDefaults, legacy: false } },
         { runValidators: true },
+      );
+    } else if (roleDefaults.roleGroup && existing.roleGroup !== roleDefaults.roleGroup) {
+      await RolePermission.updateOne(
+        { _id: existing._id },
+        { $set: { roleGroup: roleDefaults.roleGroup } },
       );
     }
   }
@@ -240,7 +297,7 @@ const resolveUserAccess = async (userId) => {
   let assignments = await UserAccessAssignment.find(activeAssignmentQuery(userId))
     .populate('roleId')
     .lean();
-  if (!assignments.length) {
+  if (!assignments.length && !user.accessAssignmentsInitialized) {
     const role = await RolePermission.findOne({
       roleKey: user.roleKey || user.crmRole || 'employee',
       active: true,
@@ -276,10 +333,15 @@ const resolveUserAccess = async (userId) => {
   const departmentModuleKeys = new Set(
     assignedDepartments.flatMap((department) => department.defaultModuleIds || []),
   );
-  // Assignments always have a department. If an old/incomplete assignment has
-  // no active department, fail closed instead of accidentally showing the role's
-  // complete module set.
-  const hasDepartmentModuleRestriction = true;
+  const managedAssignments = assignments.filter((assignment) => assignment._id !== 'legacy');
+  const hasOrganizationWideAssignment = managedAssignments.some((assignment) =>
+    ['BUSINESS_UNIT', 'MULTIPLE_BUSINESS_UNITS', 'COMPANY'].includes(assignment.dataScope),
+  );
+  // Managed department/team assignments are the intersection of role access and
+  // department modules. Legacy users and organization-wide roles retain their
+  // role permissions until they are migrated to explicit assignments.
+  const hasDepartmentModuleRestriction =
+    managedAssignments.length > 0 && !hasOrganizationWideAssignment;
   const allowedResources = new Set(
     MODULES.filter(
       (module) => !hasDepartmentModuleRestriction || departmentModuleKeys.has(module.key),
@@ -290,11 +352,7 @@ const resolveUserAccess = async (userId) => {
     assignments.map((assignment) => ({
       permissions: (assignment.roleId?.permissions || []).map((permission) => ({
         ...permission,
-        scope:
-          assignment.dataScope ||
-          permission.scope ||
-          assignment.roleId?.defaultDataScope ||
-          'ASSIGNED',
+        scope: effectiveAssignmentScope(assignment, permission.scope),
       })),
       source: `Role: ${assignment.roleId?.roleLabel || 'Unknown'}`,
     })),
@@ -305,7 +363,7 @@ const resolveUserAccess = async (userId) => {
         resource: override.resource,
         actions: [],
         deniedActions: [],
-        scopes: [assignment.dataScope],
+        scopes: [effectiveAssignmentScope(assignment)],
         sources: [],
       };
       current.actions = [...new Set([...current.actions, ...(override.allow || [])])];
@@ -337,7 +395,10 @@ const resolveUserAccess = async (userId) => {
     );
     // Resources which belong to an unselected department module must not be
     // callable directly by URL/API either.
-    if (PERMISSION_RESOURCES.includes(permission.resource) && !allowedResources.has(permission.resource)) {
+    if (
+      PERMISSION_RESOURCES.includes(permission.resource) &&
+      !allowedResources.has(permission.resource)
+    ) {
       permission.actions = [];
     }
   });
@@ -391,6 +452,7 @@ const buildDataScopeFilter = (assignment, userId) => {
 
 module.exports = {
   ensureAccessFoundation,
+  materializeRoleTemplate,
   getOrganizationWorkspace,
   resolveUserAccess,
   buildDataScopeFilter,

@@ -1,12 +1,14 @@
 import { useLocation } from 'react-router-dom';
 import WorkspaceTopbar from './WorkspaceTopbar';
+import { isSalesSession } from '../utils/auth';
 
-const getPageTitle = (pathname) => {
-  if (pathname === '/dashboard') return 'Dashboard';
+const getPageTitle = (pathname, salesSession) => {
+  if (pathname === '/dashboard') return salesSession ? 'Sales Dashboard' : 'Dashboard';
   if (pathname.startsWith('/dashboard/business')) return 'Business OS';
 
   if (pathname.startsWith('/dashboard/clients/')) return 'Client Data';
   if (pathname.startsWith('/dashboard/clients')) return 'Clients';
+  if (pathname.startsWith('/dashboard/quotations')) return 'Quotations';
 
   if (pathname.startsWith('/dashboard/employees')) return 'Employees';
   if (pathname.startsWith('/dashboard/tasks')) return 'Tasks';
@@ -27,7 +29,7 @@ const getPageTitle = (pathname) => {
 const Navbar = ({ role = 'admin' }) => {
   const location = useLocation();
 
-  const title = getPageTitle(location.pathname);
+  const title = getPageTitle(location.pathname, isSalesSession());
 
   const showSearch = !location.pathname.startsWith('/dashboard/settings');
 

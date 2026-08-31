@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Search,
   ShieldCheck,
   Trash2,
   X,
@@ -56,6 +57,7 @@ const SCOPE_COPY = {
   MULTIPLE_BUSINESS_UNITS: 'Records across selected business units.',
   COMPANY: 'Complete company data.',
 };
+const USER_TYPES = ['employee', 'client', 'vendor', 'contractor'];
 
 const roleKeyFromName = (value) =>
   value
@@ -93,6 +95,7 @@ const PermissionsHub = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [departmentDraft, setDepartmentDraft] = useState(null);
   const [selectedRoleKey, setSelectedRoleKey] = useState('super_admin');
+  const [roleSearch, setRoleSearch] = useState('');
   const [roleDraft, setRoleDraft] = useState(null);
   const [teamModal, setTeamModal] = useState(false);
   const [editingTeamId, setEditingTeamId] = useState('');
@@ -158,6 +161,7 @@ const PermissionsHub = () => {
           assignableBusinessUnitIds: ids(role.assignableBusinessUnitIds),
           assignableDepartmentIds: ids(role.assignableDepartmentIds),
           assignableTeamIds: ids(role.assignableTeamIds),
+          allowedUserTypes: role.allowedUserTypes || ['employee'],
           permissions: role.permissions || [],
         });
       }
@@ -310,6 +314,7 @@ const PermissionsHub = () => {
       assignableBusinessUnitIds: ids(role.assignableBusinessUnitIds),
       assignableDepartmentIds: ids(role.assignableDepartmentIds),
       assignableTeamIds: ids(role.assignableTeamIds),
+      allowedUserTypes: role.allowedUserTypes || ['employee'],
       permissions: role.permissions || [],
     });
   };
@@ -337,6 +342,7 @@ const PermissionsHub = () => {
         assignableBusinessUnitIds: ids(saved.assignableBusinessUnitIds),
         assignableDepartmentIds: ids(saved.assignableDepartmentIds),
         assignableTeamIds: ids(saved.assignableTeamIds),
+        allowedUserTypes: saved.allowedUserTypes || ['employee'],
         permissions: saved.permissions || [],
       });
       notify(response.message);
@@ -365,7 +371,14 @@ const PermissionsHub = () => {
         created,
       ]);
       setSelectedRoleKey(created.roleKey);
-      setRoleDraft(created);
+      setRoleDraft({
+        ...created,
+        assignableBusinessUnitIds: ids(created.assignableBusinessUnitIds),
+        assignableDepartmentIds: ids(created.assignableDepartmentIds),
+        assignableTeamIds: ids(created.assignableTeamIds),
+        allowedUserTypes: created.allowedUserTypes || ['employee'],
+        permissions: created.permissions || [],
+      });
       setRoleModal(false);
       notify(response.message);
     } catch (requestError) {
@@ -412,7 +425,12 @@ const PermissionsHub = () => {
       const result = await previewAccess(
         previewForm.mode === 'user'
           ? { userId: previewForm.userId }
-          : { roleKey: previewForm.roleKey },
+          : {
+              roleKey: previewForm.roleKey,
+              businessUnitId: previewForm.businessUnitId,
+              departmentId: previewForm.departmentId,
+              teamId: previewForm.teamId,
+            },
       );
       setPreview(result);
     } catch (requestError) {
@@ -665,9 +683,25 @@ const PermissionsHub = () => {
       <div className="border-b border-slate-200 p-4">
         <h2 className="text-sm font-semibold text-slate-900">Roles</h2>
         <p className="mt-1 text-xs text-slate-500">{roles.length} system and custom roles</p>
+        <label className="relative mt-3 block">
+          <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+          <input
+            value={roleSearch}
+            onChange={(event) => setRoleSearch(event.target.value)}
+            placeholder="Search roles"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-2 text-xs outline-none focus:border-blue-400"
+          />
+        </label>
       </div>
       <div className="max-h-[42rem] space-y-1 overflow-y-auto p-2">
-        {roles.map((role) => (
+        {roles
+          .filter((role) =>
+            [role.roleLabel, role.roleKey, role.roleGroup]
+              .join(' ')
+              .toLowerCase()
+              .includes(roleSearch.trim().toLowerCase()),
+          )
+          .map((role) => (
           <button
             key={role.roleKey}
             type="button"
@@ -684,12 +718,12 @@ const PermissionsHub = () => {
               <span
                 className={`block text-[11px] ${selectedRoleKey === role.roleKey ? 'text-blue-100' : 'text-slate-400'}`}
               >
-                Level {role.hierarchyLevel} · {role.systemRole ? 'System' : 'Custom'} ·{' '}
-                {role.userCount || 0} users
+                {role.roleGroup || (role.systemRole ? 'System' : 'Custom')} · Level{' '}
+                {role.hierarchyLevel} · {role.userCount || 0} users
               </span>
             </span>
           </button>
-        ))}
+          ))}
       </div>
     </aside>
   );
@@ -809,6 +843,69 @@ const PermissionsHub = () => {
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${active ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}
                     >
                       {department.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+            <section>
+              <h3 className="mb-1 text-sm font-semibold text-slate-900">Assignable Teams</h3>
+              <p className="mb-3 text-xs text-slate-500">
+                Leave empty to allow every team inside the selected departments.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {workspace.teams
+                  .filter(
+                    (team) =>
+                      !roleDraft.assignableDepartmentIds.length ||
+                      roleDraft.assignableDepartmentIds.includes(
+                        String(team.departmentId?._id || team.departmentId),
+                      ),
+                  )
+                  .map((team) => {
+                    const active = roleDraft.assignableTeamIds.includes(team._id);
+                    return (
+                      <button
+                        key={team._id}
+                        type="button"
+                        disabled={roleLocked}
+                        onClick={() =>
+                          setRoleDraft((current) => ({
+                            ...current,
+                            assignableTeamIds: current.assignableTeamIds.includes(team._id)
+                              ? current.assignableTeamIds.filter((id) => id !== team._id)
+                              : [...current.assignableTeamIds, team._id],
+                          }))
+                        }
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${active ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 text-slate-500'}`}
+                      >
+                        {team.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            </section>
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Allowed User Types</h3>
+              <div className="flex flex-wrap gap-2">
+                {USER_TYPES.map((userType) => {
+                  const active = roleDraft.allowedUserTypes.includes(userType);
+                  return (
+                    <button
+                      key={userType}
+                      type="button"
+                      disabled={roleLocked || roleDraft.systemRole}
+                      onClick={() =>
+                        setRoleDraft((current) => ({
+                          ...current,
+                          allowedUserTypes: current.allowedUserTypes.includes(userType)
+                            ? current.allowedUserTypes.filter((item) => item !== userType)
+                            : [...current.allowedUserTypes, userType],
+                        }))
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${active ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}
+                    >
+                      {userType}
                     </button>
                   );
                 })}

@@ -16,7 +16,6 @@ const authMiddleware = require('../middleware/authMiddleware');
 const {
   MODULES,
   UNIVERSAL_COMMUNITIES,
-  DEFAULT_ROLES,
   COMMUNITY_KEYS,
 } = require('../config/accessControl');
 const { loadAuthorization } = require('../middleware/authorization');
@@ -26,6 +25,7 @@ const {
   getAuthorizedCommunities,
 } = require('../services/accessControlService');
 const { writeAuditLog } = require('../services/auditService');
+const { ensureAccessFoundation } = require('../services/organizationAccessService');
 
 const router = express.Router();
 
@@ -318,11 +318,7 @@ const toCurrencyNumber = (value) => Number(value || 0);
 const formatCodePrefix = (type) => (type === 'invoice' ? 'INV' : 'QT');
 
 const ensureDefaults = async (createdBy) => {
-  await Promise.all(
-    DEFAULT_ROLES.map((role) =>
-      RolePermission.updateOne({ roleKey: role.roleKey }, { $setOnInsert: role }, { upsert: true }),
-    ),
-  );
+  await ensureAccessFoundation();
   await RolePermission.deleteOne({ roleKey: 'admin' });
 
   await Promise.all(

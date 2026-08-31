@@ -32,6 +32,7 @@ const DATA_SCOPES = [
   'MULTIPLE_BUSINESS_UNITS',
   'COMPANY',
 ];
+const DATA_SCOPE_RANK = Object.fromEntries(DATA_SCOPES.map((scope, index) => [scope, index + 1]));
 const blankPersonal = {
   name: '',
   email: '',
@@ -56,6 +57,20 @@ const initials = (name = '') =>
     .slice(0, 2)
     .toUpperCase() || 'EM';
 const idOf = (value) => String(value?._id || value || '');
+const roleFitsAssignment = (role, departmentId, businessUnitIds = []) => {
+  if (
+    role.active === false ||
+    role.roleKey === 'super_admin' ||
+    !role.allowedUserTypes?.includes('employee')
+  )
+    return false;
+  const departmentIds = (role.assignableDepartmentIds || []).map(idOf);
+  const unitIds = (role.assignableBusinessUnitIds || []).map(idOf);
+  return (
+    (!departmentIds.length || departmentIds.includes(departmentId)) &&
+    (!unitIds.length || businessUnitIds.every((id) => unitIds.includes(id)))
+  );
+};
 
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
@@ -684,6 +699,19 @@ const Employees = () => {
                           assignment.businessUnitIds.includes(idOf(unitId)),
                         ),
                     );
+                    const availableRoles = workspace.roles.filter((role) =>
+                      roleFitsAssignment(role, assignment.departmentId, assignment.businessUnitIds),
+                    );
+                    const selectedAssignmentRole = workspace.roles.find(
+                      (role) => role._id === assignment.roleId,
+                    );
+                    const availableDataScopes = DATA_SCOPES.filter(
+                      (scope) =>
+                        DATA_SCOPE_RANK[scope] <=
+                        DATA_SCOPE_RANK[
+                          selectedAssignmentRole?.defaultDataScope || 'ASSIGNED'
+                        ],
+                    );
                     return (
                       <div
                         key={index}
@@ -722,11 +750,25 @@ const Employees = () => {
                                 const nextDepartment = workspace.departments.find(
                                   (item) => item._id === event.target.value,
                                 );
+                                const nextBusinessUnitIds =
+                                  nextDepartment?.businessUnitIds.slice(0, 1).map(idOf) || [];
+                                const nextRoles = workspace.roles.filter((role) =>
+                                  roleFitsAssignment(
+                                    role,
+                                    event.target.value,
+                                    nextBusinessUnitIds,
+                                  ),
+                                );
+                                const nextRole =
+                                  nextRoles.find((role) => role._id === assignment.roleId) ||
+                                  nextRoles.find((role) => role.roleKey === 'employee') ||
+                                  nextRoles[0];
                                 updateAssignment(index, {
                                   departmentId: event.target.value,
-                                  businessUnitIds:
-                                    nextDepartment?.businessUnitIds.slice(0, 1).map(idOf) || [],
+                                  businessUnitIds: nextBusinessUnitIds,
                                   teamIds: [],
+                                  roleId: nextRole?._id || '',
+                                  dataScope: nextRole?.defaultDataScope || 'ASSIGNED',
                                 });
                               }}
                               className={inputClass}
@@ -834,20 +876,24 @@ const Employees = () => {
                                 const role = workspace.roles.find(
                                   (item) => item._id === event.target.value,
                                 );
+                                const assignableTeamIds = (role?.assignableTeamIds || []).map(idOf);
                                 updateAssignment(index, {
                                   roleId: event.target.value,
                                   dataScope: role?.defaultDataScope || assignment.dataScope,
+                                  teamIds: assignableTeamIds.length
+                                    ? assignment.teamIds.filter((id) =>
+                                        assignableTeamIds.includes(id),
+                                      )
+                                    : assignment.teamIds,
                                 });
                               }}
                               className={inputClass}
                             >
-                              {workspace.roles
-                                .filter((role) => role.roleKey !== 'super_admin')
-                                .map((role) => (
+                              {availableRoles.map((role) => (
                                   <option key={role._id} value={role._id}>
                                     {role.roleLabel}
                                   </option>
-                                ))}
+                              ))}
                             </select>
                           </label>
                           <label>
@@ -859,7 +905,7 @@ const Employees = () => {
                               }
                               className={inputClass}
                             >
-                              {DATA_SCOPES.map((scope) => (
+                              {availableDataScopes.map((scope) => (
                                 <option key={scope} value={scope}>
                                   {scope.replaceAll('_', ' ')}
                                 </option>

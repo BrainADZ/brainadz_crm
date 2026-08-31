@@ -3,14 +3,13 @@ const User = require('../models/User');
 const Counter = require('../models/Counter');
 const BusinessUnit = require('../models/BusinessUnit');
 const Department = require('../models/Department');
-const OrganizationTeam = require('../models/OrganizationTeam');
 const RolePermission = require('../models/RolePermission');
 const UserAccessAssignment = require('../models/UserAccessAssignment');
 const authMiddleware = require('../middleware/authMiddleware');
 const { loadAuthorization, requirePermission } = require('../middleware/authorization');
-const { DATA_SCOPES } = require('../config/accessControl');
 const { createUser, updateUser, publicUserFields } = require('../services/userService');
 const { writeAuditLog } = require('../services/auditService');
+const { validateAccessAssignments } = require('../services/accessAssignmentService');
 
 const router = express.Router();
 router.use(authMiddleware, loadAuthorization);
@@ -23,56 +22,6 @@ const nextEmployeeId = async () => {
     { new: true, upsert: true },
   );
   return `BADZ-${year}-${String(counter.value).padStart(4, '0')}`;
-};
-
-const validateAssignments = async (assignments, actor) => {
-  if (!Array.isArray(assignments) || !assignments.length)
-    throw new Error('Add at least one access assignment');
-  const normalized = [];
-  for (const [index, input] of assignments.entries()) {
-    const businessUnitIds = [...new Set((input.businessUnitIds || []).map(String).filter(Boolean))];
-    const teamIds = [...new Set((input.teamIds || []).map(String).filter(Boolean))];
-    const [department, role, units, teams] = await Promise.all([
-      Department.findById(input.departmentId),
-      RolePermission.findById(input.roleId),
-      BusinessUnit.find({ _id: { $in: businessUnitIds }, status: 'active' }),
-      OrganizationTeam.find({ _id: { $in: teamIds }, status: 'active' }),
-    ]);
-    if (!department || !role || !role.active)
-      throw new Error(`Access row ${index + 1} has an invalid department or role`);
-    if (!businessUnitIds.length || units.length !== businessUnitIds.length)
-      throw new Error(`Access row ${index + 1} requires valid Business Units`);
-    if (businessUnitIds.some((id) => !department.businessUnitIds.map(String).includes(id)))
-      throw new Error(`Access row ${index + 1} uses a Business Unit outside the department`);
-    if (
-      teams.length !== teamIds.length ||
-      teams.some(
-        (team) =>
-          String(team.departmentId) !== String(department._id) ||
-          !team.businessUnitIds.some((id) => businessUnitIds.includes(String(id))),
-      )
-    )
-      throw new Error(`Access row ${index + 1} has an invalid team selection`);
-    if (!DATA_SCOPES.includes(input.dataScope))
-      throw new Error(`Access row ${index + 1} has an invalid data scope`);
-    if (role.roleKey === 'super_admin' && actor.roleKey !== 'super_admin')
-      throw Object.assign(new Error('Only Super Admin can assign the Super Admin role'), {
-        status: 403,
-      });
-    normalized.push({
-      businessUnitIds,
-      departmentId: department._id,
-      teamIds,
-      roleId: role._id,
-      dataScope: input.dataScope,
-      isPrimary: Boolean(input.isPrimary),
-      modulePermissionOverrides: [],
-    });
-  }
-  if (!normalized.some((assignment) => assignment.isPrimary)) normalized[0].isPrimary = true;
-  if (normalized.filter((assignment) => assignment.isPrimary).length > 1)
-    throw new Error('Only one access assignment can be primary');
-  return normalized;
 };
 
 const employeeDirectoryPayload = async (users) => {
@@ -129,7 +78,11 @@ router.get('/', requirePermission('employees', 'view'), async (req, res, next) =
 router.post('/', requirePermission('employees', 'create'), async (req, res, next) => {
   let createdUser;
   try {
-    const assignments = await validateAssignments(req.body.assignments, req.user);
+    const assignments = await validateAccessAssignments(req.body.assignments, {
+      actor: req.user,
+      effectivePermissions: req.effectivePermissions,
+      targetUserType: 'employee',
+    });
     const { primaryRole, primaryDepartment, communities } = await accessContext(assignments);
     const employeeId = await nextEmployeeId();
     createdUser = await createUser({
@@ -167,6 +120,10 @@ router.post('/', requirePermission('employees', 'create'), async (req, res, next
         updatedBy: req.user._id,
       })),
     );
+    await User.updateOne(
+      { _id: createdUser._id },
+      { $set: { accessAssignmentsInitialized: true } },
+    );
     await writeAuditLog({
       req,
       targetUserId: createdUser._id,
@@ -201,7 +158,11 @@ router.put('/:employeeId', requirePermission('employees', 'update'), async (req,
       isDeleted: { $ne: true },
     });
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
-    const assignments = await validateAssignments(req.body.assignments, req.user);
+    const assignments = await validateAccessAssignments(req.body.assignments, {
+      actor: req.user,
+      effectivePermissions: req.effectivePermissions,
+      targetUserType: 'employee',
+    });
     const { primaryRole, primaryDepartment, communities } = await accessContext(assignments);
     const updatedUser = await updateUser({
       userId: employee._id,
@@ -242,6 +203,10 @@ router.put('/:employeeId', requirePermission('employees', 'update'), async (req,
         createdBy: req.user._id,
         updatedBy: req.user._id,
       })),
+    );
+    await User.updateOne(
+      { _id: employee._id },
+      { $set: { accessAssignmentsInitialized: true } },
     );
     await writeAuditLog({
       req,

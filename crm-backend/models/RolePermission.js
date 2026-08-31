@@ -27,6 +27,7 @@ const rolePermissionSchema = new mongoose.Schema(
       match: /^[a-z][a-z0-9_]*$/,
     },
     roleLabel: { type: String, required: true, trim: true },
+    roleGroup: { type: String, default: 'Custom', trim: true },
     description: { type: String, default: '', trim: true },
     allowedUserTypes: [{ type: String, enum: USER_TYPES }],
     permissions: [permissionSchema],

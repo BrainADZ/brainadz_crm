@@ -14,6 +14,7 @@ import PrivateRoute from './components/PrivateRoute';
 import AccessRoute from './components/AccessRoute';
 import AdminTasks from './pages/AdminTasks';
 import AdminDashboardHome from './pages/AdminDashboardHome';
+import SalesDashboard from './pages/SalesDashboard';
 import WhatsAppDemo from './pages/WhatsAppDemo';
 import AccountSettings from './pages/AccountSettings';
 import CommunicationHub from './pages/CommunicationHub';
@@ -25,7 +26,10 @@ import PermissionsHub from './pages/PermissionsHub';
 import Meetings from './pages/Meetings';
 import Quotations from './pages/Quotations';
 import TeamWorkload from './pages/TeamWorkload';
-import { getAuthenticatedRole } from './utils/auth';
+import { getAuthenticatedRole, isSalesSession } from './utils/auth';
+
+const DashboardHome = () =>
+  isSalesSession() ? <SalesDashboard /> : <AdminDashboardHome />;
 
 const AppRoutes = () => {
   // Re-render the auth gates after login/logout navigation. Reading the role in
@@ -72,7 +76,7 @@ const AppRoutes = () => {
             index
             element={
               <AccessRoute moduleKey="dashboard">
-                <AdminDashboardHome />
+                <DashboardHome />
               </AccessRoute>
             }
           />

@@ -4,7 +4,8 @@ const dotenv = require('dotenv');
 const User = require('../models/User');
 const Community = require('../models/Community');
 const RolePermission = require('../models/RolePermission');
-const { COMMUNITY_KEYS, DEFAULT_ROLES, UNIVERSAL_COMMUNITIES } = require('../config/accessControl');
+const { COMMUNITY_KEYS, UNIVERSAL_COMMUNITIES } = require('../config/accessControl');
+const { ensureAccessFoundation } = require('../services/organizationAccessService');
 
 dotenv.config();
 
@@ -22,15 +23,7 @@ const seedSuperAdmin = async () => {
 
   await mongoose.connect(mongoUri);
 
-  await Promise.all(
-    DEFAULT_ROLES.map((role) =>
-      RolePermission.updateOne(
-        { roleKey: role.roleKey },
-        { $set: { ...role, systemRole: true } },
-        { upsert: true },
-      ),
-    ),
-  );
+  await ensureAccessFoundation();
   await RolePermission.deleteOne({ roleKey: 'admin' });
 
   await Promise.all(

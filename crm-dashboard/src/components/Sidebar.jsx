@@ -6,6 +6,7 @@ import {
   Users,
   UserRoundCog,
   ListTodo,
+  MessageSquareText,
   Gauge,
   BarChart3,
   CalendarDays,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 
 import { getMyAccess } from '../services/accessApi';
-import { isSuperAdminSession } from '../utils/auth';
+import { isSalesSession, isSuperAdminSession } from '../utils/auth';
 
 const FULL_LOGO = '/main-logo.png';
 const COLLAPSED_LOGO = '/br-logo-sidebar.png';
@@ -81,6 +82,12 @@ const navItems = [
     moduleKey: 'quotations',
   },
   {
+    to: '/dashboard/communication',
+    label: 'Communication',
+    icon: MessageSquareText,
+    moduleKey: 'communication',
+  },
+  {
     to: '/dashboard/marketing',
     label: 'Marketing',
     icon: BarChart3,
@@ -133,6 +140,7 @@ const navItems = [
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
   const location = useLocation();
+  const salesSession = isSalesSession();
 
   const [openGroups, setOpenGroups] = useState({});
   const [visibleModules, setVisibleModules] = useState(null);
@@ -199,12 +207,18 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   const visibleNavItems = useMemo(
     () =>
-      navItems.filter(
-        (item) =>
-          visibleModules === null ||
-          visibleModules.has(item.moduleKey),
-      ),
-    [visibleModules],
+      navItems
+        .filter(
+          (item) =>
+            visibleModules === null ||
+            visibleModules.has(item.moduleKey),
+        )
+        .map((item) =>
+          salesSession && item.exact
+            ? { ...item, label: 'Sales Dashboard' }
+            : item,
+        ),
+    [salesSession, visibleModules],
   );
 
   const isActive = (item) => {

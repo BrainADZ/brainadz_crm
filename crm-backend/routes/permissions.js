@@ -20,6 +20,10 @@ const {
   resolveUserAccess,
 } = require('../services/organizationAccessService');
 const { writeAuditLog } = require('../services/auditService');
+const {
+  validateAccessAssignments,
+  syncUserPrimaryAccess,
+} = require('../services/accessAssignmentService');
 
 const router = express.Router();
 router.use(authMiddleware, loadAuthorization);
@@ -83,6 +87,7 @@ router.put(
           ),
         ),
       ];
+      department.moduleDefaultsInitialized = true;
       department.updatedBy = req.user._id;
       await department.save();
       await writeAuditLog({
@@ -218,48 +223,23 @@ router.get('/assignments', requirePermission('permissions', 'view'), async (req,
 
 router.post('/assignments', requirePermission('permissions', 'manage'), async (req, res, next) => {
   try {
-    const [user, role, department] = await Promise.all([
-      User.findById(req.body.userId),
-      RolePermission.findById(req.body.roleId),
-      Department.findById(req.body.departmentId),
-    ]);
-    if (!user || !role || !department)
-      return res.status(400).json({ message: 'Valid user, role and department are required' });
-    if (role.roleKey === 'super_admin' && req.user.roleKey !== 'super_admin')
-      return res
-        .status(403)
-        .json({ message: 'Only Super Admin can create a Super Admin assignment' });
-    if (!DATA_SCOPES.includes(req.body.dataScope))
-      return res.status(400).json({ message: 'Select a valid data scope' });
-    const businessUnitIds = uniqueIds(req.body.businessUnitIds);
-    const teamIds = uniqueIds(req.body.teamIds);
-    if (
-      !businessUnitIds.length ||
-      businessUnitIds.some((id) => !department.businessUnitIds.map(String).includes(id))
-    )
-      return res
-        .status(400)
-        .json({ message: 'Assignment business units must belong to the department' });
-    if (
-      teamIds.length !==
-      (await OrganizationTeam.countDocuments({
-        _id: { $in: teamIds },
-        departmentId: department._id,
-        businessUnitIds: { $in: businessUnitIds },
-      }))
-    )
-      return res.status(400).json({
-        message: 'Assignment teams must belong to the selected department and business units',
-      });
-    if (req.body.isPrimary)
+    const user = await User.findById(req.body.userId);
+    if (!user) return res.status(400).json({ message: 'Valid user is required' });
+    const [normalized] = await validateAccessAssignments([req.body], {
+      actor: req.user,
+      effectivePermissions: req.effectivePermissions,
+      targetUserType: user.userType,
+      ensurePrimary: false,
+    });
+    if (normalized.isPrimary)
       await UserAccessAssignment.updateMany({ userId: user._id }, { $set: { isPrimary: false } });
     const assignment = await UserAccessAssignment.create({
-      ...req.body,
-      businessUnitIds,
-      teamIds,
+      ...normalized,
+      userId: user._id,
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
+    await syncUserPrimaryAccess(user._id);
     await writeAuditLog({
       req,
       targetUserId: user._id,
@@ -282,23 +262,40 @@ router.put(
       const assignment = await UserAccessAssignment.findById(req.params.assignmentId);
       if (!assignment) return res.status(404).json({ message: 'Access assignment not found' });
       const previousValue = assignment.toObject();
-      const allowedFields = [
-        'roleId',
-        'businessUnitIds',
-        'departmentId',
-        'teamIds',
-        'dataScope',
-        'modulePermissionOverrides',
-        'isPrimary',
-        'status',
-        'startDate',
-        'endDate',
-      ];
-      allowedFields.forEach((field) => {
-        if (req.body[field] !== undefined) assignment[field] = req.body[field];
-      });
+      const user = await User.findById(assignment.userId);
+      if (!user) return res.status(404).json({ message: 'Assigned user not found' });
+      const [normalized] = await validateAccessAssignments(
+        [
+          {
+            roleId: req.body.roleId ?? assignment.roleId,
+            businessUnitIds: req.body.businessUnitIds ?? assignment.businessUnitIds,
+            departmentId: req.body.departmentId ?? assignment.departmentId,
+            teamIds: req.body.teamIds ?? assignment.teamIds,
+            dataScope: req.body.dataScope ?? assignment.dataScope,
+            modulePermissionOverrides:
+              req.body.modulePermissionOverrides ?? assignment.modulePermissionOverrides,
+            isPrimary: req.body.isPrimary ?? assignment.isPrimary,
+            status: req.body.status ?? assignment.status,
+            startDate: req.body.startDate ?? assignment.startDate,
+            endDate: req.body.endDate ?? assignment.endDate,
+          },
+        ],
+        {
+          actor: req.user,
+          effectivePermissions: req.effectivePermissions,
+          targetUserType: user.userType,
+          ensurePrimary: false,
+        },
+      );
+      if (normalized.isPrimary)
+        await UserAccessAssignment.updateMany(
+          { userId: user._id, _id: { $ne: assignment._id } },
+          { $set: { isPrimary: false } },
+        );
+      Object.assign(assignment, normalized);
       assignment.updatedBy = req.user._id;
       await assignment.save();
+      await syncUserPrimaryAccess(user._id);
       await writeAuditLog({
         req,
         targetUserId: assignment.userId,
@@ -322,6 +319,7 @@ router.delete(
     try {
       const assignment = await UserAccessAssignment.findByIdAndDelete(req.params.assignmentId);
       if (!assignment) return res.status(404).json({ message: 'Access assignment not found' });
+      await syncUserPrimaryAccess(assignment.userId);
       await writeAuditLog({
         req,
         targetUserId: assignment.userId,
@@ -346,9 +344,52 @@ router.post('/preview', requirePermission('permissions', 'view'), async (req, re
       legacy: { $ne: true },
     }).lean();
     if (!role) return res.status(404).json({ message: 'Role not found' });
+    const [department, team, businessUnit] = await Promise.all([
+      req.body.departmentId ? Department.findById(req.body.departmentId).lean() : null,
+      req.body.teamId ? OrganizationTeam.findById(req.body.teamId).lean() : null,
+      req.body.businessUnitId ? BusinessUnit.findById(req.body.businessUnitId).lean() : null,
+    ]);
+    if (req.body.departmentId && !department)
+      return res.status(400).json({ message: 'Preview department not found' });
+    if (req.body.teamId && !team)
+      return res.status(400).json({ message: 'Preview team not found' });
+    if (req.body.businessUnitId && !businessUnit)
+      return res.status(400).json({ message: 'Preview Business Unit not found' });
+    if (
+      department &&
+      role.assignableDepartmentIds?.length &&
+      !role.assignableDepartmentIds.map(String).includes(String(department._id))
+    )
+      return res.status(400).json({ message: `${role.roleLabel} cannot use this department` });
+    if (
+      businessUnit &&
+      role.assignableBusinessUnitIds?.length &&
+      !role.assignableBusinessUnitIds.map(String).includes(String(businessUnit._id))
+    )
+      return res.status(400).json({ message: `${role.roleLabel} cannot use this Business Unit` });
+    if (team && department && String(team.departmentId) !== String(department._id))
+      return res.status(400).json({ message: 'Preview team does not belong to the department' });
+    if (
+      team &&
+      role.assignableTeamIds?.length &&
+      !role.assignableTeamIds.map(String).includes(String(team._id))
+    )
+      return res.status(400).json({ message: `${role.roleLabel} cannot use this team` });
+    const allowedModuleKeys =
+      department && role.roleKey !== 'super_admin'
+        ? new Set(department.defaultModuleIds || [])
+        : null;
+    const permissions = role.permissions.filter((permission) => {
+      if (!allowedModuleKeys) return true;
+      return MODULES.some(
+        (module) =>
+          allowedModuleKeys.has(module.key) && module.resources.includes(permission.resource),
+      );
+    });
     const visibleModules = MODULES.filter((module) =>
+      (!allowedModuleKeys || allowedModuleKeys.has(module.key)) &&
       module.resources.some((resource) =>
-        role.permissions.some(
+        permissions.some(
           (permission) => permission.resource === resource && permission.actions.includes('view'),
         ),
       ),
@@ -356,9 +397,14 @@ router.post('/preview', requirePermission('permissions', 'view'), async (req, re
     return res.json({
       bypass: role.roleKey === 'super_admin',
       role,
-      permissions: role.permissions,
+      permissions,
       visibleModules,
       dataScope: role.defaultDataScope,
+      context: {
+        businessUnit: businessUnit?._id || null,
+        department: department?._id || null,
+        team: team?._id || null,
+      },
       conflicts: [],
     });
   } catch (error) {
