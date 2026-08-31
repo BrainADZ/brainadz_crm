@@ -149,9 +149,10 @@ const Meetings = () => {
         if (!context.canSchedule) {
           handledPrefillRef.current = '';
           setError(
-            context.status !== 'Interested'
-              ? 'Client status must be Interested before scheduling a meeting.'
-              : 'Assign an active employee with Department access before scheduling this meeting.',
+            context.schedulingIssue?.message ||
+              (context.status !== 'Interested'
+                ? 'Client status must be Interested before scheduling a meeting.'
+                : 'Assign an active employee with Department access before scheduling this meeting.'),
           );
           return;
         }

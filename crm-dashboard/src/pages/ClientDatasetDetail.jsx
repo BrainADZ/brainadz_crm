@@ -318,6 +318,11 @@ const ClientDatasetDetail = () => {
   const [savingRows, setSavingRows] = useState({});
   const [saveError, setSaveError] = useState('');
 
+  const [schedulingRows, setSchedulingRows] =
+    useState({});
+  const [scheduleRowErrors, setScheduleRowErrors] =
+    useState({});
+
   const [actionMessage, setActionMessage] = useState('');
   const [actionModal, setActionModal] = useState(null);
   const [actionSaved, setActionSaved] = useState(false);
@@ -566,10 +571,6 @@ const ClientDatasetDetail = () => {
     return `/dashboard/meetings?${query.toString()}`;
   };
 
-  const scheduleMeetingForRow = (rowIndex) => {
-    navigate(getScheduleMeetingUrl(rowIndex));
-  };
-
   const assignmentMap = new Map();
 
   (dataset.rowAssignments || []).forEach(
@@ -588,10 +589,115 @@ const ClientDatasetDetail = () => {
   const eligibleEmployees = employees.filter(
     (employee) =>
       !dataset.businessUnitId ||
-      (employee.businessUnitIds || []).includes(
-        String(dataset.businessUnitId),
-      ),
+      (employee.businessUnitIds || [])
+        .map(String)
+        .includes(String(dataset.businessUnitId)),
   );
+
+  const getScheduleRequestIssue = (
+    requestError,
+  ) => {
+    const responseMessage =
+      requestError?.response?.data?.message || '';
+    const responseCode =
+      requestError?.response?.data?.code || '';
+    const isAssignmentIssue =
+      responseCode.startsWith('CLIENT_ROW_') ||
+      responseMessage ===
+        'This client row is outside your meeting access scope' ||
+      responseMessage ===
+        'You cannot schedule a meeting for this client row';
+
+    return {
+      blocking: isAssignmentIssue,
+      message: isAssignmentIssue
+        ? responseMessage ||
+          'Assign an active employee with Department access before scheduling a meeting.'
+        : responseMessage ||
+          'Unable to verify this client for meeting scheduling. Please try again.',
+    };
+  };
+
+  const scheduleMeetingForRow = async (
+    rowIndex,
+    { showInModal = false } = {},
+  ) => {
+    const showScheduleError = (
+      message,
+      { blocking = false } = {},
+    ) => {
+      setScheduleRowErrors((previous) => ({
+        ...previous,
+        [rowIndex]: { blocking, message },
+      }));
+
+      if (showInModal) {
+        setSaveError(blocking ? '' : message);
+      }
+    };
+
+    const token = getAuthToken();
+
+    if (!token) {
+      showScheduleError(
+        'Session expired. Please login again.',
+      );
+      return false;
+    }
+
+    const originalRowIndex =
+      getOriginalRowIndex(rowIndex);
+
+    setScheduleRowErrors((previous) => {
+      const next = { ...previous };
+      delete next[rowIndex];
+      return next;
+    });
+    setSchedulingRows((previous) => ({
+      ...previous,
+      [rowIndex]: true,
+    }));
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/meetings/context`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            datasetId,
+            rowIndex: originalRowIndex,
+          },
+        },
+      );
+      const context = response.data || {};
+
+      if (!context.canSchedule) {
+        showScheduleError(
+          context.schedulingIssue?.message ||
+            'This client row is not ready for meeting scheduling.',
+          { blocking: true },
+        );
+        return false;
+      }
+
+      navigate(getScheduleMeetingUrl(rowIndex));
+      return true;
+    } catch (requestError) {
+      const issue =
+        getScheduleRequestIssue(requestError);
+      showScheduleError(issue.message, {
+        blocking: issue.blocking,
+      });
+      return false;
+    } finally {
+      setSchedulingRows((previous) => ({
+        ...previous,
+        [rowIndex]: false,
+      }));
+    }
+  };
 
   const selectedEmployees =
     eligibleEmployees.filter((employee) =>
@@ -857,6 +963,7 @@ const ClientDatasetDetail = () => {
     }));
 
     setSelectedRows([]);
+    setScheduleRowErrors({});
   };
 
   const refreshDataset = async () => {
@@ -882,6 +989,7 @@ const ClientDatasetDetail = () => {
     setFollowUpDates(
       response.data.followUpDates || {},
     );
+    setScheduleRowErrors({});
 
     return response.data;
   };
@@ -1159,7 +1267,14 @@ const ClientDatasetDetail = () => {
       }
 
       if (scheduleAfterSave) {
-        navigate(getScheduleMeetingUrl(rowIndex));
+        const schedulerOpened = await scheduleMeetingForRow(rowIndex, {
+          showInModal: true,
+        });
+        if (!schedulerOpened) {
+          setActionMessage(
+            'Client status and remark were saved successfully.',
+          );
+        }
         return;
       }
 
@@ -1741,6 +1856,15 @@ const ClientDatasetDetail = () => {
                   const rowStatus =
                     row[statusIndex] || '';
 
+                  const isSchedulingMeeting =
+                    Boolean(
+                      schedulingRows[rowIndex],
+                    );
+
+                  const scheduleRowIssue =
+                    scheduleRowErrors[rowIndex] ||
+                    null;
+
                   const rowClass =
                     STATUS_ROW_STYLES[
                       rowStatus
@@ -1967,61 +2091,102 @@ const ClientDatasetDetail = () => {
 
                       <td className="min-w-56 border border-slate-300 px-3 py-2">
                         {primaryMeeting ? (
-                          <div className="flex items-center gap-2">
-                            {primaryMeetingId && canViewMeetings ? (
-                              <Link
-                                to={`/dashboard/meetings?meetingId=${encodeURIComponent(primaryMeetingId)}`}
-                                title="Open meeting"
-                                className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/60"
-                              >
-                                {meetingSummary}
-                              </Link>
-                            ) : (
-                              <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                                {meetingSummary}
-                              </div>
-                            )}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              {primaryMeetingId && canViewMeetings ? (
+                                <Link
+                                  to={`/dashboard/meetings?meetingId=${encodeURIComponent(primaryMeetingId)}`}
+                                  title="Open meeting"
+                                  className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/60"
+                                >
+                                  {meetingSummary}
+                                </Link>
+                              ) : (
+                                <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                                  {meetingSummary}
+                                </div>
+                              )}
 
-                            {rowMeetings.length > 1 && (
-                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
-                                +{rowMeetings.length - 1}
-                              </span>
-                            )}
+                              {rowMeetings.length > 1 && (
+                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                                  +{rowMeetings.length - 1}
+                                </span>
+                              )}
+
+                              {rowStatus ===
+                                'Interested' &&
+                                canScheduleMeeting &&
+                                !scheduleRowIssue?.blocking &&
+                                !hasUpcomingScheduledMeeting && (
+                                  <button
+                                    type="button"
+                                    title="Schedule another meeting"
+                                    onClick={() =>
+                                      scheduleMeetingForRow(
+                                        rowIndex,
+                                      )
+                                    }
+                                    disabled={isSchedulingMeeting}
+                                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-2 text-[11px] font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                  >
+                                    <CalendarIcon />
+                                    {isSchedulingMeeting
+                                      ? 'Checking...'
+                                      : 'New'}
+                                  </button>
+                                )}
+                            </div>
 
                             {rowStatus ===
                               'Interested' &&
                               canScheduleMeeting &&
-                              !hasUpcomingScheduledMeeting && (
-                                <button
-                                  type="button"
-                                  title="Schedule another meeting"
-                                  onClick={() =>
-                                    scheduleMeetingForRow(
-                                      rowIndex,
-                                    )
-                                  }
-                                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-2 text-[11px] font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100"
-                                >
-                                  <CalendarIcon />
-                                  New
-                                </button>
+                              !hasUpcomingScheduledMeeting &&
+                              scheduleRowIssue?.blocking && (
+                                <p className="max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
+                                  {scheduleRowIssue.message}
+                                </p>
+                              )}
+
+                            {scheduleRowIssue &&
+                              !scheduleRowIssue.blocking && (
+                                <p className="max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
+                                  {scheduleRowIssue.message}
+                                </p>
                               )}
                           </div>
                         ) : rowStatus ===
                             'Interested' &&
                           canScheduleMeeting ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              scheduleMeetingForRow(
-                                rowIndex,
-                              )
-                            }
-                            className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100"
-                          >
-                            <CalendarIcon />
-                            Schedule meeting
-                          </button>
+                          <div className="space-y-1.5 text-center">
+                            {!scheduleRowIssue?.blocking ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  scheduleMeetingForRow(
+                                    rowIndex,
+                                  )
+                                }
+                                disabled={isSchedulingMeeting}
+                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                              >
+                                <CalendarIcon />
+                                {isSchedulingMeeting
+                                  ? 'Checking access...'
+                                  : 'Schedule meeting'}
+                              </button>
+                            ) : (
+                              <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
+                                {scheduleRowIssue.message}
+                              </p>
+                            )}
+
+                            {scheduleRowIssue &&
+                              !scheduleRowIssue.blocking && (
+                                <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
+                                  {scheduleRowIssue.message}
+                                </p>
+                              )}
+                          </div>
                         ) : (
                           <span className="block text-center text-xs font-medium text-slate-400">
                             —
@@ -2232,6 +2397,22 @@ const ClientDatasetDetail = () => {
                       />
                     </label>
 
+                    {actionModal.status ===
+                      'Interested' &&
+                      canScheduleMeeting &&
+                      scheduleRowErrors[
+                        actionModal.rowIndex
+                      ]?.blocking && (
+                        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+                          {
+                            scheduleRowErrors[
+                              actionModal
+                                .rowIndex
+                            ].message
+                          }
+                        </p>
+                      )}
+
                     {saveError && (
                       <p className="mt-3 text-xs font-semibold text-red-600">
                         {saveError}
@@ -2248,7 +2429,10 @@ const ClientDatasetDetail = () => {
                       <div className="mt-4 flex flex-wrap justify-end gap-2">
                         {actionModal.status ===
                           'Interested' &&
-                          canScheduleMeeting && (
+                          canScheduleMeeting &&
+                          !scheduleRowErrors[
+                            actionModal.rowIndex
+                          ]?.blocking && (
                             <button
                               type="button"
                               onClick={() =>

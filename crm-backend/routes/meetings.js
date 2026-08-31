@@ -290,16 +290,22 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   const activeUnitDepartmentIds = new Set(
     unitDepartments.map((department) => String(department._id)),
   );
+  const employeesWithActiveUnitDepartment = new Set();
   const enrichedAssignedEmployees = employees.map((employee) => {
     const organization = membershipMap.get(String(employee._id)) || {
       departmentIds: [],
       businessUnitIds: [],
       teamIds: [],
     };
-    const schedulableDepartmentIds = organization.departmentIds.filter(
+    const employeeUnitDepartmentIds = organization.departmentIds.filter((departmentId) =>
+      activeUnitDepartmentIds.has(String(departmentId)),
+    );
+    if (employeeUnitDepartmentIds.length) {
+      employeesWithActiveUnitDepartment.add(String(employee._id));
+    }
+    const schedulableDepartmentIds = employeeUnitDepartmentIds.filter(
       (departmentId) =>
-        activeUnitDepartmentIds.has(String(departmentId)) &&
-        (req.user.roleKey === 'super_admin' || actorUnitDepartmentIds.has(String(departmentId))),
+        req.user.roleKey === 'super_admin' || actorUnitDepartmentIds.has(String(departmentId)),
     );
     return {
       ...employee,
@@ -330,20 +336,39 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
       .some((teamName) => actorTeamNames.has(teamName));
 
   const scope = req.permission?.scope;
-  const assignedEmployees =
-    req.user.roleKey === 'super_admin'
-      ? enrichedAssignedEmployees
-      : enrichedAssignedEmployees.filter((employee) => {
-          if (!employee.canSchedule) return false;
-          if (ASSIGNED_SCOPES.has(scope)) {
-            return String(employee._id) === String(req.user._id);
-          }
-          if (TEAM_SCOPES.has(scope)) return sharesActorTeam(employee);
-          return true;
-        });
+  const assignedEmployees = enrichedAssignedEmployees.filter((employee) => {
+    if (!employee.canSchedule) return false;
+    if (req.user.roleKey === 'super_admin') return true;
+    if (ASSIGNED_SCOPES.has(scope)) {
+      return String(employee._id) === String(req.user._id);
+    }
+    if (TEAM_SCOPES.has(scope)) return sharesActorTeam(employee);
+    return true;
+  });
 
-  if (!assignedEmployees.length) {
-    const error = new Error('This client row is outside your meeting access scope');
+  let schedulingIssue = null;
+  if (!assignmentUserIds.length) {
+    schedulingIssue = {
+      code: 'CLIENT_ROW_UNASSIGNED',
+      message: 'Assign an active employee to this client row before scheduling a meeting',
+    };
+  } else if (!employees.length) {
+    schedulingIssue = {
+      code: 'CLIENT_ROW_ASSIGNEE_INACTIVE',
+      message: 'This client row has no active employee assignee',
+    };
+  } else if (!employeesWithActiveUnitDepartment.size) {
+    schedulingIssue = {
+      code: 'CLIENT_ROW_ASSIGNEE_NO_DEPARTMENT_ACCESS',
+      message:
+        'No assigned employee has active Department access for this client Business Unit',
+    };
+  } else if (!assignedEmployees.length) {
+    const error = new Error(
+      ASSIGNED_SCOPES.has(scope)
+        ? 'Your meeting access allows scheduling only for client rows assigned to you'
+        : 'This client row is outside your meeting team scope',
+    );
     error.status = 403;
     throw error;
   }
@@ -377,40 +402,59 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     assignedEmployees,
     suggestedEmployee,
     suggestedDepartment,
+    schedulingIssue,
     unitDepartments,
   };
 };
 
-const linkedContextPayload = (context, rowIndex) => ({
-  dataset: {
-    _id: context.dataset._id,
-    name: context.dataset.name,
-    year: context.dataset.year || '',
-    communityKey: context.dataset.communityKey,
-  },
-  datasetId: context.dataset._id,
-  datasetName: context.dataset.name,
-  rowIndex,
-  client: {
-    name: context.rowContext.clientName,
+const linkedContextPayload = (context, rowIndex) => {
+  const statusIssue =
+    context.rowContext.status === 'Interested'
+      ? null
+      : {
+          code: 'CLIENT_STATUS_NOT_INTERESTED',
+          message: 'Client status must be Interested before scheduling a meeting',
+        };
+  const schedulingIssue =
+    statusIssue ||
+    context.schedulingIssue ||
+    (!context.suggestedEmployee || !context.suggestedDepartment
+      ? {
+          code: 'CLIENT_ROW_HAS_NO_SCHEDULABLE_ASSIGNEE',
+          message: 'Assign an active employee with Department access before scheduling a meeting',
+        }
+      : null);
+  const canSchedule = !schedulingIssue;
+
+  return {
+    dataset: {
+      _id: context.dataset._id,
+      name: context.dataset.name,
+      year: context.dataset.year || '',
+      communityKey: context.dataset.communityKey,
+    },
+    datasetId: context.dataset._id,
+    datasetName: context.dataset.name,
+    rowIndex,
+    client: {
+      name: context.rowContext.clientName,
+      companyName: context.rowContext.companyName,
+      email: context.rowContext.clientEmail,
+      phone: context.rowContext.clientPhone,
+    },
+    clientName: context.rowContext.clientName,
     companyName: context.rowContext.companyName,
-    email: context.rowContext.clientEmail,
-    phone: context.rowContext.clientPhone,
-  },
-  clientName: context.rowContext.clientName,
-  companyName: context.rowContext.companyName,
-  status: context.rowContext.status,
-  businessUnit: context.businessUnit,
-  businessUnitId: context.businessUnit._id,
-  department: context.suggestedDepartment,
-  departmentId: context.suggestedDepartment?._id || null,
-  assignedEmployees: context.assignedEmployees,
-  suggestedEmployeeId: context.suggestedEmployee?._id || null,
-  canSchedule:
-    context.rowContext.status === 'Interested' &&
-    Boolean(context.suggestedEmployee) &&
-    Boolean(context.suggestedDepartment),
-});
+    status: context.rowContext.status,
+    businessUnit: context.businessUnit,
+    businessUnitId: context.businessUnit._id,
+    department: context.suggestedDepartment,
+    departmentId: context.suggestedDepartment?._id || null,
+    assignedEmployees: context.assignedEmployees,
+    suggestedEmployeeId: context.suggestedEmployee?._id || null,
+    canSchedule,
+    schedulingIssue: canSchedule ? null : schedulingIssue,
+  };
+};
 
 router.get('/context', requirePermission('meetings', 'create'), async (req, res, next) => {
   try {
@@ -591,6 +635,12 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
     if (linkedContext && linkedContext.rowContext.status !== 'Interested')
       return res.status(409).json({
         message: 'A meeting can be scheduled only when the client status is Interested',
+      });
+    if (linkedContext?.schedulingIssue)
+      return res.status(409).json({
+        message: linkedContext.schedulingIssue.message,
+        code: linkedContext.schedulingIssue.code,
+        canSchedule: false,
       });
 
     const businessUnitId = linkedContext
