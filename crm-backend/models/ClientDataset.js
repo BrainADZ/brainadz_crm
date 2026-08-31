@@ -236,6 +236,16 @@ clientDatasetSchema.index({
   createdAt: -1,
 });
 
+clientDatasetSchema.index({
+  uploadedBy: 1,
+  createdAt: -1,
+});
+
+clientDatasetSchema.index({
+  'rowAssignments.employee': 1,
+  updatedAt: -1,
+});
+
 module.exports =
   mongoose.model(
     'ClientDataset',

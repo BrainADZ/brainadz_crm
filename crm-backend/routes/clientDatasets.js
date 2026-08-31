@@ -302,6 +302,41 @@ const communityFilter = (
   },
 });
 
+const datasetVisibilityFilter = (
+  req,
+) =>
+  req.user.roleKey ===
+  'super_admin'
+    ? {}
+    : {
+        $or: [
+          {
+            uploadedBy:
+              req.user.id,
+          },
+          {
+            'rowAssignments.employee':
+              req.user.id,
+          },
+        ],
+      };
+
+const isDatasetOwner = (
+  dataset,
+  userId,
+) =>
+  Boolean(
+    dataset.uploadedBy &&
+      String(
+        dataset.uploadedBy
+          ?._id ||
+          dataset.uploadedBy,
+      ) ===
+        String(
+          userId,
+        ),
+  );
+
 const requestedCommunity = (
   req,
 ) =>
@@ -1599,6 +1634,37 @@ const getEmployeeDatasetResponse =
         )
         .filter(Boolean);
 
+    const assignedRowIndexSet =
+      new Set(
+        assignedRowIndexes,
+      );
+
+    const visibleAssignments =
+      normalizeAssignments(
+        datasetObject.rowAssignments ||
+          [],
+      ).filter(
+        (assignment) =>
+          assignedRowIndexSet.has(
+            Number(
+              assignment.rowIndex,
+            ),
+          ),
+      );
+
+    const visibleRowLogs =
+      normalizeRowLogs(
+        datasetObject.rowLogs ||
+          [],
+      ).filter(
+        (rowLog) =>
+          assignedRowIndexSet.has(
+            Number(
+              rowLog.rowIndex,
+            ),
+          ),
+      );
+
     return {
       _id:
         datasetObject._id,
@@ -1623,6 +1689,30 @@ const getEmployeeDatasetResponse =
         datasetObject
           .communityKey,
 
+      communityKey:
+        datasetObject.communityKey,
+
+      label:
+        datasetObject.label,
+
+      priority:
+        datasetObject.priority,
+
+      source:
+        datasetObject.source,
+
+      ownerAlias:
+        datasetObject.ownerAlias,
+
+      salesStage:
+        datasetObject.salesStage,
+
+      uploadedBy:
+        datasetObject.uploadedBy,
+
+      isOwner:
+        false,
+
       name:
         datasetObject.name,
 
@@ -1642,6 +1732,12 @@ const getEmployeeDatasetResponse =
       originalRowIndexes:
         assignedRowIndexes,
 
+      rowAssignments:
+        visibleAssignments,
+
+      rowLogs:
+        visibleRowLogs,
+
       followUpDates:
         getFollowUpDatesMap(
           datasetObject.rowFollowUps ||
@@ -1659,6 +1755,31 @@ const getEmployeeDatasetResponse =
 
       rowCount:
         assignedRows.length,
+
+      summary:
+        getDatasetSalesSummary(
+          {
+            columns:
+              normalizedData.columns,
+
+            rows:
+              assignedRows,
+
+            rowAssignments:
+              visibleAssignments.map(
+                (assignment) => ({
+                  ...assignment,
+
+                  rowIndex:
+                    assignedRowIndexes.indexOf(
+                      Number(
+                        assignment.rowIndex,
+                      ),
+                    ),
+                }),
+              ),
+          },
+        ),
 
       createdAt:
         datasetObject.createdAt,
@@ -1928,16 +2049,9 @@ router.get(
           req,
         ),
 
-        ...(isAssignedScope(
-          req
-            .datasetPermission
-            .scope,
-        )
-          ? {
-              'rowAssignments.employee':
-                req.user.id,
-            }
-          : {}),
+        ...datasetVisibilityFilter(
+          req,
+        ),
       };
 
       const datasets =
@@ -1953,63 +2067,46 @@ router.get(
               -1,
           });
 
-      if (
-        isAssignedScope(
-          req.datasetPermission
-            .scope,
-        )
-      ) {
-        return res.json(
-          datasets.map(
-            (
+      return res.json(
+        datasets.map((dataset) => {
+          const listItem =
+            getDatasetListItem(
               dataset,
-            ) => {
-              const assigned =
-                getEmployeeDatasetResponse(
+            );
+          const hasFullDatasetAccess =
+            req.user.roleKey ===
+              'super_admin' ||
+            isDatasetOwner(
+              dataset,
+              req.user.id,
+            );
+          if (
+            hasFullDatasetAccess
+          ) {
+            return {
+              ...listItem,
+              isOwner:
+                isDatasetOwner(
                   dataset,
                   req.user.id,
-                );
-
-              return {
-                _id:
-                  assigned._id,
-
-                businessUnitId:
-                  assigned.businessUnitId,
-
-                businessUnitName:
-                  assigned.businessUnitName,
-
-                communityKey:
-                  dataset.communityKey,
-
-                name:
-                  assigned.name,
-
-                year:
-                  assigned.year,
-
-                originalFileName:
-                  assigned.originalFileName,
-
-                rowCount:
-                  assigned.rowCount,
-
-                createdAt:
-                  assigned.createdAt,
-
-                updatedAt:
-                  assigned.updatedAt,
-              };
-            },
-          ),
-        );
-      }
-
-      return res.json(
-        datasets.map(
-          getDatasetListItem,
-        ),
+                ),
+            };
+          }
+          const assigned =
+            getEmployeeDatasetResponse(
+              dataset,
+              req.user.id,
+            );
+          return {
+            ...listItem,
+            rowCount:
+              assigned.rowCount,
+            summary:
+              assigned.summary,
+            isOwner:
+              false,
+          };
+        }),
       );
     } catch (
       error
@@ -2052,10 +2149,11 @@ router.get(
       const datasets =
         await ClientDataset.find(
           {
-            'rowAssignments.employee':
-              req.user.id,
-
             ...communityFilter(
+              req,
+            ),
+
+            ...datasetVisibilityFilter(
               req,
             ),
           },
@@ -2078,10 +2176,18 @@ router.get(
             dataset,
           ) => {
             const response =
-              getEmployeeDatasetResponse(
+              isDatasetOwner(
                 dataset,
                 req.user.id,
-              );
+              )
+                ? prepareDatasetResponse(
+                    dataset,
+                    false,
+                  )
+                : getEmployeeDatasetResponse(
+                    dataset,
+                    req.user.id,
+                  );
 
             return {
               _id:
@@ -2104,6 +2210,12 @@ router.get(
 
               rowCount:
                 response.rowCount,
+
+              isOwner:
+                isDatasetOwner(
+                  dataset,
+                  req.user.id,
+                ),
 
               createdAt:
                 response.createdAt,
@@ -2149,6 +2261,17 @@ router.get(
           'leads',
           'view',
         );
+
+      if (
+        !viewPermission
+      ) {
+        return res
+          .status(403)
+          .json({
+            message:
+              'Access denied: Sales Data view permission is required',
+          });
+      }
 
       if (
         viewPermission &&
@@ -2270,6 +2393,10 @@ router.get(
             ...communityFilter(
               req,
             ),
+
+            ...datasetVisibilityFilter(
+              req,
+            ),
           },
         )
           .populate(
@@ -2314,11 +2441,16 @@ router.get(
           })
           .lean();
 
+      const hasFullDatasetAccess =
+        req.user.roleKey ===
+          'super_admin' ||
+        isDatasetOwner(
+          dataset,
+          req.user.id,
+        );
+
       if (
-        !viewPermission ||
-        isAssignedScope(
-          viewPermission.scope,
-        )
+        !hasFullDatasetAccess
       ) {
         const assignedDataset =
           getEmployeeDatasetResponse(
@@ -2341,7 +2473,11 @@ router.get(
         }
 
         return res.json(
-          assignedDataset,
+          {
+            ...assignedDataset,
+            isOwner:
+              false,
+          },
         );
       }
 
@@ -2360,11 +2496,18 @@ router.get(
         );
 
       return res.json(
-        prepareDatasetResponse(
-          dataset,
-          includeLogs,
-          meetings,
-        ),
+        {
+          ...prepareDatasetResponse(
+            dataset,
+            includeLogs,
+            meetings,
+          ),
+          isOwner:
+            isDatasetOwner(
+              dataset,
+              req.user.id,
+            ),
+        },
       );
     } catch (
       error
@@ -2469,6 +2612,10 @@ router.patch(
             ...communityFilter(
               req,
             ),
+
+            ...datasetVisibilityFilter(
+              req,
+            ),
           },
         );
 
@@ -2507,12 +2654,16 @@ router.patch(
           });
       }
 
+      const ownsDataset =
+        isDatasetOwner(
+          dataset,
+          req.user.id,
+        );
+
       if (
-        isAssignedScope(
-          req
-            .datasetPermission
-            .scope,
-        )
+        req.user.roleKey !==
+          'super_admin' &&
+        !ownsDataset
       ) {
         const assignmentMap =
           getAssignmentsByRow(
@@ -2558,6 +2709,12 @@ router.patch(
         getColumnIndex(
           columns,
           'Remark',
+        );
+
+      const employeeIndex =
+        getColumnIndex(
+          columns,
+          'Employee',
         );
 
       const updatedRow = [
@@ -2646,6 +2803,30 @@ router.patch(
         previousFollowUpDate !==
         currentFollowUpDate;
 
+      let actorName =
+        '';
+
+      if (
+        statusChanged ||
+        remarkChanged ||
+        followUpDateChanged
+      ) {
+        actorName =
+          await getUserLabel(
+            req.user.id,
+          );
+
+        if (
+          employeeIndex !==
+          -1
+        ) {
+          updatedRow[
+            employeeIndex
+          ] =
+            actorName;
+        }
+      }
+
       if (
         followUpDateChanged
       ) {
@@ -2663,11 +2844,6 @@ router.patch(
         if (
           currentFollowUpDate
         ) {
-          const actorName =
-            await getUserLabel(
-              req.user.id,
-            );
-
           remainingFollowUps.push(
             {
               rowIndex,
@@ -2697,19 +2873,11 @@ router.patch(
 
       let updatedRowLog;
 
-      let actorName =
-        '';
-
       if (
         statusChanged ||
         remarkChanged ||
         followUpDateChanged
       ) {
-        actorName =
-          await getUserLabel(
-            req.user.id,
-          );
-
         const nextLogEntry =
           {
             changedBy:
@@ -2912,22 +3080,14 @@ router.patch(
             ),
         };
 
-      if (
-        !isAssignedScope(
-          req
-            .datasetPermission
-            .scope,
-        )
-      ) {
-        responsePayload.rowLog =
-          updatedRowLog ||
-          {
-            rowIndex,
+      responsePayload.rowLog =
+        updatedRowLog ||
+        {
+          rowIndex,
 
-            entries:
-              [],
-          };
-      }
+          entries:
+            [],
+        };
 
       return res.json(
         responsePayload,
@@ -3082,6 +3242,10 @@ router.patch(
               req.params.id,
 
             ...communityFilter(
+              req,
+            ),
+
+            ...datasetVisibilityFilter(
               req,
             ),
           },
@@ -3679,6 +3843,10 @@ router.patch(
             ...communityFilter(
               req,
             ),
+
+            ...datasetVisibilityFilter(
+              req,
+            ),
           },
         );
 
@@ -4059,6 +4227,10 @@ router.patch(
             ...communityFilter(
               req,
             ),
+
+            ...datasetVisibilityFilter(
+              req,
+            ),
           },
         );
 
@@ -4246,6 +4418,10 @@ router.patch(
           ...communityFilter(
             req,
           ),
+
+          ...datasetVisibilityFilter(
+            req,
+          ),
         },
         {
           $set:
@@ -4262,6 +4438,10 @@ router.patch(
             },
 
             ...communityFilter(
+              req,
+            ),
+
+            ...datasetVisibilityFilter(
               req,
             ),
           },
@@ -4361,6 +4541,8 @@ router.post(
         normalizeCell(
           req.body.ownerAlias,
         ) ||
+        req.user.name ||
+        req.user.email ||
         'Admin';
 
       const salesStage =
@@ -4550,6 +4732,10 @@ router.delete(
               req.params.id,
 
             ...communityFilter(
+              req,
+            ),
+
+            ...datasetVisibilityFilter(
               req,
             ),
           },
@@ -4852,6 +5038,8 @@ router.post(
             normalizeCell(
               req.body.ownerAlias,
             ) ||
+            req.user.name ||
+            req.user.email ||
             'Admin',
 
           salesStage:

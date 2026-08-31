@@ -9,7 +9,6 @@ const UserAccessAssignment = require('../models/UserAccessAssignment');
 const authMiddleware = require('../middleware/authMiddleware');
 const { loadAuthorization, requirePermission } = require('../middleware/authorization');
 const { createNotification } = require('../utils/notifications');
-const { getPermission } = require('../services/accessControlService');
 const { getDateInTimeZone } = require('../services/meetingReminderService');
 
 const router = express.Router();
@@ -212,6 +211,15 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   }
 
   const assignmentUserIds = getRowAssignmentUserIds(dataset, rowIndex);
+  const actorOwnsDataset =
+    Boolean(dataset.uploadedBy) &&
+    String(dataset.uploadedBy?._id || dataset.uploadedBy) === String(req.user._id);
+  const schedulableUserIds = [
+    ...new Set([
+      ...assignmentUserIds,
+      ...(actorOwnsDataset ? [String(req.user._id)] : []),
+    ]),
+  ];
   const actorIsAssigned = assignmentUserIds.includes(String(req.user._id));
   const {
     businessUnits: actorBusinessUnits,
@@ -226,14 +234,10 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
       .map((assignment) => String(assignment.departmentId || ''))
       .filter(Boolean),
   );
-  const leadsViewPermission = getPermission(req.effectivePermissions || [], 'leads', 'view');
-  const assignedOnly =
-    ASSIGNED_SCOPES.has(req.permission?.scope) ||
-    (!leadsViewPermission || ASSIGNED_SCOPES.has(leadsViewPermission.scope));
-
   if (
     req.user.roleKey !== 'super_admin' &&
-    (!actorBusinessUnitIds.has(String(businessUnit._id)) || (assignedOnly && !actorIsAssigned))
+    (!actorBusinessUnitIds.has(String(businessUnit._id)) ||
+      (!actorIsAssigned && !actorOwnsDataset))
   ) {
     const error = new Error('You cannot schedule a meeting for this client row');
     error.status = 403;
@@ -242,7 +246,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
 
   const [employees, memberships, unitDepartments] = await Promise.all([
     User.find({
-      _id: { $in: assignmentUserIds },
+      _id: { $in: schedulableUserIds },
       userType: 'employee',
       isDeleted: { $ne: true },
       accountStatus: 'active',
@@ -251,7 +255,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
       .sort({ name: 1 })
       .lean(),
     UserAccessAssignment.find({
-      ...activeAccessQuery({ $in: assignmentUserIds }),
+      ...activeAccessQuery({ $in: schedulableUserIds }),
       businessUnitIds: businessUnit._id,
     })
       .select('userId departmentId businessUnitIds teamIds')
@@ -347,7 +351,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   });
 
   let schedulingIssue = null;
-  if (!assignmentUserIds.length) {
+  if (!schedulableUserIds.length) {
     schedulingIssue = {
       code: 'CLIENT_ROW_UNASSIGNED',
       message: 'Assign an active employee to this client row before scheduling a meeting',
@@ -398,7 +402,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     dataset,
     businessUnit,
     rowContext,
-    assignmentUserIds,
+    assignmentUserIds: schedulableUserIds,
     assignedEmployees,
     suggestedEmployee,
     suggestedDepartment,

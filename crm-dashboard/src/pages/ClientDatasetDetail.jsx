@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
   Link,
-  useLocation,
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { getAuthenticatedRole, getValidToken } from '../utils/auth';
+import { getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '../config/api';
 
 const CLIENT_WORK_COLUMNS = ['Status', 'Remark', 'Employee'];
@@ -275,7 +274,6 @@ const formatMeetingDateTime = (meeting) => {
 
 const ClientDatasetDetail = () => {
   const { datasetId } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [dataset, setDataset] = useState(null);
@@ -503,23 +501,8 @@ const ClientDatasetDetail = () => {
   const canViewMeetings = meetingActions.includes('view');
   const canScheduleMeeting = meetingActions.includes('create');
 
-  const inEmployeeSales =
-    location.pathname.startsWith(
-      '/employee-dashboard/sales',
-    );
-
-  const backLink =
-    getAuthenticatedRole() === 'admin'
-      ? '/dashboard/clients'
-      : inEmployeeSales
-        ? '/employee-dashboard/sales'
-        : '/employee-dashboard/datasets';
-
-  const backLabel =
-    inEmployeeSales ||
-    getAuthenticatedRole() === 'admin'
-      ? 'Back to sales data'
-      : 'Back to assigned datasets';
+  const backLink = '/dashboard/clients';
+  const backLabel = 'Back to sales data';
 
   const getOriginalRowIndex = (rowIndex) =>
     dataset.originalRowIndexes?.[rowIndex] ??

@@ -85,35 +85,44 @@ const getAssignedRowsForEmployee = (datasets, employeeId) => {
       datasetObject.rows || [],
     );
     const assignments = datasetObject.rowAssignments || [];
+    const ownsDataset =
+      Boolean(datasetObject.uploadedBy) &&
+      String(datasetObject.uploadedBy) === String(employeeId);
+    const visibleRowIndexes = ownsDataset
+      ? rows.map((_, rowIndex) => rowIndex)
+      : [
+          ...new Set(
+            assignments
+              .filter((assignment) => String(assignment.employee) === String(employeeId))
+              .map((assignment) => Number(assignment.rowIndex)),
+          ),
+        ];
 
-    assignments
-      .filter((assignment) => String(assignment.employee) === String(employeeId))
-      .forEach((assignment) => {
-        const rowIndex = Number(assignment.rowIndex);
-        const row = rows[rowIndex];
-        if (!row) return;
+    visibleRowIndexes.forEach((rowIndex) => {
+      const row = rows[rowIndex];
+      if (!row) return;
 
-        const clientName =
-          getCellValue(columns, row, ['Client Name', 'Client Name ']) ||
-          getCellValue(columns, row, ['Company Name', 'Company Name ']) ||
-          `Row ${rowIndex + 1}`;
-        const companyName = getCellValue(columns, row, ['Company Name', 'Company Name ']);
+      const clientName =
+        getCellValue(columns, row, ['Client Name', 'Client Name ']) ||
+        getCellValue(columns, row, ['Company Name', 'Company Name ']) ||
+        `Row ${rowIndex + 1}`;
+      const companyName = getCellValue(columns, row, ['Company Name', 'Company Name ']);
 
-        assignedRows.push({
-          datasetId: datasetObject._id,
-          datasetName: datasetObject.name,
-          year: datasetObject.year,
-          rowIndex,
-          serialNumber: rowIndex + 1,
-          clientName,
-          companyName,
-          city: getCellValue(columns, row, ['City']),
-          phone: getCellValue(columns, row, ['Mobile 1', 'Mobile 1 ', 'Mobile']),
-          email: getCellValue(columns, row, ['Email 1', 'Email 1 ', 'Email']),
-          status: getCellValue(columns, row, ['Status']),
-          website: getCellValue(columns, row, ['Website']),
-        });
+      assignedRows.push({
+        datasetId: datasetObject._id,
+        datasetName: datasetObject.name,
+        year: datasetObject.year,
+        rowIndex,
+        serialNumber: rowIndex + 1,
+        clientName,
+        companyName,
+        city: getCellValue(columns, row, ['City']),
+        phone: getCellValue(columns, row, ['Mobile 1', 'Mobile 1 ', 'Mobile']),
+        email: getCellValue(columns, row, ['Email 1', 'Email 1 ', 'Email']),
+        status: getCellValue(columns, row, ['Status']),
+        website: getCellValue(columns, row, ['Website']),
       });
+    });
   });
 
   return assignedRows;
@@ -121,7 +130,12 @@ const getAssignedRowsForEmployee = (datasets, employeeId) => {
 
 router.get('/employee/assigned-rows', authMiddleware, requireEmployee, async (req, res) => {
   try {
-    const datasets = await ClientDataset.find({ 'rowAssignments.employee': req.user.id });
+    const datasets = await ClientDataset.find({
+      $or: [
+        { uploadedBy: req.user.id },
+        { 'rowAssignments.employee': req.user.id },
+      ],
+    });
     return res.json(getAssignedRowsForEmployee(datasets, req.user.id));
   } catch (error) {
     console.error('Error fetching assigned rows:', error);

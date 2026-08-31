@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
-import { getAuthenticatedRole, getValidToken } from '../utils/auth';
+import { getValidToken } from '../utils/auth';
 
 const getAuthHeaders = () => ({
   Authorization: `Bearer ${getValidToken('admin') || getValidToken('employee') || ''}`,
@@ -455,8 +455,7 @@ const Clients = () => {
   };
 
   const selectedDatasets = datasets.filter((dataset) => selectedDatasetIds.includes(dataset._id));
-  const isEmployeeWorkspace = getAuthenticatedRole() === 'employee';
-  const datasetBasePath = isEmployeeWorkspace ? '/employee-dashboard/sales' : '/dashboard/clients';
+  const datasetBasePath = '/dashboard/clients';
   const canImport = salesActions.includes('import');
   const canUpdate = salesActions.includes('update');
   const canAssign = salesActions.includes('assign');
