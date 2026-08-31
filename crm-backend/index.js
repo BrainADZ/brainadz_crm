@@ -19,6 +19,7 @@ const permissionRoutes = require('./routes/permissions');
 const employeeDirectoryRoutes = require('./routes/employeeDirectory');
 const meetingRoutes = require('./routes/meetings');
 const quotationRoutes = require('./routes/quotations');
+const { startMeetingReminderScheduler } = require('./services/meetingReminderService');
 const path = require('path');
 
 dotenv.config();
@@ -71,7 +72,10 @@ mongoose
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => console.log('MongoDB connected'))
+  .then(() => {
+    console.log('MongoDB connected');
+    startMeetingReminderScheduler();
+  })
   .catch((err) => console.error('MongoDB connection error:', err));
 
 // API Routes

@@ -1,10 +1,17 @@
 import { useState } from 'react';
 
-const PasswordInput = ({ className = '', ...props }) => {
+const PasswordInput = ({ className = '', leadingIcon: LeadingIcon, ...props }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   return (
     <div className="relative">
+      {LeadingIcon && (
+        <LeadingIcon
+          size={17}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-slate-400"
+        />
+      )}
       <input {...props} type={isVisible ? 'text' : 'password'} className={`${className} pr-11`} />
       <button
         type="button"

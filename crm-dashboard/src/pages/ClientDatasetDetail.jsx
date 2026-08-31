@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import { getAuthenticatedRole, getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '../config/api';
 
@@ -234,9 +239,44 @@ const CheckIcon = () => (
   </svg>
 );
 
+const CalendarIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    className="h-4 w-4 fill-none stroke-current"
+    strokeWidth="2"
+  >
+    <path d="M8 2v4M16 2v4M3 10h18" />
+    <path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
+  </svg>
+);
+
+const formatMeetingDateTime = (meeting) => {
+  if (!meeting?.meetingDate) {
+    return 'Date not set';
+  }
+
+  const dateTime = new Date(
+    `${meeting.meetingDate}T${meeting.meetingTime || '00:00'}:00`,
+  );
+
+  if (Number.isNaN(dateTime.getTime())) {
+    return [meeting.meetingDate, meeting.meetingTime]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(dateTime);
+};
+
 const ClientDatasetDetail = () => {
   const { datasetId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [dataset, setDataset] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,6 +284,7 @@ const ClientDatasetDetail = () => {
 
   const [employees, setEmployees] = useState([]);
   const [salesActions, setSalesActions] = useState([]);
+  const [meetingActions, setMeetingActions] = useState([]);
 
   const [selectedRows, setSelectedRows] = useState([]);
   const [selectedEmployeeIds, setSelectedEmployeeIds] =
@@ -330,6 +371,10 @@ const ClientDatasetDetail = () => {
 
         setSalesActions(
           optionsResponse.data.actions || [],
+        );
+
+        setMeetingActions(
+          optionsResponse.data.meetingActions || [],
         );
       } catch (requestError) {
         setError(
@@ -450,6 +495,8 @@ const ClientDatasetDetail = () => {
 
   const isAdmin = salesActions.includes('assign');
   const canUpdate = salesActions.includes('update');
+  const canViewMeetings = meetingActions.includes('view');
+  const canScheduleMeeting = meetingActions.includes('create');
 
   const inEmployeeSales =
     location.pathname.startsWith(
@@ -472,6 +519,56 @@ const ClientDatasetDetail = () => {
   const getOriginalRowIndex = (rowIndex) =>
     dataset.originalRowIndexes?.[rowIndex] ??
     rowIndex;
+
+  const getRowMeetings = (rowIndex) => {
+    const originalRowIndex = getOriginalRowIndex(rowIndex);
+    const value =
+      dataset.rowMeetings?.[String(originalRowIndex)] ??
+      dataset.rowMeetings?.[originalRowIndex];
+
+    if (!value) {
+      return [];
+    }
+
+    return (Array.isArray(value) ? value : [value]).filter(Boolean);
+  };
+
+  const getPrimaryMeeting = (rowMeetings) => {
+    const sortedMeetings = [...rowMeetings].sort((first, second) =>
+      `${first.meetingDate || '9999-12-31'}T${first.meetingTime || '23:59'}`.localeCompare(
+        `${second.meetingDate || '9999-12-31'}T${second.meetingTime || '23:59'}`,
+      ),
+    );
+    const today = getTodayDateKey();
+
+    return (
+      sortedMeetings.find(
+        (meeting) =>
+          String(meeting.status || 'scheduled').toLowerCase() === 'scheduled' &&
+          meeting.meetingDate >= today,
+      ) ||
+      sortedMeetings.find(
+        (meeting) =>
+          String(meeting.status || 'scheduled').toLowerCase() === 'scheduled',
+      ) ||
+      sortedMeetings[0] ||
+      null
+    );
+  };
+
+  const getScheduleMeetingUrl = (rowIndex) => {
+    const query = new URLSearchParams({
+      create: '1',
+      datasetId: String(datasetId),
+      rowIndex: String(getOriginalRowIndex(rowIndex)),
+    });
+
+    return `/dashboard/meetings?${query.toString()}`;
+  };
+
+  const scheduleMeetingForRow = (rowIndex) => {
+    navigate(getScheduleMeetingUrl(rowIndex));
+  };
 
   const assignmentMap = new Map();
 
@@ -943,7 +1040,9 @@ const ClientDatasetDetail = () => {
     setActionSaved(false);
   };
 
-  const saveActionChanges = async () => {
+  const saveActionChanges = async (
+    { scheduleAfterSave = false } = {},
+  ) => {
     if (!actionModal || !canUpdate) {
       return;
     }
@@ -1057,6 +1156,11 @@ const ClientDatasetDetail = () => {
 
           return next;
         });
+      }
+
+      if (scheduleAfterSave) {
+        navigate(getScheduleMeetingUrl(rowIndex));
+        return;
       }
 
       setActionMessage(
@@ -1619,6 +1723,10 @@ const ClientDatasetDetail = () => {
                 )}
 
                 <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
+                  Meeting
+                </th>
+
+                <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
                   Actions
                 </th>
               </tr>
@@ -1640,6 +1748,67 @@ const ClientDatasetDetail = () => {
                     (visibleIndex % 2 === 0
                       ? 'bg-white'
                       : 'bg-slate-50');
+
+                  const rowMeetings =
+                    getRowMeetings(rowIndex);
+
+                  const primaryMeeting =
+                    getPrimaryMeeting(rowMeetings);
+
+                  const hasUpcomingScheduledMeeting =
+                    rowMeetings.some(
+                      (meeting) =>
+                        String(
+                          meeting.status ||
+                            'scheduled',
+                        ).toLowerCase() ===
+                          'scheduled' &&
+                        meeting.meetingDate >=
+                          todayDateKey,
+                    );
+
+                  const primaryMeetingId =
+                    primaryMeeting?._id ||
+                    primaryMeeting?.meetingId;
+
+                  const primaryMeetingStatus =
+                    String(
+                      primaryMeeting?.status ||
+                        'scheduled',
+                    ).toLowerCase();
+
+                  const meetingStatusClass =
+                    primaryMeetingStatus ===
+                    'cancelled'
+                      ? 'bg-rose-50 text-rose-700'
+                      : primaryMeetingStatus ===
+                          'completed'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-blue-50 text-blue-700';
+
+                  const meetingSummary =
+                    primaryMeeting ? (
+                      <>
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meetingStatusClass}`}
+                        >
+                          <CalendarIcon />
+                        </span>
+
+                        <span className="min-w-0 text-left">
+                          <span className="block whitespace-nowrap text-xs font-bold text-slate-800">
+                            {formatMeetingDateTime(
+                              primaryMeeting,
+                            )}
+                          </span>
+
+                          <span className="mt-0.5 block max-w-44 truncate text-[11px] font-medium text-slate-500">
+                            {primaryMeeting.meetingTitle ||
+                              primaryMeetingStatus}
+                          </span>
+                        </span>
+                      </>
+                    ) : null;
 
                   return (
                     <tr
@@ -1796,6 +1965,70 @@ const ClientDatasetDetail = () => {
                         },
                       )}
 
+                      <td className="min-w-56 border border-slate-300 px-3 py-2">
+                        {primaryMeeting ? (
+                          <div className="flex items-center gap-2">
+                            {primaryMeetingId && canViewMeetings ? (
+                              <Link
+                                to={`/dashboard/meetings?meetingId=${encodeURIComponent(primaryMeetingId)}`}
+                                title="Open meeting"
+                                className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/60"
+                              >
+                                {meetingSummary}
+                              </Link>
+                            ) : (
+                              <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                                {meetingSummary}
+                              </div>
+                            )}
+
+                            {rowMeetings.length > 1 && (
+                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                                +{rowMeetings.length - 1}
+                              </span>
+                            )}
+
+                            {rowStatus ===
+                              'Interested' &&
+                              canScheduleMeeting &&
+                              !hasUpcomingScheduledMeeting && (
+                                <button
+                                  type="button"
+                                  title="Schedule another meeting"
+                                  onClick={() =>
+                                    scheduleMeetingForRow(
+                                      rowIndex,
+                                    )
+                                  }
+                                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-2 text-[11px] font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100"
+                                >
+                                  <CalendarIcon />
+                                  New
+                                </button>
+                              )}
+                          </div>
+                        ) : rowStatus ===
+                            'Interested' &&
+                          canScheduleMeeting ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              scheduleMeetingForRow(
+                                rowIndex,
+                              )
+                            }
+                            className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100"
+                          >
+                            <CalendarIcon />
+                            Schedule meeting
+                          </button>
+                        ) : (
+                          <span className="block text-center text-xs font-medium text-slate-400">
+                            —
+                          </span>
+                        )}
+                      </td>
+
                       <td className="border border-slate-300 px-3 py-2 text-center">
                         <button
                           type="button"
@@ -1821,7 +2054,7 @@ const ClientDatasetDetail = () => {
                   <td
                     colSpan={
                       displayColumnIndexes.length +
-                      2 +
+                      3 +
                       (isAdmin ? 1 : 0)
                     }
                     className="border border-slate-300 px-3 py-10 text-center text-slate-500"
@@ -2012,11 +2245,40 @@ const ClientDatasetDetail = () => {
                     )}
 
                     {canUpdate && (
-                      <div className="mt-4 flex justify-end">
+                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                        {actionModal.status ===
+                          'Interested' &&
+                          canScheduleMeeting && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                saveActionChanges({
+                                  scheduleAfterSave:
+                                    true,
+                                })
+                              }
+                              disabled={
+                                savingRows[
+                                  actionModal
+                                    .rowIndex
+                                ]
+                              }
+                              className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                            >
+                              <CalendarIcon />
+
+                              {savingRows[
+                                actionModal.rowIndex
+                              ]
+                                ? 'Saving...'
+                                : 'Save & schedule meeting'}
+                            </button>
+                          )}
+
                         <button
                           type="button"
-                          onClick={
-                            saveActionChanges
+                          onClick={() =>
+                            saveActionChanges()
                           }
                           disabled={
                             savingRows[

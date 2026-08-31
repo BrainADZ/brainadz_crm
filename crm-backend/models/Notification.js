@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     communityKey: { type: String, default: '', trim: true, index: true },
+    dedupeKey: { type: String, trim: true, maxlength: 256 },
     recipientRole: {
       type: String,
       enum: ['admin', 'employee'],
@@ -63,5 +64,12 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ recipientRole: 1, recipientUser: 1, createdAt: -1 });
 notificationSchema.index({ recipientRole: 1, recipientUser: 1, isRead: 1 });
+notificationSchema.index(
+  { communityKey: 1, dedupeKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { dedupeKey: { $type: 'string' } },
+  },
+);
 
 module.exports = mongoose.model('Notification', notificationSchema);

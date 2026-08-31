@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   CalendarDays,
@@ -33,6 +34,9 @@ const defaultTime = () => {
 };
 const blankMeeting = () => ({
   meetingTitle: '',
+  datasetId: '',
+  rowIndex: '',
+  employeeId: '',
   businessUnitId: '',
   departmentId: '',
   meetingDate: localDate(),
@@ -61,6 +65,8 @@ const formatDateTime = (date, time) => {
 };
 
 const Meetings = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledPrefillRef = useRef('');
   const [meetings, setMeetings] = useState([]);
   const [options, setOptions] = useState({
     businessUnits: [],
@@ -75,6 +81,7 @@ const Meetings = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(blankMeeting);
+  const [linkedContext, setLinkedContext] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -104,6 +111,91 @@ const Meetings = () => {
     load();
   }, [load]);
 
+  const requestedMeetingId = searchParams.get('meetingId') || '';
+  const requestedDatasetId = searchParams.get('datasetId') || '';
+  const requestedRowIndex = searchParams.get('rowIndex') || '';
+  const shouldCreateLinkedMeeting =
+    searchParams.get('create') === '1' && requestedDatasetId && requestedRowIndex !== '';
+
+  useEffect(() => {
+    if (!requestedMeetingId) return undefined;
+    setMeetingFilter('all');
+    setDepartmentFilter('all');
+    setSearch('');
+
+    const timeoutId = window.setTimeout(() => {
+      document
+        .getElementById(`meeting-${requestedMeetingId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    return () => window.clearTimeout(timeoutId);
+  }, [meetings, requestedMeetingId]);
+
+  useEffect(() => {
+    if (!shouldCreateLinkedMeeting || loading) return;
+
+    const prefillKey = `${requestedDatasetId}:${requestedRowIndex}`;
+    if (handledPrefillRef.current === prefillKey) return;
+    handledPrefillRef.current = prefillKey;
+
+    const loadLinkedContext = async () => {
+      setError('');
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/meetings/context`, {
+          headers: headers(),
+          params: { datasetId: requestedDatasetId, rowIndex: requestedRowIndex },
+        });
+        const context = response.data || {};
+        if (!context.canSchedule) {
+          handledPrefillRef.current = '';
+          setError(
+            context.status !== 'Interested'
+              ? 'Client status must be Interested before scheduling a meeting.'
+              : 'Assign an active employee with Department access before scheduling this meeting.',
+          );
+          return;
+        }
+        const businessUnitId = idOf(context.businessUnitId);
+        const preferredDepartmentId = idOf(context.departmentId);
+        const fallbackDepartment = options.departments.find((department) =>
+          (department.businessUnitIds || []).map(idOf).includes(businessUnitId),
+        );
+        const departmentId =
+          preferredDepartmentId &&
+          options.departments.some((department) => idOf(department) === preferredDepartmentId)
+            ? preferredDepartmentId
+            : idOf(fallbackDepartment);
+        const clientLabel = context.clientName || context.companyName || context.datasetName;
+
+        setLinkedContext(context);
+        setForm({
+          ...blankMeeting(),
+          meetingTitle: clientLabel ? `${clientLabel} - Client Meeting` : 'Client Meeting',
+          datasetId: requestedDatasetId,
+          rowIndex: requestedRowIndex,
+          employeeId:
+            idOf(context.suggestedEmployeeId) || idOf(context.assignedEmployees?.[0]),
+          businessUnitId,
+          departmentId,
+        });
+        setModalOpen(true);
+      } catch (requestError) {
+        handledPrefillRef.current = '';
+        setError(
+          requestError.response?.data?.message || 'Unable to load the interested client details',
+        );
+      }
+    };
+
+    loadLinkedContext();
+  }, [
+    loading,
+    options.departments,
+    requestedDatasetId,
+    requestedRowIndex,
+    shouldCreateLinkedMeeting,
+  ]);
+
   const today = localDate();
   const filtered = useMemo(
     () =>
@@ -127,6 +219,9 @@ const Meetings = () => {
             meeting.employee?.name,
             meeting.departmentId?.name,
             meeting.businessUnitId?.name,
+            meeting.clientName,
+            meeting.companyName,
+            meeting.datasetName,
             meeting.meetingMode,
             meeting.platformOrLocation,
             meeting.notes,
@@ -173,20 +268,47 @@ const Meetings = () => {
       businessUnitId: idOf(businessUnit),
       departmentId: idOf(department),
     });
+    setLinkedContext(null);
     setError('');
     setModalOpen(true);
   };
 
-  const availableDepartments = options.departments.filter(
-    (department) =>
-      !form.businessUnitId ||
-      (department.businessUnitIds || []).map(idOf).includes(form.businessUnitId),
+  const closeScheduler = () => {
+    setModalOpen(false);
+    setLinkedContext(null);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('create');
+    nextParams.delete('datasetId');
+    nextParams.delete('rowIndex');
+    setSearchParams(nextParams, { replace: true });
+    handledPrefillRef.current = '';
+  };
+
+  const linkedEmployees = (linkedContext?.assignedEmployees || []).filter(
+    (employee) => employee.canSchedule !== false,
   );
+  const selectedLinkedEmployee = linkedEmployees.find(
+    (employee) => employee._id === form.employeeId,
+  );
+  const availableDepartments = options.departments.filter((department) => {
+    const belongsToBusinessUnit =
+      !form.businessUnitId ||
+      (department.businessUnitIds || []).map(idOf).includes(form.businessUnitId);
+    const employeeCanAttend =
+      !linkedContext ||
+      !selectedLinkedEmployee?.schedulableDepartmentIds?.length ||
+      selectedLinkedEmployee.schedulableDepartmentIds.includes(idOf(department));
+    return belongsToBusinessUnit && employeeCanAttend;
+  });
   const availableParticipants = options.employees.filter(
     (employee) =>
       employee.departmentIds?.includes(form.departmentId) &&
-      employee.businessUnitIds?.includes(form.businessUnitId),
+      employee.businessUnitIds?.includes(form.businessUnitId) &&
+      employee._id !== form.employeeId,
   );
+  const reminderEmployee =
+    linkedEmployees.find((employee) => employee._id === form.employeeId) ||
+    options.employees.find((employee) => employee._id === form.employeeId);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -204,7 +326,7 @@ const Meetings = () => {
         ),
       );
       setMessage(response.data.message);
-      setModalOpen(false);
+      closeScheduler();
       setMeetingFilter('upcoming');
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to schedule meeting');
@@ -343,7 +465,15 @@ const Meetings = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((meeting) => (
-                <tr key={meeting._id} className="align-top hover:bg-blue-50/30">
+                <tr
+                  id={`meeting-${meeting._id}`}
+                  key={meeting._id}
+                  className={`align-top transition hover:bg-blue-50/30 ${
+                    requestedMeetingId === meeting._id
+                      ? 'bg-blue-50 ring-2 ring-inset ring-blue-400'
+                      : ''
+                  }`}
+                >
                   <td className="whitespace-nowrap px-4 py-3">
                     <p className="font-semibold text-slate-900">
                       {formatDateTime(meeting.meetingDate, meeting.meetingTime)}
@@ -355,6 +485,21 @@ const Meetings = () => {
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{meeting.meetingTitle}</p>
+                    {(meeting.clientName || meeting.companyName) && (
+                      <p className="mt-1 text-xs font-semibold text-blue-700">
+                        Client: {meeting.clientName || meeting.companyName}
+                        {meeting.clientName &&
+                          meeting.companyName &&
+                          meeting.clientName !== meeting.companyName
+                          ? ` · ${meeting.companyName}`
+                          : ''}
+                      </p>
+                    )}
+                    {meeting.datasetName && (
+                      <p className="mt-1 text-[11px] font-medium text-slate-400">
+                        Dataset: {meeting.datasetName}
+                      </p>
+                    )}
                     <p className="mt-1 max-w-64 truncate text-xs text-slate-500">
                       {meeting.notes || 'No agenda added'}
                     </p>
@@ -454,13 +599,39 @@ const Meetings = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={closeScheduler}
                 className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"
               >
                 <X size={19} />
               </button>
             </div>
             <div className="space-y-6 p-6">
+              {linkedContext && (
+                <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                    Interested client
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">
+                    {linkedContext.clientName ||
+                      linkedContext.companyName ||
+                      linkedContext.datasetName}
+                  </p>
+                  {linkedContext.clientName &&
+                    linkedContext.companyName &&
+                    linkedContext.clientName !== linkedContext.companyName && (
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        {linkedContext.companyName}
+                      </p>
+                    )}
+                  <p className="mt-2 text-xs text-slate-500">
+                    Dataset: {linkedContext.datasetName} · Row {Number(linkedContext.rowIndex) + 1}
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-blue-800">
+                    On the meeting date, the assigned employee will receive a bell notification
+                    and, when email delivery is configured, an email reminder.
+                  </p>
+                </section>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="sm:col-span-2">
                   <span className={labelClass}>Meeting title *</span>
@@ -477,6 +648,7 @@ const Meetings = () => {
                   <select
                     required
                     value={form.businessUnitId}
+                    disabled={Boolean(linkedContext)}
                     onChange={(event) => {
                       const businessUnitId = event.target.value;
                       const department = options.departments.find((item) =>
@@ -499,6 +671,46 @@ const Meetings = () => {
                     ))}
                   </select>
                 </label>
+                {linkedContext && (
+                  <label className="sm:col-span-2">
+                    <span className={labelClass}>Assigned employee / reminder recipient *</span>
+                    <select
+                      required
+                      value={form.employeeId}
+                      onChange={(event) => {
+                        const employeeId = event.target.value;
+                        const employee = linkedEmployees.find(
+                          (item) => item._id === employeeId,
+                        );
+                        const allowedDepartmentIds = employee?.schedulableDepartmentIds || [];
+                        const departmentId = allowedDepartmentIds.includes(form.departmentId)
+                          ? form.departmentId
+                          : allowedDepartmentIds[0] || form.departmentId;
+                        setForm({
+                          ...form,
+                          employeeId,
+                          departmentId,
+                          participantUserIds: form.participantUserIds.filter(
+                            (participantId) => participantId !== employeeId,
+                          ),
+                        });
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">Select assigned employee</option>
+                      {linkedEmployees.map((employee) => (
+                        <option key={employee._id} value={employee._id}>
+                          {employee.name || employee.email}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-1.5 block text-xs text-slate-500">
+                      {reminderEmployee?.email
+                        ? `Reminder email: ${reminderEmployee.email}`
+                        : 'The selected employee must have an email address.'}
+                    </span>
+                  </label>
+                )}
                 <label>
                   <span className={labelClass}>Department *</span>
                   <select
@@ -644,7 +856,7 @@ const Meetings = () => {
             <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={closeScheduler}
                 className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
               >
                 Cancel

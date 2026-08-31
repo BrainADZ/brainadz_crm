@@ -1,5 +1,6 @@
 :root,
-html[data-theme='light'] {
+html[data-theme='light'],
+.login-page {
   color-scheme: light;
   --page-bg: #f3f7fd;
   --surface: #ffffff;
@@ -11,11 +12,13 @@ html[data-theme='light'] {
   --text-primary: #15233d;
   --text-secondary: #475569;
   --text-muted: #71809b;
+  --text-subtle: #94a3b8;
   --border: #dfe7f2;
   --border-strong: #d3ddeb;
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --primary-soft: #edf4ff;
+  --accent: #2563eb;
   --success: #12b76a;
   --warning: #f79009;
   --danger: #e53935;
@@ -151,6 +154,12 @@ html[data-theme='dark'] input:not([type='checkbox']):not([type='radio']),
 html[data-theme='dark'] textarea,
 html[data-theme='dark'] select {
   background-color: var(--surface-soft) !important;
+}
+
+/* The branded sign-in screen is intentionally light, independent of the
+   authenticated dashboard preference. */
+html[data-theme='dark'] .login-page input:not([type='checkbox']):not([type='radio']) {
+  background-color: var(--surface) !important;
 }
 
 html[data-theme='dark'] input::placeholder,

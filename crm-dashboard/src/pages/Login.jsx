@@ -107,7 +107,7 @@ const Login = () => {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-white lg:grid lg:grid-cols-[58%_42%]">
+    <main className="login-page relative min-h-screen overflow-hidden bg-white lg:grid lg:grid-cols-[58%_42%]">
       <img
         src={loginBackground}
         alt=""
@@ -226,6 +226,7 @@ const Login = () => {
               <span className="mb-2 block text-sm font-extrabold text-[#1d3869]">Password</span>
               <PasswordInput
                 className={inputClass}
+                leadingIcon={LockKeyhole}
                 placeholder="Enter your password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}

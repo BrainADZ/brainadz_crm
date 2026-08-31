@@ -6,6 +6,9 @@ const XLSX = require('xlsx');
 const ClientDataset =
   require('../models/ClientDataset');
 
+const Meeting =
+  require('../models/Meeting');
+
 const User =
   require('../models/User');
 
@@ -1399,10 +1402,76 @@ const getFollowUpDatesMap =
     );
   };
 
+const getRowMeetingsMap =
+  (
+    meetings = [],
+    allowedRowIndexes = null,
+  ) => {
+    const allowed =
+      allowedRowIndexes
+        ? new Set(
+            allowedRowIndexes.map(
+              Number,
+            ),
+          )
+        : null;
+
+    return meetings.reduce(
+      (
+        meetingMap,
+        meeting,
+      ) => {
+        const meetingObject =
+          typeof meeting.toObject ===
+          'function'
+            ? meeting.toObject()
+            : meeting;
+
+        const rowIndex =
+          Number(
+            meetingObject.rowIndex,
+          );
+
+        if (
+          !Number.isInteger(
+            rowIndex,
+          ) ||
+          rowIndex < 0 ||
+          (
+            allowed &&
+            !allowed.has(
+              rowIndex,
+            )
+          )
+        ) {
+          return meetingMap;
+        }
+
+        const key =
+          String(
+            rowIndex,
+          );
+
+        meetingMap[key] = [
+          ...(
+            meetingMap[key] ||
+            []
+          ),
+
+          meetingObject,
+        ];
+
+        return meetingMap;
+      },
+      {},
+    );
+  };
+
 const prepareDatasetResponse =
   (
     dataset,
     includeLogs = false,
+    meetings = [],
   ) => {
     const datasetObject =
       dataset.toObject();
@@ -1466,6 +1535,11 @@ const prepareDatasetResponse =
           datasetObject.rowFollowUps ||
             [],
         ),
+
+      rowMeetings:
+        getRowMeetingsMap(
+          meetings,
+        ),
     };
   };
 
@@ -1473,6 +1547,7 @@ const getEmployeeDatasetResponse =
   (
     dataset,
     employeeId,
+    meetings = [],
   ) => {
     const datasetObject =
       dataset.toObject();
@@ -1571,6 +1646,13 @@ const getEmployeeDatasetResponse =
         getFollowUpDatesMap(
           datasetObject.rowFollowUps ||
             [],
+
+          assignedRowIndexes,
+        ),
+
+      rowMeetings:
+        getRowMeetingsMap(
+          meetings,
 
           assignedRowIndexes,
         ),
@@ -1800,6 +1882,16 @@ router.get(
             ) =>
               permission.resource ===
               'leads',
+          )?.actions ||
+          [],
+
+        meetingActions:
+          req.effectivePermissions.find(
+            (
+              permission,
+            ) =>
+              permission.resource ===
+              'meetings',
           )?.actions ||
           [],
       });
@@ -2200,6 +2292,28 @@ router.get(
           });
       }
 
+      const meetings =
+        await Meeting.find({
+          dataset:
+            dataset._id,
+
+          rowIndex: {
+            $ne:
+              null,
+          },
+        })
+          .select(
+            'dataset rowIndex meetingDate meetingTime status',
+          )
+          .sort({
+            meetingDate:
+              1,
+
+            meetingTime:
+              1,
+          })
+          .lean();
+
       if (
         !viewPermission ||
         isAssignedScope(
@@ -2210,6 +2324,7 @@ router.get(
           getEmployeeDatasetResponse(
             dataset,
             req.user.id,
+            meetings,
           );
 
         if (
@@ -2248,6 +2363,7 @@ router.get(
         prepareDatasetResponse(
           dataset,
           includeLogs,
+          meetings,
         ),
       );
     } catch (

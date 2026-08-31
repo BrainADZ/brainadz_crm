@@ -1,12 +1,16 @@
 const express = require('express');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/authMiddleware');
+const { queueMeetingReminderProcessing } = require('../services/meetingReminderService');
 
 const router = express.Router();
 
 const getRecipientFilter = (user) => {
   if (user.role === 'admin') {
-    return { recipientRole: 'admin' };
+    return {
+      recipientRole: 'admin',
+      $or: [{ recipientUser: null }, { recipientUser: user.id }],
+    };
   }
 
   return {
@@ -17,6 +21,9 @@ const getRecipientFilter = (user) => {
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      queueMeetingReminderProcessing({ employeeId: req.user._id });
+    }
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
     const recipientFilter = getRecipientFilter(req.user);
 

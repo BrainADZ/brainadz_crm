@@ -3,7 +3,6 @@ const ClientDataset = require('../models/ClientDataset');
 const Meeting = require('../models/Meeting');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
-const { createNotification } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -76,11 +75,6 @@ const getCellValue = (columns, row, candidates) => {
   return index === -1 ? '' : normalizeCell(row[index]);
 };
 
-const getUserLabel = async (userId) => {
-  const user = await User.findById(userId).select('name email');
-  return user?.name || user?.email || 'Employee';
-};
-
 const getAssignedRowsForEmployee = (datasets, employeeId) => {
   const assignedRows = [];
 
@@ -148,94 +142,10 @@ router.get('/meetings/me', authMiddleware, requireEmployee, async (req, res) => 
   }
 });
 
-router.post('/meetings', authMiddleware, requireEmployee, async (req, res) => {
-  try {
-    const {
-      datasetId,
-      rowIndex,
-      meetingTitle,
-      meetingDate,
-      meetingTime,
-      meetingMode,
-      platformOrLocation,
-      notes,
-    } = req.body;
-
-    const normalizedRowIndex = Number(rowIndex);
-    if (!datasetId || !Number.isInteger(normalizedRowIndex) || normalizedRowIndex < 0) {
-      return res.status(400).json({ message: 'Select a valid assigned client' });
-    }
-
-    if (!meetingTitle || !meetingDate || !meetingTime) {
-      return res.status(400).json({ message: 'Meeting title, date, and time are required' });
-    }
-
-    const dataset = await ClientDataset.findById(datasetId);
-    if (!dataset) {
-      return res.status(404).json({ message: 'Dataset not found' });
-    }
-
-    const assignment = (dataset.rowAssignments || []).find(
-      (item) =>
-        Number(item.rowIndex) === normalizedRowIndex &&
-        String(item.employee) === String(req.user.id),
-    );
-
-    if (!assignment) {
-      return res.status(403).json({ message: 'This client data is not assigned to you' });
-    }
-
-    const { columns, rows } = addWorkColumnsAfterWebsite(dataset.columns || [], dataset.rows || []);
-    const row = rows[normalizedRowIndex];
-    if (!row) {
-      return res.status(404).json({ message: 'Assigned row not found' });
-    }
-
-    const companyName = getCellValue(columns, row, ['Company Name', 'Company Name ']);
-    const clientName =
-      getCellValue(columns, row, ['Client Name', 'Client Name ']) ||
-      companyName ||
-      `Row ${normalizedRowIndex + 1}`;
-
-    const meeting = new Meeting({
-      employee: req.user.id,
-      dataset: dataset._id,
-      rowIndex: normalizedRowIndex,
-      datasetName: dataset.name,
-      clientName,
-      companyName,
-      meetingTitle: normalizeCell(meetingTitle),
-      meetingDate: normalizeCell(meetingDate),
-      meetingTime: normalizeCell(meetingTime),
-      meetingMode: ['Physical', 'Online', 'Phone'].includes(meetingMode) ? meetingMode : 'Online',
-      platformOrLocation: normalizeCell(platformOrLocation),
-      notes: normalizeCell(notes),
-    });
-
-    await meeting.save();
-    const actorName = await getUserLabel(req.user.id);
-
-    await createNotification({
-      recipientRole: 'admin',
-      actorUser: req.user.id,
-      actorName,
-      actorRole: req.user.role,
-      type: 'meeting_scheduled',
-      title: `${actorName} scheduled a meeting`,
-      message: `${meeting.meetingTitle} with ${clientName} on ${meeting.meetingDate} at ${meeting.meetingTime}.`,
-      link: '/dashboard/tasks',
-      meta: {
-        meetingId: meeting._id,
-        datasetId: dataset._id,
-        rowIndex: normalizedRowIndex,
-      },
-    });
-
-    return res.status(201).json({ message: 'Meeting scheduled successfully', meeting });
-  } catch (error) {
-    console.error('Error scheduling meeting:', error);
-    return res.status(500).json({ message: error.message || 'Server error' });
-  }
+router.post('/meetings', authMiddleware, requireEmployee, (req, res) => {
+  return res.status(410).json({
+    message: 'This legacy meeting endpoint has been retired. Use the Meetings scheduler.',
+  });
 });
 
 router.get('/admin-summary', authMiddleware, requireAdmin, async (req, res) => {

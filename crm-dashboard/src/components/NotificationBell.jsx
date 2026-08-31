@@ -9,6 +9,7 @@ const notificationTone = {
   client_unassignment: 'bg-rose-50 text-rose-700',
   client_row_update: 'bg-violet-50 text-violet-700',
   meeting_scheduled: 'bg-emerald-50 text-emerald-700',
+  meeting_reminder: 'bg-amber-50 text-amber-700',
   general: 'bg-slate-100 text-slate-600',
 };
 
@@ -29,6 +30,13 @@ const notificationIcon = {
     <>
       <path d="M8 2v4M16 2v4M3 10h18" />
       <path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
+    </>
+  ),
+  meeting_reminder: (
+    <>
+      <path d="M8 2v4M16 2v4M3 10h18" />
+      <path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
+      <path d="M12 14v3M12 19h.01" />
     </>
   ),
   general: <path d="M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
