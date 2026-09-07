@@ -207,6 +207,8 @@ const AccountSettings = ({ role }) => {
 
   const [quickFind, setQuickFind] = useState('');
   const [profile, setProfile] = useState(null);
+  const [profileImage, setProfileImage] = useState(null);
+  const [imageInputKey, setImageInputKey] = useState(0);
   const [personalForm, setPersonalForm] = useState(buildPersonalForm(null));
   const [preferenceForm, setPreferenceForm] = useState(buildPreferenceForm(null));
   const [passwordForm, setPasswordForm] = useState(buildPasswordForm(null));
@@ -315,6 +317,7 @@ const AccountSettings = ({ role }) => {
     setError('');
 
     const data = new FormData();
+    if (profileImage) data.append('image', profileImage);
     data.append('name', `${personalForm.firstName} ${personalForm.lastName}`.trim());
     data.append('alias', personalForm.alias);
     data.append('nickname', personalForm.nickname);
@@ -336,7 +339,10 @@ const AccountSettings = ({ role }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem(tokenKey)}` },
       });
       syncProfile(response.data.user);
-      setMessage(response.data.message || 'Personal information updated successfully');
+      setProfileImage(null);
+      setImageInputKey((previous) => previous + 1);
+      window.dispatchEvent(new Event('crm-profile-updated'));
+      navigate('/dashboard', { replace: true });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to update personal information');
     } finally {
@@ -462,6 +468,32 @@ const AccountSettings = ({ role }) => {
 
         <Subsection title="Details">
           <div className="space-y-3">
+            <FieldRow label="Profile Photo">
+              <div>
+                <input
+                  key={imageInputKey}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  aria-label="Profile photo"
+                  disabled={isSaving}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    setProfileImage(null);
+                    setMessage('');
+                    setError('');
+                    if (!file) return;
+                    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                      setError('Choose a JPG or PNG photo up to 5 MB.');
+                      event.target.value = '';
+                      return;
+                    }
+                    setProfileImage(file);
+                  }}
+                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700"
+                />
+                <p className="mt-1 text-xs text-slate-500">JPG or PNG, up to 5 MB. Save to update your account photo.</p>
+              </div>
+            </FieldRow>
             <FieldRow label="First Name">
               <input
                 className={fieldClass}
@@ -596,7 +628,11 @@ const AccountSettings = ({ role }) => {
         <div className="flex items-center justify-center gap-2 bg-slate-50 px-4 py-3">
           <button
             type="button"
-            onClick={() => setPersonalForm(buildPersonalForm(profile))}
+            onClick={() => {
+              setPersonalForm(buildPersonalForm(profile));
+              setProfileImage(null);
+              setImageInputKey((previous) => previous + 1);
+            }}
             className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
           >
             Cancel

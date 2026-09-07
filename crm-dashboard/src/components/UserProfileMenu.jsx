@@ -20,6 +20,7 @@ const UserProfileMenu = ({ role }) => {
   const dropdownRef = useRef(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const tokenKey = role === 'admin' ? 'adminToken' : 'employeeToken';
@@ -45,9 +46,12 @@ const UserProfileMenu = ({ role }) => {
       }
     };
 
+    const handleProfileUpdated = () => fetchProfile();
+    window.addEventListener('crm-profile-updated', handleProfileUpdated);
     fetchProfile();
     return () => {
       ignore = true;
+      window.removeEventListener('crm-profile-updated', handleProfileUpdated);
     };
   }, [navigate, role, tokenKey]);
 
@@ -93,11 +97,12 @@ const UserProfileMenu = ({ role }) => {
     <span
       className={`profile-avatar flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-sm ring-2`}
     >
-      {avatarUrl ? (
+      {avatarUrl && avatarUrl !== failedAvatarUrl ? (
         <img
           src={avatarUrl}
           alt={profile?.name || 'Profile'}
           className="h-full w-full object-cover"
+          onError={() => setFailedAvatarUrl(avatarUrl)}
         />
       ) : (
         <span className={textClass}>{getInitials(profile?.name)}</span>
