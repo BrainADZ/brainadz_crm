@@ -6,6 +6,7 @@ const {
   COMMUNITIES,
   NUMBER_PREFIXES,
   PRIORITIES,
+  SERVICE_CATEGORIES,
   STATUSES,
 } = require('../constants/websiteEnquiry');
 
@@ -21,6 +22,40 @@ const populate = (query) =>
     .populate('meetingIds', 'meetingTitle meetingDate meetingTime status');
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
+
+const serviceCategoryEntries = Object.entries(SERVICE_CATEGORIES);
+
+const resolveServiceFields = (serviceCategoryValue, serviceValue) => {
+  const serviceCategory = normalize(serviceCategoryValue, 160);
+  const service = normalize(serviceValue, 240);
+
+  if (serviceCategory) {
+    return { serviceCategory, service };
+  }
+
+  const combinedServiceMatch = service.match(/^(.+?)\s+-\s+(.+)$/);
+  if (combinedServiceMatch && SERVICE_CATEGORIES[combinedServiceMatch[1]]) {
+    return {
+      serviceCategory: combinedServiceMatch[1],
+      service: combinedServiceMatch[2],
+    };
+  }
+
+  const normalizedService = service.toLowerCase();
+  const matchedCategory = serviceCategoryEntries.find(([, services]) =>
+    services.some((candidate) => candidate.toLowerCase() === normalizedService),
+  );
+
+  return {
+    serviceCategory: matchedCategory?.[0] || '',
+    service,
+  };
+};
+
+const withResolvedServiceFields = (enquiry) => ({
+  ...enquiry,
+  ...resolveServiceFields(enquiry.serviceCategory, enquiry.service),
+});
 
 const getCommunityKey = (value) => {
   const communityKey = normalize(value, 32).toLowerCase() || 'marketing';
@@ -64,17 +99,20 @@ const createWithUniqueNumber = async (communityKey, payload) => {
   throw httpError(500, 'Unable to generate an enquiry number');
 };
 
-const getSafeEnquiryFields = (body) => ({
-  name: normalize(body.name, 160),
-  email: normalize(body.email, 254).toLowerCase(),
-  phone: normalize(body.phone, 30),
-  company: normalize(body.company, 200),
-  serviceCategory: normalize(body.serviceCategory, 160),
-  service: normalize(body.service, 240),
-  message: normalize(body.message, 10000),
-  source: normalize(body.source, 160),
-  pageUrl: normalize(body.pageUrl, 2048),
-});
+const getSafeEnquiryFields = (body) => {
+  const serviceFields = resolveServiceFields(body.serviceCategory, body.service);
+
+  return {
+    name: normalize(body.name, 160),
+    email: normalize(body.email, 254).toLowerCase(),
+    phone: normalize(body.phone, 30),
+    company: normalize(body.company, 200),
+    ...serviceFields,
+    message: normalize(body.message, 10000),
+    source: normalize(body.source, 160),
+    pageUrl: normalize(body.pageUrl, 2048),
+  };
+};
 
 const validateRequiredEnquiryFields = ({ name, email, phone }) => {
   if (!name || !email || !phone) {
@@ -162,9 +200,15 @@ const listEnquiries = async (req, res, next) => {
     const search = normalize(req.query.search, 200);
     if (search) {
       const expression = new RegExp(escapeRegExp(search), 'i');
-      filters.$or = ['enquiryNumber', 'name', 'company', 'email', 'phone', 'service'].map(
-        (field) => ({ [field]: expression }),
-      );
+      filters.$or = [
+        'enquiryNumber',
+        'name',
+        'company',
+        'email',
+        'phone',
+        'serviceCategory',
+        'service',
+      ].map((field) => ({ [field]: expression }));
     }
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
@@ -184,7 +228,7 @@ const listEnquiries = async (req, res, next) => {
       ]),
     ]);
     res.json({
-      items,
+      items: items.map(withResolvedServiceFields),
       total,
       page,
       limit,

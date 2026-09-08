@@ -10,5 +10,73 @@ const STATUSES = [
 ];
 const PRIORITIES = ['Low', 'Medium', 'High'];
 const NUMBER_PREFIXES = { marketing: 'MKT', exhibition: 'EXH', live: 'LIVE' };
+const SERVICE_CATEGORIES = {
+  'Digital Marketing': [
+    'Social Media Marketing Services (SMM)',
+    'Social Media Optimization Services (SMO)',
+    'Content Marketing Services',
+    'Online Reputation Management (ORM)',
+    'Influencer Marketing',
+    'WhatsApp Marketing',
+    'Email Marketing',
+  ],
+  'Performance Marketing': [
+    'Google Ads',
+    'Meta Ads',
+    'LinkedIn Ads',
+    'Search Engine Marketing (SEM)',
+    'YouTube Ads',
+    'Google Shopping Ads',
+    'Ecommerce PPC',
+    'Lead Generation Services',
+    'Remarketing Ads',
+    'Display Advertising',
+    'Landing Page Optimization',
+    'PPC Audit Services',
+  ],
+  'SEO Services': [
+    'SEO Audit Services',
+    'On-Page SEO',
+    'Technical SEO',
+    'Off-Page SEO',
+    'Link-Building Services',
+    'Local SEO Services',
+    'Ecommerce SEO Services',
+    'Enterprise SEO Services',
+    'International SEO Services',
+  ],
+  'Web Design & Development': [
+    'UI/UX Design',
+    'Web Development Services',
+    'WordPress Development',
+    'Shopify Development',
+    'E-Commerce Development',
+    'Custom Web Application Development',
+    'Mobile App Development',
+    'Website Maintenance Services',
+  ],
+  'Creative & Media Services': [
+    'Creative Design Services',
+    'Graphic Design Services',
+    'Branding Design Services',
+    'Social Media Creative Design',
+    'Ad Creative Design',
+    'Visual Content Creation',
+    'Motion Graphics Services',
+    'Short Video Editing',
+    'Reel Editing Services',
+    'Video Editing Services',
+    'Corporate Video Editing',
+    'YouTube Thumbnail Design',
+    'Presentation Design Services',
+    'Infographic Design Services',
+  ],
+};
 
-module.exports = { COMMUNITIES, NUMBER_PREFIXES, PRIORITIES, STATUSES };
+module.exports = {
+  COMMUNITIES,
+  NUMBER_PREFIXES,
+  PRIORITIES,
+  SERVICE_CATEGORIES,
+  STATUSES,
+};
