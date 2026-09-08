@@ -482,7 +482,10 @@ const AccountSettings = ({ role }) => {
                     setMessage('');
                     setError('');
                     if (!file) return;
-                    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                    if (
+                      !['image/jpeg', 'image/png'].includes(file.type) ||
+                      file.size > 5 * 1024 * 1024
+                    ) {
                       setError('Choose a JPG or PNG photo up to 5 MB.');
                       event.target.value = '';
                       return;
@@ -491,7 +494,9 @@ const AccountSettings = ({ role }) => {
                   }}
                   className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:font-medium file:text-blue-700"
                 />
-                <p className="mt-1 text-xs text-slate-500">JPG or PNG, up to 5 MB. Save to update your account photo.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  JPG or PNG, up to 5 MB. Save to update your account photo.
+                </p>
               </div>
             </FieldRow>
             <FieldRow label="First Name">
@@ -1070,7 +1075,9 @@ const AccountSettings = ({ role }) => {
                     </span>
                     <span className="flex items-start justify-between gap-3 border-t border-slate-200 p-4">
                       <span>
-                        <span className="block text-sm font-bold text-slate-900">{option.title}</span>
+                        <span className="block text-sm font-bold text-slate-900">
+                          {option.title}
+                        </span>
                         <span className="mt-1 block text-xs text-slate-500">
                           {option.description}
                         </span>

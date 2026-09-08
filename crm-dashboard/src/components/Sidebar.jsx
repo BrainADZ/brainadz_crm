@@ -7,6 +7,7 @@ import {
   UserRoundCog,
   ListTodo,
   MessageSquareText,
+  Inbox,
   Gauge,
   BarChart3,
   CalendarDays,
@@ -41,6 +42,24 @@ const projectWorkItems = [
     to: '/dashboard/workload',
     label: 'Team Workload',
     icon: Gauge,
+  },
+];
+
+const websiteEnquiryItems = [
+  {
+    to: '/dashboard/website-enquiries/marketing',
+    label: 'Marketing Enquiry',
+    icon: MessageSquareText,
+  },
+  {
+    to: '/dashboard/website-enquiries/exhibits',
+    label: 'Exhibits Enquiry',
+    icon: MessageSquareText,
+  },
+  {
+    to: '/dashboard/website-enquiries/live',
+    label: 'Live Enquiry',
+    icon: MessageSquareText,
   },
 ];
 
@@ -85,6 +104,13 @@ const navItems = [
     to: '/dashboard/communication',
     label: 'Communication',
     icon: MessageSquareText,
+    moduleKey: 'communication',
+  },
+  {
+    id: 'website-enquiries',
+    label: 'Website Enquiry',
+    icon: Inbox,
+    children: websiteEnquiryItems,
     moduleKey: 'communication',
   },
   {
@@ -166,11 +192,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       .then((access) => {
         if (!active) return;
 
-        setVisibleModules(
-          access.bypass
-            ? null
-            : new Set(access.visibleModules || []),
-        );
+        setVisibleModules(access.bypass ? null : new Set(access.visibleModules || []));
       })
       .catch(() => {
         if (active) {
@@ -208,16 +230,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const visibleNavItems = useMemo(
     () =>
       navItems
-        .filter(
-          (item) =>
-            visibleModules === null ||
-            visibleModules.has(item.moduleKey),
-        )
-        .map((item) =>
-          salesSession && item.exact
-            ? { ...item, label: 'Sales Dashboard' }
-            : item,
-        ),
+        .filter((item) => visibleModules === null || visibleModules.has(item.moduleKey))
+        .map((item) => (salesSession && item.exact ? { ...item, label: 'Sales Dashboard' } : item)),
     [salesSession, visibleModules],
   );
 
@@ -231,9 +245,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     return location.pathname.startsWith(item.to);
   };
 
-  const isProjectWorkRoute = projectWorkItems.some((child) =>
-    isActive(child),
-  );
+  const isProjectWorkRoute = projectWorkItems.some((child) => isActive(child));
 
   const clearFlyoutCloseTimer = () => {
     if (flyoutCloseTimer.current) {
@@ -294,13 +306,9 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     const flyoutHeight = 176;
     const screenGap = 12;
 
-    const maximumTop =
-      window.innerHeight - flyoutHeight - screenGap;
+    const maximumTop = window.innerHeight - flyoutHeight - screenGap;
 
-    return Math.max(
-      screenGap,
-      Math.min(rect.top - 4, maximumTop),
-    );
+    return Math.max(screenGap, Math.min(rect.top - 4, maximumTop));
   };
 
   const openCollapsedFlyout = (event, itemId) => {
@@ -308,8 +316,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
     clearFlyoutCloseTimer();
 
-    const rect =
-      event.currentTarget.getBoundingClientRect();
+    const rect = event.currentTarget.getBoundingClientRect();
 
     setCollapsedFlyout({
       id: itemId,
@@ -378,18 +385,12 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       {/* Logo */}
       <div
         className={`app-sidebar-border flex h-20 shrink-0 items-center border-b ${
-          collapsed
-            ? 'justify-center px-2'
-            : 'justify-between px-3'
+          collapsed ? 'justify-center px-2' : 'justify-between px-3'
         }`}
       >
         <Link
           to="/dashboard"
-          className={`flex min-w-0 items-center ${
-            collapsed
-              ? 'justify-center'
-              : 'gap-3'
-          }`}
+          className={`flex min-w-0 items-center ${collapsed ? 'justify-center' : 'gap-3'}`}
           onClick={() => {
             clearFlyoutCloseTimer();
             setCollapsedFlyout(null);
@@ -410,9 +411,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                   src={COLLAPSED_LOGO}
                   alt="BrainADZ"
                   className="app-sidebar-logo block h-9 w-9 object-contain"
-                  onError={() =>
-                    setCollapsedLogoError(true)
-                  }
+                  onError={() => setCollapsedLogoError(true)}
                 />
               ) : (
                 <span
@@ -464,20 +463,11 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
             const Icon = item.icon;
 
             if (item.children) {
-              const groupActive = item.children.some(
-                (child) => isActive(child),
-              );
+              const groupActive = item.children.some((child) => isActive(child));
 
-              const groupOpen =
-                !collapsed &&
-                (
-                  openGroups[item.id] ||
-                  groupActive
-                );
+              const groupOpen = !collapsed && (openGroups[item.id] || groupActive);
 
-              const flyoutOpen =
-                collapsed &&
-                collapsedFlyout?.id === item.id;
+              const flyoutOpen = collapsed && collapsedFlyout?.id === item.id;
 
               return (
                 <div
@@ -486,10 +476,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                   onMouseEnter={(event) => {
                     if (!collapsed) return;
 
-                    openCollapsedFlyout(
-                      event,
-                      item.id,
-                    );
+                    openCollapsedFlyout(event, item.id);
                   }}
                   onMouseLeave={() => {
                     if (collapsed) {
@@ -503,42 +490,29 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                       if (collapsed) {
                         clearFlyoutCloseTimer();
 
-                        const rect =
-                          event.currentTarget.getBoundingClientRect();
+                        const rect = event.currentTarget.getBoundingClientRect();
 
-                        setCollapsedFlyout(
-                          (current) => {
-                            if (
-                              current?.id === item.id
-                            ) {
-                              return null;
-                            }
+                        setCollapsedFlyout((current) => {
+                          if (current?.id === item.id) {
+                            return null;
+                          }
 
-                            return {
-                              id: item.id,
-                              top: getFlyoutTop(rect),
-                            };
-                          },
-                        );
+                          return {
+                            id: item.id,
+                            top: getFlyoutTop(rect),
+                          };
+                        });
 
                         return;
                       }
 
                       toggleGroup(item.id);
                     }}
-                    title={
-                      collapsed
-                        ? item.label
-                        : ''
-                    }
+                    title={collapsed ? item.label : ''}
                     className={`group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                      collapsed
-                        ? 'justify-center'
-                        : 'gap-3'
+                      collapsed ? 'justify-center' : 'gap-3'
                     } ${
-                      groupActive ||
-                      groupOpen ||
-                      flyoutOpen
+                      groupActive || groupOpen || flyoutOpen
                         ? 'app-nav-active shadow-sm'
                         : 'app-sidebar-muted app-sidebar-hover'
                     }`}
@@ -552,9 +526,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
                     {!collapsed && (
                       <>
-                        <span className="flex-1 truncate text-left">
-                          {item.label}
-                        </span>
+                        <span className="flex-1 truncate text-left">{item.label}</span>
 
                         {groupOpen ? (
                           <ChevronDown
@@ -577,51 +549,43 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
                   {groupOpen && (
                     <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
-                      {item.children.map(
-                        (child) => {
-                          const ChildIcon =
-                            child.icon;
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon;
 
-                          const childActive =
-                            isActive(child);
+                        const childActive = isActive(child);
 
-                          return (
-                            <Link
-                              key={child.to}
-                              to={child.to}
-                              className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                                childActive
-                                  ? 'app-nav-active shadow-sm'
-                                  : 'app-sidebar-muted app-sidebar-hover'
-                              }`}
-                            >
-                              <ChildIcon
-                                size={17}
-                                strokeWidth={1.7}
-                                className="shrink-0 text-current"
-                                style={iconStyle}
-                              />
+                        return (
+                          <Link
+                            key={child.to}
+                            to={child.to}
+                            className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                              childActive
+                                ? 'app-nav-active shadow-sm'
+                                : 'app-sidebar-muted app-sidebar-hover'
+                            }`}
+                          >
+                            <ChildIcon
+                              size={17}
+                              strokeWidth={1.7}
+                              className="shrink-0 text-current"
+                              style={iconStyle}
+                            />
 
-                              <span className="truncate">
-                                {child.label}
-                              </span>
-                            </Link>
-                          );
-                        },
-                      )}
+                            <span className="truncate">{child.label}</span>
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
 
                   {flyoutOpen &&
-                    typeof document !==
-                      'undefined' &&
+                    typeof document !== 'undefined' &&
                     createPortal(
                       <div
                         className="app-sidebar project-work-flyout fixed z-[9999] w-56 rounded-xl border p-2 shadow-2xl"
                         style={{
                           left: '60px',
-                          top:
-                            collapsedFlyout.top,
+                          top: collapsedFlyout.top,
                           pointerEvents: 'auto',
                         }}
                         onMouseEnter={() => {
@@ -636,52 +600,40 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                         </div>
 
                         <div className="space-y-1">
-                          {item.children.map(
-                            (child) => {
-                              const ChildIcon =
-                                child.icon;
+                          {item.children.map((child) => {
+                            const ChildIcon = child.icon;
 
-                              const childActive =
-                                isActive(child);
+                            const childActive = isActive(child);
 
-                              return (
-                                <Link
-                                  key={child.to}
-                                  to={child.to}
-                                  onMouseEnter={() => {
-                                    clearFlyoutCloseTimer();
-                                  }}
-                                  onClick={() => {
-                                    clearFlyoutCloseTimer();
+                            return (
+                              <Link
+                                key={child.to}
+                                to={child.to}
+                                onMouseEnter={() => {
+                                  clearFlyoutCloseTimer();
+                                }}
+                                onClick={() => {
+                                  clearFlyoutCloseTimer();
 
-                                    setCollapsedFlyout(
-                                      null,
-                                    );
-                                  }}
-                                  className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
-                                    childActive
-                                      ? 'app-nav-active shadow-sm'
-                                      : 'app-sidebar-muted app-sidebar-hover'
-                                  }`}
-                                >
-                                  <ChildIcon
-                                    size={18}
-                                    strokeWidth={1.7}
-                                    className="shrink-0 text-current"
-                                    style={
-                                      iconStyle
-                                    }
-                                  />
+                                  setCollapsedFlyout(null);
+                                }}
+                                className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                                  childActive
+                                    ? 'app-nav-active shadow-sm'
+                                    : 'app-sidebar-muted app-sidebar-hover'
+                                }`}
+                              >
+                                <ChildIcon
+                                  size={18}
+                                  strokeWidth={1.7}
+                                  className="shrink-0 text-current"
+                                  style={iconStyle}
+                                />
 
-                                  <span className="truncate">
-                                    {
-                                      child.label
-                                    }
-                                  </span>
-                                </Link>
-                              );
-                            },
-                          )}
+                                <span className="truncate">{child.label}</span>
+                              </Link>
+                            );
+                          })}
                         </div>
                       </div>,
                       document.body,
@@ -700,20 +652,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                   clearFlyoutCloseTimer();
                   setCollapsedFlyout(null);
                 }}
-                title={
-                  collapsed
-                    ? item.label
-                    : ''
-                }
+                title={collapsed ? item.label : ''}
                 className={`group flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                  collapsed
-                    ? 'justify-center'
-                    : 'gap-3'
-                } ${
-                  active
-                    ? 'app-nav-active shadow-sm'
-                    : 'app-sidebar-muted app-sidebar-hover'
-                }`}
+                  collapsed ? 'justify-center' : 'gap-3'
+                } ${active ? 'app-nav-active shadow-sm' : 'app-sidebar-muted app-sidebar-hover'}`}
               >
                 <Icon
                   size={19}
@@ -722,11 +664,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                   style={iconStyle}
                 />
 
-                {!collapsed && (
-                  <span className="truncate">
-                    {item.label}
-                  </span>
-                )}
+                {!collapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );
           })}
@@ -756,23 +694,16 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       <div className="app-sidebar-border shrink-0 border-t p-2.5">
         <div
           className={`app-security-card flex items-center rounded-xl border p-2 ${
-            collapsed
-              ? 'justify-center'
-              : 'gap-3'
+            collapsed ? 'justify-center' : 'gap-3'
           }`}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-            <ShieldCheck
-              size={18}
-              strokeWidth={1.7}
-            />
+            <ShieldCheck size={18} strokeWidth={1.7} />
           </span>
 
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block truncate text-xs font-semibold">
-                Enterprise Security
-              </span>
+              <span className="block truncate text-xs font-semibold">Enterprise Security</span>
 
               <span className="app-sidebar-muted block truncate text-[10px]">
                 Role-based access

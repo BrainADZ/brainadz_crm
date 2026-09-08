@@ -43,7 +43,10 @@ const summaryFor = (dataset) => {
   if (dataset.summary) return { ...emptySummary, ...dataset.summary };
   const columns = dataset.columns || [];
   const statusIndex = columns.findIndex(
-    (column) => String(column?.key || column?.label || column).trim().toLowerCase() === 'status',
+    (column) =>
+      String(column?.key || column?.label || column)
+        .trim()
+        .toLowerCase() === 'status',
   );
   const statuses = (dataset.rows || []).map((row) =>
     String(Array.isArray(row) ? row[statusIndex] : row?.status || '')
@@ -94,13 +97,16 @@ const SalesDashboard = () => {
 
   const totals = useMemo(
     () =>
-      datasets.reduce((current, dataset) => {
-        const summary = summaryFor(dataset);
-        Object.keys(emptySummary).forEach((key) => {
-          current[key] += Number(summary[key] || 0);
-        });
-        return current;
-      }, { ...emptySummary }),
+      datasets.reduce(
+        (current, dataset) => {
+          const summary = summaryFor(dataset);
+          Object.keys(emptySummary).forEach((key) => {
+            current[key] += Number(summary[key] || 0);
+          });
+          return current;
+        },
+        { ...emptySummary },
+      ),
     [datasets],
   );
   const upcomingMeetings = useMemo(() => {
@@ -191,7 +197,10 @@ const SalesDashboard = () => {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ label, value, note, icon: Icon, tone }) => (
-          <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <article
+            key={label}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
             <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
               <Icon size={18} />
             </span>
@@ -229,7 +238,9 @@ const SalesDashboard = () => {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{dataset.name}</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {dataset.name}
+                      </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {summary.followUpRows} follow-ups · {summary.interestedRows} interested ·{' '}
                         {summary.convertedRows} converted
@@ -238,7 +249,10 @@ const SalesDashboard = () => {
                     <span className="text-xs font-semibold text-emerald-700">{progress}% won</span>
                   </div>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
                 </Link>
               );

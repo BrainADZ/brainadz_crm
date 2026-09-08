@@ -97,9 +97,9 @@ const Login = () => {
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
-        (requestError.request
-          ? 'CRM server is unavailable. Start the backend and try again.'
-          : 'Unable to sign in. Please try again.'),
+          (requestError.request
+            ? 'CRM server is unavailable. Start the backend and try again.'
+            : 'Unable to sign in. Please try again.'),
       );
     } finally {
       setLoading(false);
@@ -132,8 +132,8 @@ const Login = () => {
               workspace.
             </h1>
             <p className="relative mt-5 max-w-162.5 text-base leading-7 text-slate-600">
-              One company. One workspace. Empower your teams across Marketing, Live and
-              Exhibitions with clarity, control and complete visibility.
+              One company. One workspace. Empower your teams across Marketing, Live and Exhibitions
+              with clarity, control and complete visibility.
             </p>
           </div>
 
@@ -159,8 +159,9 @@ const Login = () => {
             {stats.map(({ value, label, icon: Icon, color }, index) => (
               <div
                 key={value}
-                className={`flex items-center justify-center gap-3 px-2 ${index ? 'border-l border-slate-200' : ''
-                  }`}
+                className={`flex items-center justify-center gap-3 px-2 ${
+                  index ? 'border-l border-slate-200' : ''
+                }`}
               >
                 <span
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${colorClasses[color].icon}`}
@@ -204,7 +205,9 @@ const Login = () => {
 
           <form onSubmit={handleLogin} className="mt-8">
             <label className="block">
-              <span className="mb-2 block text-sm font-extrabold text-[#1d3869]">Email address</span>
+              <span className="mb-2 block text-sm font-extrabold text-[#1d3869]">
+                Email address
+              </span>
               <div className="relative">
                 <Mail
                   size={17}

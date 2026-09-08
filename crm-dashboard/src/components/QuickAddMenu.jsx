@@ -14,12 +14,48 @@ import { getMyAccess } from '../services/accessApi';
 import { isSuperAdminSession } from '../utils/auth';
 
 const actions = [
-  { label: 'Add client data', to: '/dashboard/clients', moduleKey: 'sales', resource: 'clients', icon: Users },
-  { label: 'Create quotation', to: '/dashboard/quotations', moduleKey: 'quotations', resource: 'quotations', icon: FilePlus2 },
-  { label: 'Add project', to: '/dashboard/projects', moduleKey: 'projects', resource: 'projects', icon: FolderPlus },
-  { label: 'Create task', to: '/dashboard/tasks', moduleKey: 'projects', resource: 'projects', icon: ListPlus },
-  { label: 'Schedule meeting', to: '/dashboard/meetings', moduleKey: 'meetings', resource: 'meetings', icon: CalendarPlus },
-  { label: 'Add employee', to: '/dashboard/employees', moduleKey: 'employees', resource: 'employees', icon: UserPlus },
+  {
+    label: 'Add client data',
+    to: '/dashboard/clients',
+    moduleKey: 'sales',
+    resource: 'clients',
+    icon: Users,
+  },
+  {
+    label: 'Create quotation',
+    to: '/dashboard/quotations',
+    moduleKey: 'quotations',
+    resource: 'quotations',
+    icon: FilePlus2,
+  },
+  {
+    label: 'Add project',
+    to: '/dashboard/projects',
+    moduleKey: 'projects',
+    resource: 'projects',
+    icon: FolderPlus,
+  },
+  {
+    label: 'Create task',
+    to: '/dashboard/tasks',
+    moduleKey: 'projects',
+    resource: 'projects',
+    icon: ListPlus,
+  },
+  {
+    label: 'Schedule meeting',
+    to: '/dashboard/meetings',
+    moduleKey: 'meetings',
+    resource: 'meetings',
+    icon: CalendarPlus,
+  },
+  {
+    label: 'Add employee',
+    to: '/dashboard/employees',
+    moduleKey: 'employees',
+    resource: 'employees',
+    icon: UserPlus,
+  },
 ];
 
 const QuickAddMenu = () => {
@@ -99,7 +135,10 @@ const QuickAddMenu = () => {
       >
         <Plus size={16} strokeWidth={2} />
         <span className="hidden md:inline">New</span>
-        <ChevronDown size={14} className={`hidden transition md:block ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          size={14}
+          className={`hidden transition md:block ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
@@ -107,7 +146,9 @@ const QuickAddMenu = () => {
           role="menu"
           className="ui-surface absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border p-1.5 shadow-xl"
         >
-          <p className="ui-muted px-3 py-2 text-[11px] font-bold uppercase tracking-wider">Quick add</p>
+          <p className="ui-muted px-3 py-2 text-[11px] font-bold uppercase tracking-wider">
+            Quick add
+          </p>
           {availableActions.map(({ label, to, icon: Icon }) => (
             <Link
               key={label}

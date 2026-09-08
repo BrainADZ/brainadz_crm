@@ -64,7 +64,10 @@ const StatCard = ({ label, value, note, tone, icon, to, action, loading }) => (
         <p className="mt-2 text-sm font-semibold text-slate-700">{label}</p>
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="truncate text-xs text-slate-500">{note}</p>
-          <Link to={to} className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-800">
+          <Link
+            to={to}
+            className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-800"
+          >
             {action} →
           </Link>
         </div>

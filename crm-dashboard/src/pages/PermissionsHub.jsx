@@ -702,27 +702,27 @@ const PermissionsHub = () => {
               .includes(roleSearch.trim().toLowerCase()),
           )
           .map((role) => (
-          <button
-            key={role.roleKey}
-            type="button"
-            onClick={() => selectRole(role)}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${selectedRoleKey === role.roleKey ? 'bg-blue-600 text-white' : 'hover:bg-white'}`}
-          >
-            <span
-              className={`flex h-8 w-8 items-center justify-center rounded-lg ${selectedRoleKey === role.roleKey ? 'bg-white/15' : 'bg-white text-blue-700'}`}
+            <button
+              key={role.roleKey}
+              type="button"
+              onClick={() => selectRole(role)}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${selectedRoleKey === role.roleKey ? 'bg-blue-600 text-white' : 'hover:bg-white'}`}
             >
-              {role.locked ? <LockKeyhole size={14} /> : <ShieldCheck size={14} />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{role.roleLabel}</span>
               <span
-                className={`block text-[11px] ${selectedRoleKey === role.roleKey ? 'text-blue-100' : 'text-slate-400'}`}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${selectedRoleKey === role.roleKey ? 'bg-white/15' : 'bg-white text-blue-700'}`}
               >
-                {role.roleGroup || (role.systemRole ? 'System' : 'Custom')} · Level{' '}
-                {role.hierarchyLevel} · {role.userCount || 0} users
+                {role.locked ? <LockKeyhole size={14} /> : <ShieldCheck size={14} />}
               </span>
-            </span>
-          </button>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{role.roleLabel}</span>
+                <span
+                  className={`block text-[11px] ${selectedRoleKey === role.roleKey ? 'text-blue-100' : 'text-slate-400'}`}
+                >
+                  {role.roleGroup || (role.systemRole ? 'System' : 'Custom')} · Level{' '}
+                  {role.hierarchyLevel} · {role.userCount || 0} users
+                </span>
+              </span>
+            </button>
           ))}
       </div>
     </aside>

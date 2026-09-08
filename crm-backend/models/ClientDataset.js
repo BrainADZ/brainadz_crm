@@ -71,12 +71,9 @@ const rowFollowUpSchema = new mongoose.Schema(
       type: String,
       default: '',
       validate: {
-        validator: (value) =>
-          !value ||
-          /^\d{4}-\d{2}-\d{2}$/.test(value),
+        validator: (value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value),
 
-        message:
-          'Follow-up date must use YYYY-MM-DD format',
+        message: 'Follow-up date must use YYYY-MM-DD format',
       },
     },
 
@@ -117,11 +114,7 @@ const clientDatasetSchema = new mongoose.Schema(
 
     tableFormat: {
       type: String,
-      enum: [
-        'marketing',
-        'live',
-        'exhibition',
-      ],
+      enum: ['marketing', 'live', 'exhibition'],
       default: 'exhibition',
       index: true,
     },
@@ -159,11 +152,7 @@ const clientDatasetSchema = new mongoose.Schema(
 
     priority: {
       type: String,
-      enum: [
-        'Low',
-        'Medium',
-        'High',
-      ],
+      enum: ['Low', 'Medium', 'High'],
       default: 'Medium',
     },
 
@@ -193,23 +182,13 @@ const clientDatasetSchema = new mongoose.Schema(
       },
     ],
 
-    rows: [
-      [
-        mongoose.Schema.Types.Mixed,
-      ],
-    ],
+    rows: [[mongoose.Schema.Types.Mixed]],
 
-    rowLogs: [
-      rowLogSchema,
-    ],
+    rowLogs: [rowLogSchema],
 
-    rowAssignments: [
-      rowAssignmentSchema,
-    ],
+    rowAssignments: [rowAssignmentSchema],
 
-    rowFollowUps: [
-      rowFollowUpSchema,
-    ],
+    rowFollowUps: [rowFollowUpSchema],
 
     rowCount: {
       type: Number,
@@ -246,8 +225,4 @@ clientDatasetSchema.index({
   updatedAt: -1,
 });
 
-module.exports =
-  mongoose.model(
-    'ClientDataset',
-    clientDatasetSchema,
-  );
+module.exports = mongoose.model('ClientDataset', clientDatasetSchema);

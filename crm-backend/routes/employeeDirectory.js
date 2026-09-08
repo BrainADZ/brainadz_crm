@@ -204,10 +204,7 @@ router.put('/:employeeId', requirePermission('employees', 'update'), async (req,
         updatedBy: req.user._id,
       })),
     );
-    await User.updateOne(
-      { _id: employee._id },
-      { $set: { accessAssignmentsInitialized: true } },
-    );
+    await User.updateOne({ _id: employee._id }, { $set: { accessAssignmentsInitialized: true } });
     await writeAuditLog({
       req,
       targetUserId: employee._id,

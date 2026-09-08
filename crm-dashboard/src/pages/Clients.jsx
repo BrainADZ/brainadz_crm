@@ -814,7 +814,9 @@ const Clients = () => {
       <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Sales work queue</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Sales work queue
+            </p>
             <p className="mt-1 text-sm font-semibold text-slate-800">
               Jump directly to records that need sales attention.
             </p>
@@ -822,7 +824,11 @@ const Clients = () => {
           <div className="flex flex-wrap gap-2">
             {[
               ['all', 'All Lists', datasets.length],
-              ['hot', 'High Priority', datasets.filter((dataset) => dataset.priority === 'High').length],
+              [
+                'hot',
+                'High Priority',
+                datasets.filter((dataset) => dataset.priority === 'High').length,
+              ],
               ['followup', 'Follow-up', totals.followUpRows],
               ['unassigned', 'Unassigned', totals.unassignedRows],
               ['untouched', 'Untouched', totals.untouchedRows],
@@ -937,7 +943,9 @@ const Clients = () => {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-              <span>{filteredDatasets.length} visible list{filteredDatasets.length === 1 ? '' : 's'}</span>
+              <span>
+                {filteredDatasets.length} visible list{filteredDatasets.length === 1 ? '' : 's'}
+              </span>
               {hasActiveFilters && (
                 <button
                   type="button"

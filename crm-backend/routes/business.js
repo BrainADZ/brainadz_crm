@@ -13,11 +13,7 @@ const RolePermission = require('../models/RolePermission');
 const OfficeStructure = require('../models/OfficeStructure');
 const Community = require('../models/Community');
 const authMiddleware = require('../middleware/authMiddleware');
-const {
-  MODULES,
-  UNIVERSAL_COMMUNITIES,
-  COMMUNITY_KEYS,
-} = require('../config/accessControl');
+const { MODULES, UNIVERSAL_COMMUNITIES, COMMUNITY_KEYS } = require('../config/accessControl');
 const { loadAuthorization } = require('../middleware/authorization');
 const {
   getPermission,

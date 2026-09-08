@@ -86,8 +86,7 @@ const getAssignedRowsForEmployee = (datasets, employeeId) => {
     );
     const assignments = datasetObject.rowAssignments || [];
     const ownsDataset =
-      Boolean(datasetObject.uploadedBy) &&
-      String(datasetObject.uploadedBy) === String(employeeId);
+      Boolean(datasetObject.uploadedBy) && String(datasetObject.uploadedBy) === String(employeeId);
     const visibleRowIndexes = ownsDataset
       ? rows.map((_, rowIndex) => rowIndex)
       : [
@@ -131,10 +130,7 @@ const getAssignedRowsForEmployee = (datasets, employeeId) => {
 router.get('/employee/assigned-rows', authMiddleware, requireEmployee, async (req, res) => {
   try {
     const datasets = await ClientDataset.find({
-      $or: [
-        { uploadedBy: req.user.id },
-        { 'rowAssignments.employee': req.user.id },
-      ],
+      $or: [{ uploadedBy: req.user.id }, { 'rowAssignments.employee': req.user.id }],
     });
     return res.json(getAssignedRowsForEmployee(datasets, req.user.id));
   } catch (error) {

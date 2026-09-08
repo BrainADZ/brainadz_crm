@@ -19,6 +19,7 @@ const permissionRoutes = require('./routes/permissions');
 const employeeDirectoryRoutes = require('./routes/employeeDirectory');
 const meetingRoutes = require('./routes/meetings');
 const quotationRoutes = require('./routes/quotations');
+const websiteEnquiryRoutes = require('./routes/websiteEnquiries');
 const { startMeetingReminderScheduler } = require('./services/meetingReminderService');
 const path = require('path');
 
@@ -39,6 +40,10 @@ const parseAllowedOrigins = (value) =>
         'https://democrm.brainadzlive.in',
         'http://democrm.brainadzlive.in',
         'https://crm.brainadz.com',
+        'https://brainadz.marketing',
+        'https://www.brainadz.marketing',
+        'https://crm.brainadzlive.in',
+        'https://crmapi.brainadzlive.in',
       ];
 
 const allowedOrigins = parseAllowedOrigins(process.env.CLIENT_ORIGINS);
@@ -53,7 +58,7 @@ app.use(
       }
     },
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Website-Key'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     optionsSuccessStatus: 200,
   }),
@@ -94,6 +99,7 @@ app.use('/api/permissions', permissionRoutes);
 app.use('/api/employee-directory', employeeDirectoryRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/quotations', quotationRoutes);
+app.use('/api/website-enquiries', websiteEnquiryRoutes);
 
 // Socket.IO Setup
 const io = socketIo(server, {

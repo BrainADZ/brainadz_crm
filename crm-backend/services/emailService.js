@@ -71,10 +71,7 @@ const sendMeetingReminderEmail = async ({ meeting, employee }) => {
   const platformOrLocation = String(meeting.platformOrLocation || '').trim();
   const notes = String(meeting.notes || '').trim();
   const employeeName = String(employee.name || employee.email).trim();
-  const crmBaseUrl = String(process.env.CRM_APP_URL || 'http://localhost:5173').replace(
-    /\/+$/,
-    '',
-  );
+  const crmBaseUrl = String(process.env.CRM_APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
   const meetingUrl = `${crmBaseUrl}/dashboard/meetings?meetingId=${encodeURIComponent(String(meeting._id || ''))}`;
   const subjectContact = contactLabel ? ` with ${contactLabel}` : '';
 

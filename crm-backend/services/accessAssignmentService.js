@@ -36,8 +36,7 @@ const validateAccessAssignments = async (
       OrganizationTeam.find({ _id: { $in: teamIds }, status: 'active' }),
     ]);
 
-    if (!department || !role)
-      throw accessError(`${rowLabel} has an invalid department or role`);
+    if (!department || !role) throw accessError(`${rowLabel} has an invalid department or role`);
     if (!role.allowedUserTypes?.includes(targetUserType))
       throw accessError(`${role.roleLabel} cannot be assigned to a ${targetUserType}`);
     if (!businessUnitIds.length || units.length !== businessUnitIds.length)
@@ -65,10 +64,7 @@ const validateAccessAssignments = async (
     const assignableDepartmentIds = role.assignableDepartmentIds?.map(String) || [];
     const assignableBusinessUnitIds = role.assignableBusinessUnitIds?.map(String) || [];
     const assignableTeamIds = role.assignableTeamIds?.map(String) || [];
-    if (
-      assignableDepartmentIds.length &&
-      !assignableDepartmentIds.includes(String(department._id))
-    )
+    if (assignableDepartmentIds.length && !assignableDepartmentIds.includes(String(department._id)))
       throw accessError(`${role.roleLabel} cannot be assigned to ${department.name}`);
     if (
       assignableBusinessUnitIds.length &&
@@ -82,7 +78,7 @@ const validateAccessAssignments = async (
       if (role.hierarchyLevel >= actorRole.hierarchyLevel)
         throw accessError('You cannot assign a role at or above your own hierarchy level', 403);
       const scopedPermissions = (role.permissions || []).map((permission) => ({
-        ...permission.toObject?.() || permission,
+        ...(permission.toObject?.() || permission),
         scope: input.dataScope,
       }));
       if (!canGrantPermission(effectivePermissions, scopedPermissions))

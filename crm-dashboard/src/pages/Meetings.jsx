@@ -174,8 +174,7 @@ const Meetings = () => {
           meetingTitle: clientLabel ? `${clientLabel} - Client Meeting` : 'Client Meeting',
           datasetId: requestedDatasetId,
           rowIndex: requestedRowIndex,
-          employeeId:
-            idOf(context.suggestedEmployeeId) || idOf(context.assignedEmployees?.[0]),
+          employeeId: idOf(context.suggestedEmployeeId) || idOf(context.assignedEmployees?.[0]),
           businessUnitId,
           departmentId,
         });
@@ -490,8 +489,8 @@ const Meetings = () => {
                       <p className="mt-1 text-xs font-semibold text-blue-700">
                         Client: {meeting.clientName || meeting.companyName}
                         {meeting.clientName &&
-                          meeting.companyName &&
-                          meeting.clientName !== meeting.companyName
+                        meeting.companyName &&
+                        meeting.clientName !== meeting.companyName
                           ? ` · ${meeting.companyName}`
                           : ''}
                       </p>
@@ -620,16 +619,14 @@ const Meetings = () => {
                   {linkedContext.clientName &&
                     linkedContext.companyName &&
                     linkedContext.clientName !== linkedContext.companyName && (
-                      <p className="mt-0.5 text-sm text-slate-600">
-                        {linkedContext.companyName}
-                      </p>
+                      <p className="mt-0.5 text-sm text-slate-600">{linkedContext.companyName}</p>
                     )}
                   <p className="mt-2 text-xs text-slate-500">
                     Dataset: {linkedContext.datasetName} · Row {Number(linkedContext.rowIndex) + 1}
                   </p>
                   <p className="mt-2 text-xs font-medium text-blue-800">
-                    On the meeting date, the assigned employee will receive a bell notification
-                    and, when email delivery is configured, an email reminder.
+                    On the meeting date, the assigned employee will receive a bell notification and,
+                    when email delivery is configured, an email reminder.
                   </p>
                 </section>
               )}
@@ -680,9 +677,7 @@ const Meetings = () => {
                       value={form.employeeId}
                       onChange={(event) => {
                         const employeeId = event.target.value;
-                        const employee = linkedEmployees.find(
-                          (item) => item._id === employeeId,
-                        );
+                        const employee = linkedEmployees.find((item) => item._id === employeeId);
                         const allowedDepartmentIds = employee?.schedulableDepartmentIds || [];
                         const departmentId = allowedDepartmentIds.includes(form.departmentId)
                           ? form.departmentId

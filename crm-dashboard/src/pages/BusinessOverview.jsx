@@ -59,7 +59,9 @@ const RecentList = ({ title, description, rows, empty, renderRow, to }) => (
       ) : (
         <div className="px-4 py-7 text-center">
           <p className="text-sm font-semibold text-slate-700">{empty}</p>
-          <p className="mt-1 text-xs text-slate-500">New activity will appear here automatically.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            New activity will appear here automatically.
+          </p>
         </div>
       )}
     </div>
@@ -229,7 +231,10 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
           </div>
           <div className="space-y-3">
             {pipeline.map((stage) => (
-              <div key={stage.label} className="grid grid-cols-[6rem_1fr_2.5rem] items-center gap-3">
+              <div
+                key={stage.label}
+                className="grid grid-cols-[6rem_1fr_2.5rem] items-center gap-3"
+              >
                 <span className="text-xs font-semibold text-slate-600">{stage.label}</span>
                 <span className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <span
@@ -253,14 +258,20 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
             <span
               className="block h-full rounded-full bg-blue-600"
               style={{
-                width: `${summary?.quotationStats?.value
-                  ? Math.min((summary.quotationStats.acceptedValue / summary.quotationStats.value) * 100, 100)
-                  : 0}%`,
+                width: `${
+                  summary?.quotationStats?.value
+                    ? Math.min(
+                        (summary.quotationStats.acceptedValue / summary.quotationStats.value) * 100,
+                        100,
+                      )
+                    : 0
+                }%`,
               }}
             />
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            {summary?.quotationStats?.accepted || 0} accepted · {summary?.quotationStats?.sent || 0} sent
+            {summary?.quotationStats?.accepted || 0} accepted · {summary?.quotationStats?.sent || 0}{' '}
+            sent
           </p>
         </article>
       </section>
@@ -276,7 +287,9 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
             <div key={quotation._id} className="px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold text-slate-900">{quotation.subject || quotation.quotationNumber}</p>
+                  <p className="font-bold text-slate-900">
+                    {quotation.subject || quotation.quotationNumber}
+                  </p>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     {quotation.clientName || 'Client'} · {quotation.status || 'Draft'}
                   </p>
@@ -305,7 +318,8 @@ const BusinessOverview = ({ embedded = false, refreshToken = 0 }) => {
                   {item.title || item.clientName || 'Scheduled meeting'}
                 </p>
                 <p className="mt-1 truncate text-xs font-medium text-slate-500">
-                  {item.meetingDate} · {item.meetingTime || 'Time not set'} · {item.meetingMode || 'Meeting'}
+                  {item.meetingDate} · {item.meetingTime || 'Time not set'} ·{' '}
+                  {item.meetingMode || 'Meeting'}
                 </p>
               </div>
             </div>

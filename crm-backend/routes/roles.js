@@ -56,7 +56,9 @@ const withCounts = async (roles) => {
       { $match: { status: 'active' } },
       { $group: { _id: '$roleId', userIds: { $addToSet: '$userId' } } },
     ]),
-    User.find({ isDeleted: { $ne: true } }).select('_id roleKey').lean(),
+    User.find({ isDeleted: { $ne: true } })
+      .select('_id roleKey')
+      .lean(),
   ]);
   const activeUserIds = new Set(users.map((user) => String(user._id)));
   const roleKeyById = new Map(roles.map((role) => [String(role._id), role.roleKey]));

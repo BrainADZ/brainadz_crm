@@ -708,9 +708,7 @@ const Employees = () => {
                     const availableDataScopes = DATA_SCOPES.filter(
                       (scope) =>
                         DATA_SCOPE_RANK[scope] <=
-                        DATA_SCOPE_RANK[
-                          selectedAssignmentRole?.defaultDataScope || 'ASSIGNED'
-                        ],
+                        DATA_SCOPE_RANK[selectedAssignmentRole?.defaultDataScope || 'ASSIGNED'],
                     );
                     return (
                       <div
@@ -753,11 +751,7 @@ const Employees = () => {
                                 const nextBusinessUnitIds =
                                   nextDepartment?.businessUnitIds.slice(0, 1).map(idOf) || [];
                                 const nextRoles = workspace.roles.filter((role) =>
-                                  roleFitsAssignment(
-                                    role,
-                                    event.target.value,
-                                    nextBusinessUnitIds,
-                                  ),
+                                  roleFitsAssignment(role, event.target.value, nextBusinessUnitIds),
                                 );
                                 const nextRole =
                                   nextRoles.find((role) => role._id === assignment.roleId) ||
@@ -890,9 +884,9 @@ const Employees = () => {
                               className={inputClass}
                             >
                               {availableRoles.map((role) => (
-                                  <option key={role._id} value={role._id}>
-                                    {role.roleLabel}
-                                  </option>
+                                <option key={role._id} value={role._id}>
+                                  {role.roleLabel}
+                                </option>
                               ))}
                             </select>
                           </label>

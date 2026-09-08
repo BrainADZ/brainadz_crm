@@ -1,10 +1,4 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-} from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import DashboardLayout from './components/DashboardLayout';
 import Clients from './pages/Clients';
 import ClientDatasetDetail from './pages/ClientDatasetDetail';
@@ -25,11 +19,11 @@ import DocumentsHub from './pages/DocumentsHub';
 import PermissionsHub from './pages/PermissionsHub';
 import Meetings from './pages/Meetings';
 import Quotations from './pages/Quotations';
+import MarketingEnquiries from './pages/MarketingEnquiries';
 import TeamWorkload from './pages/TeamWorkload';
 import { getAuthenticatedRole, isSalesSession } from './utils/auth';
 
-const DashboardHome = () =>
-  isSalesSession() ? <SalesDashboard /> : <AdminDashboardHome />;
+const DashboardHome = () => (isSalesSession() ? <SalesDashboard /> : <AdminDashboardHome />);
 
 const AppRoutes = () => {
   // Re-render the auth gates after login/logout navigation. Reading the role in
@@ -39,173 +33,181 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-        {/* Default route to handle login redirection */}
+      {/* Default route to handle login redirection */}
+      <Route
+        path="/"
+        element={
+          authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      <Route
+        path="/login"
+        element={
+          authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Login />
+          )
+        }
+      />
+      <Route path="/employee-login" element={<Navigate to="/login" replace />} />
+
+      {/* Shared CRM dashboard. The sidebar and every route are permission-gated. */}
+      <Route
+        path="/dashboard"
+        element={
+          <PrivateRoute roles={['admin', 'employee']}>
+            <DashboardLayout />
+          </PrivateRoute>
+        }
+      >
         <Route
-          path="/"
+          index
           element={
-            authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            <AccessRoute moduleKey="dashboard">
+              <DashboardHome />
+            </AccessRoute>
           }
         />
-
+        <Route path="business" element={<Navigate to="/dashboard" replace />} />
         <Route
-          path="/login"
+          path="clients"
           element={
-            authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Login />
-            )
+            <AccessRoute moduleKey="sales">
+              <Clients />
+            </AccessRoute>
           }
         />
-        <Route path="/employee-login" element={<Navigate to="/login" replace />} />
-
-        {/* Shared CRM dashboard. The sidebar and every route are permission-gated. */}
         <Route
-          path="/dashboard"
+          path="clients/:datasetId"
           element={
-            <PrivateRoute roles={['admin', 'employee']}>
-              <DashboardLayout />
-            </PrivateRoute>
+            <AccessRoute moduleKey="sales">
+              <ClientDatasetDetail />
+            </AccessRoute>
           }
-        >
-          <Route
-            index
-            element={
-              <AccessRoute moduleKey="dashboard">
-                <DashboardHome />
-              </AccessRoute>
-            }
-          />
-          <Route path="business" element={<Navigate to="/dashboard" replace />} />
-          <Route
-            path="clients"
-            element={
-              <AccessRoute moduleKey="sales">
-                <Clients />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="clients/:datasetId"
-            element={
-              <AccessRoute moduleKey="sales">
-                <ClientDatasetDetail />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="quotations"
-            element={
-              <AccessRoute moduleKey="quotations">
-                <Quotations />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="employees"
-            element={
-              <AccessRoute moduleKey="employees">
-                <Employees />
-              </AccessRoute>
-            }
-          />
-          <Route path="departments" element={<Navigate to="/dashboard/permissions" replace />} />
-          <Route
-            path="tasks"
-            element={
-              <AccessRoute moduleKey="projects">
-                <AdminTasks />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="workload"
-            element={
-              <AccessRoute moduleKey="projects">
-                <TeamWorkload />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="meetings"
-            element={
-              <AccessRoute moduleKey="meetings">
-                <Meetings />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="communication"
-            element={
-              <AccessRoute moduleKey="communication">
-                <CommunicationHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="marketing"
-            element={
-              <AccessRoute moduleKey="marketing">
-                <MarketingHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="accounting"
-            element={
-              <AccessRoute moduleKey="accounting">
-                <AccountingHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="projects"
-            element={
-              <AccessRoute moduleKey="projects">
-                <ProjectsHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="documents"
-            element={
-              <AccessRoute moduleKey="documents">
-                <DocumentsHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="permissions"
-            element={
-              <AccessRoute moduleKey="permissions">
-                <PermissionsHub />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="whatsapp"
-            element={
-              <AccessRoute moduleKey="whatsapp">
-                <WhatsAppDemo />
-              </AccessRoute>
-            }
-          />
-          <Route
-            path="settings"
-            element={<AccountSettings role={authenticatedRole === 'admin' ? 'admin' : 'employee'} />}
-          />
-          <Route path="assign-clients" element={<Navigate to="/dashboard/tasks" replace />} />
-        </Route>
+        />
+        <Route
+          path="quotations"
+          element={
+            <AccessRoute moduleKey="quotations">
+              <Quotations />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="employees"
+          element={
+            <AccessRoute moduleKey="employees">
+              <Employees />
+            </AccessRoute>
+          }
+        />
+        <Route path="departments" element={<Navigate to="/dashboard/permissions" replace />} />
+        <Route
+          path="tasks"
+          element={
+            <AccessRoute moduleKey="projects">
+              <AdminTasks />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="workload"
+          element={
+            <AccessRoute moduleKey="projects">
+              <TeamWorkload />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="meetings"
+          element={
+            <AccessRoute moduleKey="meetings">
+              <Meetings />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="communication"
+          element={
+            <AccessRoute moduleKey="communication">
+              <CommunicationHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="website-enquiries/marketing"
+          element={
+            <AccessRoute moduleKey="communication">
+              <MarketingEnquiries />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="marketing"
+          element={
+            <AccessRoute moduleKey="marketing">
+              <MarketingHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="accounting"
+          element={
+            <AccessRoute moduleKey="accounting">
+              <AccountingHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="projects"
+          element={
+            <AccessRoute moduleKey="projects">
+              <ProjectsHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="documents"
+          element={
+            <AccessRoute moduleKey="documents">
+              <DocumentsHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="permissions"
+          element={
+            <AccessRoute moduleKey="permissions">
+              <PermissionsHub />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="whatsapp"
+          element={
+            <AccessRoute moduleKey="whatsapp">
+              <WhatsAppDemo />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="settings"
+          element={<AccountSettings role={authenticatedRole === 'admin' ? 'admin' : 'employee'} />}
+        />
+        <Route path="assign-clients" element={<Navigate to="/dashboard/tasks" replace />} />
+      </Route>
 
-        {/* Legacy employee-only links now use the shared CRM dashboard. */}
-        <Route path="/employee-dashboard/*" element={<Navigate to="/dashboard" replace />} />
+      {/* Legacy employee-only links now use the shared CRM dashboard. */}
+      <Route path="/employee-dashboard/*" element={<Navigate to="/dashboard" replace />} />
 
-        {/* Catch-all Route for Undefined Paths */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all Route for Undefined Paths */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import {
-  Link,
-  useNavigate,
-  useParams,
-} from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '../config/api';
 
@@ -41,8 +37,7 @@ const STATUS_ROW_STYLES = {
   'Not Reachable': 'bg-orange-50/60',
 };
 
-const getAuthToken = () =>
-  getValidToken('admin') || getValidToken('employee');
+const getAuthToken = () => getValidToken('admin') || getValidToken('employee');
 
 const formatDate = (value) => {
   if (!value) return '';
@@ -58,9 +53,7 @@ const formatDate = (value) => {
 
 const getTodayDateKey = () => {
   const now = new Date();
-  const localDate = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60000,
-  );
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
 
   return localDate.toISOString().slice(0, 10);
 };
@@ -71,10 +64,7 @@ const normalizeColumnName = (column) =>
     .toLowerCase();
 
 const getColumnIndex = (columns, columnName) =>
-  columns.findIndex(
-    (column) =>
-      normalizeColumnName(column) === columnName.toLowerCase(),
-  );
+  columns.findIndex((column) => normalizeColumnName(column) === columnName.toLowerCase());
 
 const normalizeContactHeader = (column) =>
   normalizeColumnName(column)
@@ -98,8 +88,7 @@ const isEmailColumn = (column) => {
   return /^(email|email id|email address)(\s*\d+)?$/.test(header);
 };
 
-const isOtherColumn = (column) =>
-  ['other', 'others'].includes(normalizeContactHeader(column));
+const isOtherColumn = (column) => ['other', 'others'].includes(normalizeContactHeader(column));
 
 const splitContactValue = (value) =>
   String(value || '')
@@ -108,30 +97,21 @@ const splitContactValue = (value) =>
     .filter(Boolean);
 
 const getGroupedContactValues = (row, indexes) => [
-  ...new Set(
-    indexes.flatMap((index) => splitContactValue(row[index])),
-  ),
+  ...new Set(indexes.flatMap((index) => splitContactValue(row[index]))),
 ];
 
 const getRowLog = (rowLogs = [], rowIndex) =>
-  rowLogs.find(
-    (rowLog) =>
-      Number(rowLog.rowIndex) === Number(rowIndex),
-  );
+  rowLogs.find((rowLog) => Number(rowLog.rowIndex) === Number(rowIndex));
 
 const addWorkColumnsAfterWebsite = (columns = [], rows = []) => {
   const safeColumns = columns.map(
-    (column, index) =>
-      String(column || '').trim() || `Column ${index + 1}`,
+    (column, index) => String(column || '').trim() || `Column ${index + 1}`,
   );
 
   const workIndexes = new Map(
     CLIENT_WORK_COLUMNS.map((column) => [
       column,
-      safeColumns.findIndex(
-        (item) =>
-          normalizeColumnName(item) === column.toLowerCase(),
-      ),
+      safeColumns.findIndex((item) => normalizeColumnName(item) === column.toLowerCase()),
     ]),
   );
 
@@ -140,25 +120,18 @@ const addWorkColumnsAfterWebsite = (columns = [], rows = []) => {
     .filter(
       (index) =>
         !CLIENT_WORK_COLUMNS.some(
-          (column) =>
-            normalizeColumnName(safeColumns[index]) ===
-            column.toLowerCase(),
+          (column) => normalizeColumnName(safeColumns[index]) === column.toLowerCase(),
         ),
     );
 
   return {
-    columns: [
-      ...dataIndexes.map((index) => safeColumns[index]),
-      ...CLIENT_WORK_COLUMNS,
-    ],
+    columns: [...dataIndexes.map((index) => safeColumns[index]), ...CLIENT_WORK_COLUMNS],
 
     rows: rows.map((row) => [
       ...dataIndexes.map((index) => row[index] ?? ''),
 
       ...CLIENT_WORK_COLUMNS.map((column) =>
-        workIndexes.get(column) === -1
-          ? ''
-          : (row[workIndexes.get(column)] ?? ''),
+        workIndexes.get(column) === -1 ? '' : (row[workIndexes.get(column)] ?? ''),
       ),
     ]),
   };
@@ -166,18 +139,12 @@ const addWorkColumnsAfterWebsite = (columns = [], rows = []) => {
 
 const ContactCell = ({ values, type }) => {
   if (!values.length) {
-    return (
-      <span className="text-xs font-medium text-slate-400">
-        —
-      </span>
-    );
+    return <span className="text-xs font-medium text-slate-400">—</span>;
   }
 
   if (values.length === 1) {
     return (
-      <span className="whitespace-nowrap text-sm font-medium text-slate-700">
-        {values[0]}
-      </span>
+      <span className="whitespace-nowrap text-sm font-medium text-slate-700">{values[0]}</span>
     );
   }
 
@@ -189,28 +156,19 @@ const ContactCell = ({ values, type }) => {
         className="h-9 w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
       >
         {values.map((value, index) => (
-          <option
-            key={`${value}-${index}`}
-            value={value}
-          >
+          <option key={`${value}-${index}`} value={value}>
             {value}
           </option>
         ))}
       </select>
 
-      <p className="mt-1 text-[10px] font-semibold text-slate-400">
-        {values.length} options
-      </p>
+      <p className="mt-1 text-[10px] font-semibold text-slate-400">{values.length} options</p>
     </div>
   );
 };
 
 const MessageIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="h-4 w-4 fill-none stroke-current"
-    strokeWidth="2"
-  >
+  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2">
     <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
     <path d="M8 9h8" />
     <path d="M8 13h5" />
@@ -218,32 +176,20 @@ const MessageIcon = () => (
 );
 
 const CloseIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="h-4 w-4 fill-none stroke-current"
-    strokeWidth="2"
-  >
+  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2">
     <path d="M18 6 6 18" />
     <path d="m6 6 12 12" />
   </svg>
 );
 
 const CheckIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="h-4 w-4 fill-none stroke-current"
-    strokeWidth="2"
-  >
+  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2">
     <path d="m5 12 4 4L19 6" />
   </svg>
 );
 
 const CalendarIcon = () => (
-  <svg
-    viewBox="0 0 24 24"
-    className="h-4 w-4 fill-none stroke-current"
-    strokeWidth="2"
-  >
+  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2">
     <path d="M8 2v4M16 2v4M3 10h18" />
     <path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
   </svg>
@@ -254,14 +200,10 @@ const formatMeetingDateTime = (meeting) => {
     return 'Date not set';
   }
 
-  const dateTime = new Date(
-    `${meeting.meetingDate}T${meeting.meetingTime || '00:00'}:00`,
-  );
+  const dateTime = new Date(`${meeting.meetingDate}T${meeting.meetingTime || '00:00'}:00`);
 
   if (Number.isNaN(dateTime.getTime())) {
-    return [meeting.meetingDate, meeting.meetingTime]
-      .filter(Boolean)
-      .join(' ');
+    return [meeting.meetingDate, meeting.meetingTime].filter(Boolean).join(' ');
   }
 
   return new Intl.DateTimeFormat('en-IN', {
@@ -285,17 +227,14 @@ const ClientDatasetDetail = () => {
   const [meetingActions, setMeetingActions] = useState([]);
 
   const [selectedRows, setSelectedRows] = useState([]);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] =
-    useState([]);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
 
   const [assignmentMode, setAssignmentMode] = useState('full');
   const [recordLimit, setRecordLimit] = useState('');
 
-  const [assignmentMessage, setAssignmentMessage] =
-    useState('');
+  const [assignmentMessage, setAssignmentMessage] = useState('');
 
-  const [assignmentError, setAssignmentError] =
-    useState('');
+  const [assignmentError, setAssignmentError] = useState('');
 
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -303,23 +242,19 @@ const ClientDatasetDetail = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
 
-  const [assignmentFilter, setAssignmentFilter] =
-    useState('all');
+  const [assignmentFilter, setAssignmentFilter] = useState('all');
 
   const [sourceFilter, setSourceFilter] = useState('all');
 
-  const [followUpDateFilter, setFollowUpDateFilter] =
-    useState('');
+  const [followUpDateFilter, setFollowUpDateFilter] = useState('');
 
   const [followUpDates, setFollowUpDates] = useState({});
 
   const [savingRows, setSavingRows] = useState({});
   const [saveError, setSaveError] = useState('');
 
-  const [schedulingRows, setSchedulingRows] =
-    useState({});
-  const [scheduleRowErrors, setScheduleRowErrors] =
-    useState({});
+  const [schedulingRows, setSchedulingRows] = useState({});
+  const [scheduleRowErrors, setScheduleRowErrors] = useState({});
 
   const [actionMessage, setActionMessage] = useState('');
   const [actionModal, setActionModal] = useState(null);
@@ -331,9 +266,7 @@ const ClientDatasetDetail = () => {
         const token = getAuthToken();
 
         if (!token) {
-          setError(
-            'Session expired. Please login again.',
-          );
+          setError('Session expired. Please login again.');
           return;
         }
 
@@ -341,49 +274,31 @@ const ClientDatasetDetail = () => {
           Authorization: `Bearer ${token}`,
         };
 
-        const [datasetResponse, optionsResponse] =
-          await Promise.all([
-            axios.get(
-              `${API_BASE_URL}/api/client-datasets/${datasetId}`,
-              {
-                headers,
-              },
-            ),
+        const [datasetResponse, optionsResponse] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/client-datasets/${datasetId}`, {
+            headers,
+          }),
 
-            axios
-              .get(
-                `${API_BASE_URL}/api/client-datasets/options`,
-                {
-                  headers,
-                },
-              )
-              .catch(() => ({
-                data: {},
-              })),
-          ]);
+          axios
+            .get(`${API_BASE_URL}/api/client-datasets/options`, {
+              headers,
+            })
+            .catch(() => ({
+              data: {},
+            })),
+        ]);
 
         setDataset(datasetResponse.data);
 
-        setFollowUpDates(
-          datasetResponse.data.followUpDates || {},
-        );
+        setFollowUpDates(datasetResponse.data.followUpDates || {});
 
-        setEmployees(
-          optionsResponse.data.employees || [],
-        );
+        setEmployees(optionsResponse.data.employees || []);
 
-        setSalesActions(
-          optionsResponse.data.actions || [],
-        );
+        setSalesActions(optionsResponse.data.actions || []);
 
-        setMeetingActions(
-          optionsResponse.data.meetingActions || [],
-        );
+        setMeetingActions(optionsResponse.data.meetingActions || []);
       } catch (requestError) {
-        setError(
-          requestError.response?.data?.message ||
-            'Unable to load client data',
-        );
+        setError(requestError.response?.data?.message || 'Unable to load client data');
       } finally {
         setIsLoading(false);
       }
@@ -400,38 +315,21 @@ const ClientDatasetDetail = () => {
       };
     }
 
-    return addWorkColumnsAfterWebsite(
-      dataset.columns || [],
-      dataset.rows || [],
-    );
+    return addWorkColumnsAfterWebsite(dataset.columns || [], dataset.rows || []);
   }, [dataset]);
 
-  const statusIndex = getColumnIndex(
-    tableData.columns,
-    'Status',
-  );
+  const statusIndex = getColumnIndex(tableData.columns, 'Status');
 
-  const remarkIndex = getColumnIndex(
-    tableData.columns,
-    'Remark',
-  );
+  const remarkIndex = getColumnIndex(tableData.columns, 'Remark');
 
-  const employeeIndex = getColumnIndex(
-    tableData.columns,
-    'Employee',
-  );
+  const employeeIndex = getColumnIndex(tableData.columns, 'Employee');
 
-  const sourceIndex = getColumnIndex(
-    tableData.columns,
-    'Source',
-  );
+  const sourceIndex = getColumnIndex(tableData.columns, 'Source');
 
   const phoneColumnIndexes = useMemo(
     () =>
       tableData.columns
-        .map((column, index) =>
-          isPhoneColumn(column) ? index : -1,
-        )
+        .map((column, index) => (isPhoneColumn(column) ? index : -1))
         .filter((index) => index !== -1),
     [tableData.columns],
   );
@@ -439,18 +337,14 @@ const ClientDatasetDetail = () => {
   const emailColumnIndexes = useMemo(
     () =>
       tableData.columns
-        .map((column, index) =>
-          isEmailColumn(column) ? index : -1,
-        )
+        .map((column, index) => (isEmailColumn(column) ? index : -1))
         .filter((index) => index !== -1),
     [tableData.columns],
   );
 
-  const primaryPhoneIndex =
-    phoneColumnIndexes[0] ?? -1;
+  const primaryPhoneIndex = phoneColumnIndexes[0] ?? -1;
 
-  const primaryEmailIndex =
-    emailColumnIndexes[0] ?? -1;
+  const primaryEmailIndex = emailColumnIndexes[0] ?? -1;
 
   const displayColumnIndexes = useMemo(() => {
     const hiddenIndexes = new Set([
@@ -461,27 +355,15 @@ const ClientDatasetDetail = () => {
       ...emailColumnIndexes.slice(1),
 
       ...tableData.columns
-        .map((column, index) =>
-          isOtherColumn(column) ? index : -1,
-        )
+        .map((column, index) => (isOtherColumn(column) ? index : -1))
         .filter((index) => index !== -1),
     ]);
 
-    return tableData.columns
-      .map((_, index) => index)
-      .filter((index) => !hiddenIndexes.has(index));
-  }, [
-    tableData.columns,
-    statusIndex,
-    remarkIndex,
-    phoneColumnIndexes,
-    emailColumnIndexes,
-  ]);
+    return tableData.columns.map((_, index) => index).filter((index) => !hiddenIndexes.has(index));
+  }, [tableData.columns, statusIndex, remarkIndex, phoneColumnIndexes, emailColumnIndexes]);
 
   if (isLoading) {
-    return (
-      <div className="h-32 animate-pulse rounded-xl border border-slate-200 bg-white" />
-    );
+    return <div className="h-32 animate-pulse rounded-xl border border-slate-200 bg-white" />;
   }
 
   if (error) {
@@ -504,15 +386,12 @@ const ClientDatasetDetail = () => {
   const backLink = '/dashboard/clients';
   const backLabel = 'Back to sales data';
 
-  const getOriginalRowIndex = (rowIndex) =>
-    dataset.originalRowIndexes?.[rowIndex] ??
-    rowIndex;
+  const getOriginalRowIndex = (rowIndex) => dataset.originalRowIndexes?.[rowIndex] ?? rowIndex;
 
   const getRowMeetings = (rowIndex) => {
     const originalRowIndex = getOriginalRowIndex(rowIndex);
     const value =
-      dataset.rowMeetings?.[String(originalRowIndex)] ??
-      dataset.rowMeetings?.[originalRowIndex];
+      dataset.rowMeetings?.[String(originalRowIndex)] ?? dataset.rowMeetings?.[originalRowIndex];
 
     if (!value) {
       return [];
@@ -536,8 +415,7 @@ const ClientDatasetDetail = () => {
           meeting.meetingDate >= today,
       ) ||
       sortedMeetings.find(
-        (meeting) =>
-          String(meeting.status || 'scheduled').toLowerCase() === 'scheduled',
+        (meeting) => String(meeting.status || 'scheduled').toLowerCase() === 'scheduled',
       ) ||
       sortedMeetings[0] ||
       null
@@ -556,40 +434,25 @@ const ClientDatasetDetail = () => {
 
   const assignmentMap = new Map();
 
-  (dataset.rowAssignments || []).forEach(
-    (assignment) => {
-      const originalIndex = Number(
-        assignment.rowIndex,
-      );
+  (dataset.rowAssignments || []).forEach((assignment) => {
+    const originalIndex = Number(assignment.rowIndex);
 
-      assignmentMap.set(originalIndex, [
-        ...(assignmentMap.get(originalIndex) || []),
-        assignment,
-      ]);
-    },
-  );
+    assignmentMap.set(originalIndex, [...(assignmentMap.get(originalIndex) || []), assignment]);
+  });
 
   const eligibleEmployees = employees.filter(
     (employee) =>
       !dataset.businessUnitId ||
-      (employee.businessUnitIds || [])
-        .map(String)
-        .includes(String(dataset.businessUnitId)),
+      (employee.businessUnitIds || []).map(String).includes(String(dataset.businessUnitId)),
   );
 
-  const getScheduleRequestIssue = (
-    requestError,
-  ) => {
-    const responseMessage =
-      requestError?.response?.data?.message || '';
-    const responseCode =
-      requestError?.response?.data?.code || '';
+  const getScheduleRequestIssue = (requestError) => {
+    const responseMessage = requestError?.response?.data?.message || '';
+    const responseCode = requestError?.response?.data?.code || '';
     const isAssignmentIssue =
       responseCode.startsWith('CLIENT_ROW_') ||
-      responseMessage ===
-        'This client row is outside your meeting access scope' ||
-      responseMessage ===
-        'You cannot schedule a meeting for this client row';
+      responseMessage === 'This client row is outside your meeting access scope' ||
+      responseMessage === 'You cannot schedule a meeting for this client row';
 
     return {
       blocking: isAssignmentIssue,
@@ -601,14 +464,8 @@ const ClientDatasetDetail = () => {
     };
   };
 
-  const scheduleMeetingForRow = async (
-    rowIndex,
-    { showInModal = false } = {},
-  ) => {
-    const showScheduleError = (
-      message,
-      { blocking = false } = {},
-    ) => {
+  const scheduleMeetingForRow = async (rowIndex, { showInModal = false } = {}) => {
+    const showScheduleError = (message, { blocking = false } = {}) => {
       setScheduleRowErrors((previous) => ({
         ...previous,
         [rowIndex]: { blocking, message },
@@ -622,14 +479,11 @@ const ClientDatasetDetail = () => {
     const token = getAuthToken();
 
     if (!token) {
-      showScheduleError(
-        'Session expired. Please login again.',
-      );
+      showScheduleError('Session expired. Please login again.');
       return false;
     }
 
-    const originalRowIndex =
-      getOriginalRowIndex(rowIndex);
+    const originalRowIndex = getOriginalRowIndex(rowIndex);
 
     setScheduleRowErrors((previous) => {
       const next = { ...previous };
@@ -642,18 +496,15 @@ const ClientDatasetDetail = () => {
     }));
 
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/meetings/context`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            datasetId,
-            rowIndex: originalRowIndex,
-          },
+      const response = await axios.get(`${API_BASE_URL}/api/meetings/context`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+        params: {
+          datasetId,
+          rowIndex: originalRowIndex,
+        },
+      });
       const context = response.data || {};
 
       if (!context.canSchedule) {
@@ -668,8 +519,7 @@ const ClientDatasetDetail = () => {
       navigate(getScheduleMeetingUrl(rowIndex));
       return true;
     } catch (requestError) {
-      const issue =
-        getScheduleRequestIssue(requestError);
+      const issue = getScheduleRequestIssue(requestError);
       showScheduleError(issue.message, {
         blocking: issue.blocking,
       });
@@ -682,38 +532,24 @@ const ClientDatasetDetail = () => {
     }
   };
 
-  const selectedEmployees =
-    eligibleEmployees.filter((employee) =>
-      selectedEmployeeIds.includes(employee._id),
-    );
+  const selectedEmployees = eligibleEmployees.filter((employee) =>
+    selectedEmployeeIds.includes(employee._id),
+  );
 
-  const getFollowUpDate = (rowIndex) =>
-    followUpDates[
-      String(getOriginalRowIndex(rowIndex))
-    ] || '';
+  const getFollowUpDate = (rowIndex) => followUpDates[String(getOriginalRowIndex(rowIndex))] || '';
 
   const todayDateKey = getTodayDateKey();
 
-  const normalizedSearch = searchTerm
-    .trim()
-    .toLowerCase();
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const sourceOptions =
     sourceIndex === -1
       ? []
       : [
           ...new Set(
-            tableData.rows
-              .map((row) =>
-                String(
-                  row[sourceIndex] || '',
-                ).trim(),
-              )
-              .filter(Boolean),
+            tableData.rows.map((row) => String(row[sourceIndex] || '').trim()).filter(Boolean),
           ),
-        ].sort((first, second) =>
-          first.localeCompare(second),
-        );
+        ].sort((first, second) => first.localeCompare(second));
 
   const statusCounts = tableData.rows.reduce(
     (counts, row) => {
@@ -722,8 +558,7 @@ const ClientDatasetDetail = () => {
       counts.all += 1;
 
       if (status) {
-        counts[status] =
-          (counts[status] || 0) + 1;
+        counts[status] = (counts[status] || 0) + 1;
       }
 
       return counts;
@@ -736,34 +571,21 @@ const ClientDatasetDetail = () => {
   const selectedFilterEmployee =
     employeeFilter === 'all'
       ? null
-      : eligibleEmployees.find(
-          (employee) =>
-            String(employee._id) ===
-            String(employeeFilter),
-        );
+      : eligibleEmployees.find((employee) => String(employee._id) === String(employeeFilter));
 
   const rowMatchesEmployee = (row, rowIndex) => {
     if (!selectedFilterEmployee) {
       return true;
     }
 
-    const originalIndex =
-      getOriginalRowIndex(rowIndex);
+    const originalIndex = getOriginalRowIndex(rowIndex);
 
-    const assignments =
-      assignmentMap.get(originalIndex) || [];
+    const assignments = assignmentMap.get(originalIndex) || [];
 
-    const assignedCell =
-      employeeIndex === -1
-        ? ''
-        : String(
-            row[employeeIndex] || '',
-          ).trim();
+    const assignedCell = employeeIndex === -1 ? '' : String(row[employeeIndex] || '').trim();
 
     const selectedName = String(
-      selectedFilterEmployee.name ||
-        selectedFilterEmployee.email ||
-        '',
+      selectedFilterEmployee.name || selectedFilterEmployee.email || '',
     ).trim();
 
     return (
@@ -775,24 +597,15 @@ const ClientDatasetDetail = () => {
           assignment.assignedTo?._id;
 
         const assignmentName = String(
-          assignment.employeeName ||
-            assignment.employee?.name ||
-            assignment.assignedTo?.name ||
-            '',
+          assignment.employeeName || assignment.employee?.name || assignment.assignedTo?.name || '',
         ).trim();
 
         return (
-          (assignmentId &&
-            String(assignmentId) ===
-              String(
-                selectedFilterEmployee._id,
-              )) ||
-          (selectedName &&
-            assignmentName === selectedName)
+          (assignmentId && String(assignmentId) === String(selectedFilterEmployee._id)) ||
+          (selectedName && assignmentName === selectedName)
         );
       }) ||
-      (selectedName &&
-        assignedCell.includes(selectedName))
+      (selectedName && assignedCell.includes(selectedName))
     );
   };
 
@@ -804,25 +617,15 @@ const ClientDatasetDetail = () => {
     .filter(({ row, rowIndex }) => {
       const status = row[statusIndex] || '';
 
-      const followUpDate =
-        getFollowUpDate(rowIndex);
+      const followUpDate = getFollowUpDate(rowIndex);
 
-      const originalIndex =
-        getOriginalRowIndex(rowIndex);
+      const originalIndex = getOriginalRowIndex(rowIndex);
 
-      const assignments =
-        assignmentMap.get(originalIndex) || [];
+      const assignments = assignmentMap.get(originalIndex) || [];
 
-      const assignedCell =
-        employeeIndex === -1
-          ? ''
-          : String(
-              row[employeeIndex] || '',
-            ).trim();
+      const assignedCell = employeeIndex === -1 ? '' : String(row[employeeIndex] || '').trim();
 
-      const isAssigned =
-        assignments.length > 0 ||
-        Boolean(assignedCell);
+      const isAssigned = assignments.length > 0 || Boolean(assignedCell);
 
       const matchesSearch =
         !normalizedSearch ||
@@ -832,34 +635,25 @@ const ClientDatasetDetail = () => {
             .includes(normalizedSearch),
         );
 
-      const matchesStatus =
-        statusFilter === 'all' ||
-        status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || status === statusFilter;
 
-      const matchesEmployee =
-        rowMatchesEmployee(row, rowIndex);
+      const matchesEmployee = rowMatchesEmployee(row, rowIndex);
 
       const matchesAssignment =
         assignmentFilter === 'all' ||
-        (assignmentFilter === 'assigned' &&
-          isAssigned) ||
-        (assignmentFilter === 'unassigned' &&
-          !isAssigned);
+        (assignmentFilter === 'assigned' && isAssigned) ||
+        (assignmentFilter === 'unassigned' && !isAssigned);
 
       const matchesSource =
         sourceFilter === 'all' ||
-        (sourceIndex !== -1 &&
-          String(
-            row[sourceIndex] || '',
-          ).trim() === sourceFilter);
+        (sourceIndex !== -1 && String(row[sourceIndex] || '').trim() === sourceFilter);
 
       const matchesFollowUpDate =
         statusFilter !== 'Follow Up'
           ? true
           : followUpDateFilter
             ? followUpDate === followUpDateFilter
-            : !followUpDate ||
-              followUpDate >= todayDateKey;
+            : !followUpDate || followUpDate >= todayDateKey;
 
       return (
         matchesSearch &&
@@ -875,19 +669,11 @@ const ClientDatasetDetail = () => {
         return first.rowIndex - second.rowIndex;
       }
 
-      const firstDate =
-        getFollowUpDate(first.rowIndex) ||
-        '9999-12-31';
+      const firstDate = getFollowUpDate(first.rowIndex) || '9999-12-31';
 
-      const secondDate =
-        getFollowUpDate(second.rowIndex) ||
-        '9999-12-31';
+      const secondDate = getFollowUpDate(second.rowIndex) || '9999-12-31';
 
-      return (
-        firstDate.localeCompare(secondDate) ||
-        first.rowIndex -
-          second.rowIndex
-      );
+      return firstDate.localeCompare(secondDate) || first.rowIndex - second.rowIndex;
     });
 
   const hasActiveFilters =
@@ -910,39 +696,29 @@ const ClientDatasetDetail = () => {
   const toggleRowSelection = (rowIndex) => {
     setSelectedRows((previous) =>
       previous.includes(rowIndex)
-        ? previous.filter(
-            (selectedRow) =>
-              selectedRow !== rowIndex,
-          )
+        ? previous.filter((selectedRow) => selectedRow !== rowIndex)
         : [...previous, rowIndex],
     );
   };
 
   const selectUnassignedRows = () => {
-    const nextSelectedRows =
-      tableData.rows
-        .map((_, rowIndex) => rowIndex)
-        .filter((rowIndex) => {
-          const originalIndex =
-            getOriginalRowIndex(rowIndex);
+    const nextSelectedRows = tableData.rows
+      .map((_, rowIndex) => rowIndex)
+      .filter((rowIndex) => {
+        const originalIndex = getOriginalRowIndex(rowIndex);
 
-          return !(
-            assignmentMap.get(originalIndex) || []
-          ).length;
-        });
+        return !(assignmentMap.get(originalIndex) || []).length;
+      });
 
     setSelectedRows(nextSelectedRows);
   };
 
-  const updateAssignmentState = (
-    responseData,
-  ) => {
+  const updateAssignmentState = (responseData) => {
     setDataset((previous) => ({
       ...previous,
       columns: responseData.columns,
       rows: responseData.rows,
-      rowAssignments:
-        responseData.rowAssignments,
+      rowAssignments: responseData.rowAssignments,
     }));
 
     setSelectedRows([]);
@@ -953,25 +729,18 @@ const ClientDatasetDetail = () => {
     const token = getAuthToken();
 
     if (!token) {
-      throw new Error(
-        'Session expired. Please login again.',
-      );
+      throw new Error('Session expired. Please login again.');
     }
 
-    const response = await axios.get(
-      `${API_BASE_URL}/api/client-datasets/${datasetId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+    const response = await axios.get(`${API_BASE_URL}/api/client-datasets/${datasetId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
       },
-    );
+    });
 
     setDataset(response.data);
 
-    setFollowUpDates(
-      response.data.followUpDates || {},
-    );
+    setFollowUpDates(response.data.followUpDates || {});
     setScheduleRowErrors({});
 
     return response.data;
@@ -981,29 +750,20 @@ const ClientDatasetDetail = () => {
     setAssignmentMessage('');
     setAssignmentError('');
 
-    if (
-      assignmentMode === 'selected' &&
-      selectedRows.length === 0
-    ) {
-      setAssignmentError(
-        'Select at least one row',
-      );
+    if (assignmentMode === 'selected' && selectedRows.length === 0) {
+      setAssignmentError('Select at least one row');
       return;
     }
 
     if (!selectedEmployeeIds.length) {
-      setAssignmentError(
-        'Select at least one employee',
-      );
+      setAssignmentError('Select at least one employee');
       return;
     }
 
     const token = getAuthToken();
 
     if (!token) {
-      setAssignmentError(
-        'Session expired. Please login again.',
-      );
+      setAssignmentError('Session expired. Please login again.');
       return;
     }
 
@@ -1013,18 +773,13 @@ const ClientDatasetDetail = () => {
       const response = await axios.patch(
         `${API_BASE_URL}/api/client-datasets/${datasetId}/assign`,
         {
-          rowIndexes: selectedRows.map(
-            getOriginalRowIndex,
-          ),
+          rowIndexes: selectedRows.map(getOriginalRowIndex),
 
           employeeIds: selectedEmployeeIds,
 
           assignmentMode,
 
-          limit:
-            assignmentMode === 'limited'
-              ? Number(recordLimit)
-              : undefined,
+          limit: assignmentMode === 'limited' ? Number(recordLimit) : undefined,
         },
         {
           headers: {
@@ -1035,15 +790,9 @@ const ClientDatasetDetail = () => {
 
       updateAssignmentState(response.data);
 
-      setAssignmentMessage(
-        response.data.message ||
-          'Data assigned successfully',
-      );
+      setAssignmentMessage(response.data.message || 'Data assigned successfully');
     } catch (requestError) {
-      setAssignmentError(
-        requestError.response?.data?.message ||
-          'Unable to assign selected rows',
-      );
+      setAssignmentError(requestError.response?.data?.message || 'Unable to assign selected rows');
     } finally {
       setIsAssigning(false);
     }
@@ -1054,18 +803,14 @@ const ClientDatasetDetail = () => {
     setAssignmentError('');
 
     if (!selectedRows.length) {
-      setAssignmentError(
-        'Select at least one row',
-      );
+      setAssignmentError('Select at least one row');
       return;
     }
 
     const token = getAuthToken();
 
     if (!token) {
-      setAssignmentError(
-        'Session expired. Please login again.',
-      );
+      setAssignmentError('Session expired. Please login again.');
       return;
     }
 
@@ -1075,9 +820,7 @@ const ClientDatasetDetail = () => {
       const response = await axios.patch(
         `${API_BASE_URL}/api/client-datasets/${datasetId}/unassign`,
         {
-          rowIndexes: selectedRows.map(
-            getOriginalRowIndex,
-          ),
+          rowIndexes: selectedRows.map(getOriginalRowIndex),
         },
         {
           headers: {
@@ -1093,14 +836,10 @@ const ClientDatasetDetail = () => {
 
       setSelectedRows([]);
 
-      setAssignmentMessage(
-        response.data.message ||
-          'Rows unassigned successfully',
-      );
+      setAssignmentMessage(response.data.message || 'Rows unassigned successfully');
     } catch (requestError) {
       setAssignmentError(
-        requestError.response?.data?.message ||
-          'Unable to unassign selected rows',
+        requestError.response?.data?.message || 'Unable to unassign selected rows',
       );
     } finally {
       setIsAssigning(false);
@@ -1119,8 +858,7 @@ const ClientDatasetDetail = () => {
 
       remark: row[remarkIndex] || '',
 
-      followUpDate:
-        getFollowUpDate(rowIndex),
+      followUpDate: getFollowUpDate(rowIndex),
     });
   };
 
@@ -1131,9 +869,7 @@ const ClientDatasetDetail = () => {
     setActionSaved(false);
   };
 
-  const saveActionChanges = async (
-    { scheduleAfterSave = false } = {},
-  ) => {
+  const saveActionChanges = async ({ scheduleAfterSave = false } = {}) => {
     if (!actionModal || !canUpdate) {
       return;
     }
@@ -1141,16 +877,13 @@ const ClientDatasetDetail = () => {
     const token = getAuthToken();
 
     if (!token) {
-      setSaveError(
-        'Session expired. Please login again.',
-      );
+      setSaveError('Session expired. Please login again.');
       return;
     }
 
     const rowIndex = actionModal.rowIndex;
 
-    const originalRowIndex =
-      getOriginalRowIndex(rowIndex);
+    const originalRowIndex = getOriginalRowIndex(rowIndex);
 
     setSaveError('');
     setActionMessage('');
@@ -1168,10 +901,7 @@ const ClientDatasetDetail = () => {
 
           remark: actionModal.remark || '',
 
-          followUpDate:
-            actionModal.status === 'Follow Up'
-              ? actionModal.followUpDate || ''
-              : '',
+          followUpDate: actionModal.status === 'Follow Up' ? actionModal.followUpDate || '' : '',
         },
         {
           headers: {
@@ -1181,41 +911,28 @@ const ClientDatasetDetail = () => {
       );
 
       setDataset((previous) => {
-        const normalized =
-          addWorkColumnsAfterWebsite(
-            previous.columns,
-            previous.rows,
-          );
+        const normalized = addWorkColumnsAfterWebsite(previous.columns, previous.rows);
 
-        const nextRows = normalized.rows.map(
-          (row, currentRowIndex) =>
-            getOriginalRowIndex(currentRowIndex) ===
-            Number(response.data.rowIndex)
-              ? response.data.row
-              : row,
+        const nextRows = normalized.rows.map((row, currentRowIndex) =>
+          getOriginalRowIndex(currentRowIndex) === Number(response.data.rowIndex)
+            ? response.data.row
+            : row,
         );
 
-        const nextRowLogs =
-          response.data.rowLog
-            ? [
-                ...(previous.rowLogs || []).filter(
-                  (rowLog) =>
-                    Number(rowLog.rowIndex) !==
-                    Number(
-                      response.data.rowIndex,
-                    ),
-                ),
+        const nextRowLogs = response.data.rowLog
+          ? [
+              ...(previous.rowLogs || []).filter(
+                (rowLog) => Number(rowLog.rowIndex) !== Number(response.data.rowIndex),
+              ),
 
-                response.data.rowLog,
-              ]
-            : previous.rowLogs;
+              response.data.rowLog,
+            ]
+          : previous.rowLogs;
 
         return {
           ...previous,
 
-          columns:
-            response.data.columns ||
-            normalized.columns,
+          columns: response.data.columns || normalized.columns,
 
           rows: nextRows,
 
@@ -1224,20 +941,16 @@ const ClientDatasetDetail = () => {
       });
 
       if (response.data.followUpDates) {
-        setFollowUpDates(
-          response.data.followUpDates,
-        );
+        setFollowUpDates(response.data.followUpDates);
       } else {
         setFollowUpDates((previous) => {
           const next = {
             ...previous,
           };
 
-          const key =
-            String(originalRowIndex);
+          const key = String(originalRowIndex);
 
-          const nextDate =
-            response.data.followUpDate || '';
+          const nextDate = response.data.followUpDate || '';
 
           if (nextDate) {
             next[key] = nextDate;
@@ -1254,16 +967,12 @@ const ClientDatasetDetail = () => {
           showInModal: true,
         });
         if (!schedulerOpened) {
-          setActionMessage(
-            'Client status and remark were saved successfully.',
-          );
+          setActionMessage('Client status and remark were saved successfully.');
         }
         return;
       }
 
-      setActionMessage(
-        'Your action saved successfully.',
-      );
+      setActionMessage('Your action saved successfully.');
 
       setActionSaved(true);
 
@@ -1275,8 +984,7 @@ const ClientDatasetDetail = () => {
       }, 900);
     } catch (requestError) {
       setSaveError(
-        requestError.response?.data?.message ||
-          'Unable to save client action. Please try again.',
+        requestError.response?.data?.message || 'Unable to save client action. Please try again.',
       );
     } finally {
       setSavingRows((previous) => ({
@@ -1286,19 +994,11 @@ const ClientDatasetDetail = () => {
     }
   };
 
-  const currentActionRowLog =
-    actionModal
-      ? getRowLog(
-          dataset.rowLogs || [],
-          getOriginalRowIndex(
-            actionModal.rowIndex,
-          ),
-        )
-      : null;
+  const currentActionRowLog = actionModal
+    ? getRowLog(dataset.rowLogs || [], getOriginalRowIndex(actionModal.rowIndex))
+    : null;
 
-  const currentActionEntries = [
-    ...(currentActionRowLog?.entries || []),
-  ].reverse();
+  const currentActionEntries = [...(currentActionRowLog?.entries || [])].reverse();
 
   return (
     <div className="w-full space-y-5">
@@ -1311,22 +1011,17 @@ const ClientDatasetDetail = () => {
             ← {backLabel}
           </Link>
 
-          <h1 className="mt-2 text-2xl font-semibold text-slate-950">
-            {dataset.name}
-          </h1>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-950">{dataset.name}</h1>
 
           <p className="mt-1 text-sm text-slate-500">
-            {dataset.year || 'No year'} · Uploaded{' '}
-            {formatDate(dataset.createdAt)} ·{' '}
+            {dataset.year || 'No year'} · Uploaded {formatDate(dataset.createdAt)} ·{' '}
             {dataset.rowCount} rows
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
-            {dataset.businessUnitName ||
-              dataset.tableFormat ||
-              'Sales Data'}
+            {dataset.businessUnitName || dataset.tableFormat || 'Sales Data'}
           </span>
 
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">
@@ -1337,18 +1032,14 @@ const ClientDatasetDetail = () => {
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-300 bg-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">
-            Client data table
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-800">Client data table</h2>
 
           <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
               <input
                 type="search"
                 value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(event.target.value)
-                }
+                onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search client, phone, email, city, source..."
                 className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:max-w-sm"
               />
@@ -1357,8 +1048,7 @@ const ClientDatasetDetail = () => {
                 <select
                   value={statusFilter}
                   onChange={(event) => {
-                    const value =
-                      event.target.value;
+                    const value = event.target.value;
 
                     setStatusFilter(value);
 
@@ -1368,96 +1058,54 @@ const ClientDatasetDetail = () => {
                   }}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                 >
-                  <option value="all">
-                    All statuses
-                  </option>
+                  <option value="all">All statuses</option>
 
-                  {CLIENT_STATUS_OPTIONS.map(
-                    (status) => (
-                      <option
-                        key={status}
-                        value={status}
-                      >
-                        {status}
-                      </option>
-                    ),
-                  )}
+                  {CLIENT_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
                 </select>
 
                 <select
                   value={employeeFilter}
-                  onChange={(event) =>
-                    setEmployeeFilter(
-                      event.target.value,
-                    )
-                  }
+                  onChange={(event) => setEmployeeFilter(event.target.value)}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                 >
-                  <option value="all">
-                    All employees
-                  </option>
+                  <option value="all">All employees</option>
 
-                  {eligibleEmployees.map(
-                    (employee) => (
-                      <option
-                        key={employee._id}
-                        value={String(
-                          employee._id,
-                        )}
-                      >
-                        {employee.name ||
-                          employee.email}
-                      </option>
-                    ),
-                  )}
+                  {eligibleEmployees.map((employee) => (
+                    <option key={employee._id} value={String(employee._id)}>
+                      {employee.name || employee.email}
+                    </option>
+                  ))}
                 </select>
 
                 <select
                   value={assignmentFilter}
-                  onChange={(event) =>
-                    setAssignmentFilter(
-                      event.target.value,
-                    )
-                  }
+                  onChange={(event) => setAssignmentFilter(event.target.value)}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                 >
-                  <option value="all">
-                    All assignments
-                  </option>
+                  <option value="all">All assignments</option>
 
-                  <option value="assigned">
-                    Assigned
-                  </option>
+                  <option value="assigned">Assigned</option>
 
-                  <option value="unassigned">
-                    Unassigned
-                  </option>
+                  <option value="unassigned">Unassigned</option>
                 </select>
 
                 {sourceIndex !== -1 ? (
                   <select
                     value={sourceFilter}
-                    onChange={(event) =>
-                      setSourceFilter(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(event) => setSourceFilter(event.target.value)}
                     className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                   >
-                    <option value="all">
-                      All sources
-                    </option>
+                    <option value="all">All sources</option>
 
-                    {sourceOptions.map(
-                      (source) => (
-                        <option
-                          key={source}
-                          value={source}
-                        >
-                          {source}
-                        </option>
-                      ),
-                    )}
+                    {sourceOptions.map((source) => (
+                      <option key={source} value={source}>
+                        {source}
+                      </option>
+                    ))}
                   </select>
                 ) : (
                   <div className="hidden xl:block" />
@@ -1476,18 +1124,13 @@ const ClientDatasetDetail = () => {
                     type="date"
                     min={todayDateKey}
                     value={followUpDateFilter}
-                    onChange={(event) =>
-                      setFollowUpDateFilter(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(event) => setFollowUpDateFilter(event.target.value)}
                     className="h-9 rounded-lg border border-violet-300 bg-white px-3 text-xs font-semibold text-violet-800 outline-none"
                   />
                 </label>
 
                 <p className="pb-2 text-xs font-medium text-violet-700">
-                  Today first, then upcoming
-                  follow-ups.
+                  Today first, then upcoming follow-ups.
                 </p>
               </div>
             )}
@@ -1495,11 +1138,8 @@ const ClientDatasetDetail = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <span>
-                  {visibleRows.length}{' '}
-                  visible client
-                  {visibleRows.length === 1
-                    ? ''
-                    : 's'}
+                  {visibleRows.length} visible client
+                  {visibleRows.length === 1 ? '' : 's'}
                 </span>
 
                 {hasActiveFilters && (
@@ -1515,69 +1155,37 @@ const ClientDatasetDetail = () => {
 
               <div className="flex flex-wrap gap-2">
                 {[
-                  [
-                    'all',
-                    'All',
-                    statusCounts.all || 0,
-                  ],
+                  ['all', 'All', statusCounts.all || 0],
 
-                  [
-                    'Pending',
-                    'Pending',
-                    statusCounts.Pending || 0,
-                  ],
+                  ['Pending', 'Pending', statusCounts.Pending || 0],
 
-                  [
-                    'Contacted',
-                    'Contacted',
-                    statusCounts.Contacted || 0,
-                  ],
+                  ['Contacted', 'Contacted', statusCounts.Contacted || 0],
 
-                  [
-                    'Follow Up',
-                    'Follow-up',
-                    statusCounts['Follow Up'] || 0,
-                  ],
+                  ['Follow Up', 'Follow-up', statusCounts['Follow Up'] || 0],
 
-                  [
-                    'Interested',
-                    'Interested',
-                    statusCounts.Interested || 0,
-                  ],
+                  ['Interested', 'Interested', statusCounts.Interested || 0],
 
-                  [
-                    'Converted',
-                    'Converted',
-                    statusCounts.Converted || 0,
-                  ],
-                ].map(
-                  ([value, label, count]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(value);
+                  ['Converted', 'Converted', statusCounts.Converted || 0],
+                ].map(([value, label, count]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter(value);
 
-                        if (
-                          value !== 'Follow Up'
-                        ) {
-                          setFollowUpDateFilter('');
-                        }
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                        statusFilter === value
-                          ? 'border-blue-600 bg-blue-600 text-white'
-                          : 'border-slate-300 bg-white text-slate-700 hover:bg-blue-50'
-                      }`}
-                    >
-                      {label}{' '}
-
-                      <span className="ml-1 opacity-80">
-                        {count}
-                      </span>
-                    </button>
-                  ),
-                )}
+                      if (value !== 'Follow Up') {
+                        setFollowUpDateFilter('');
+                      }
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                      statusFilter === value
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:bg-blue-50'
+                    }`}
+                  >
+                    {label} <span className="ml-1 opacity-80">{count}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -1601,9 +1209,7 @@ const ClientDatasetDetail = () => {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        setSelectedRows([])
-                      }
+                      onClick={() => setSelectedRows([])}
                       disabled={!selectedRows.length}
                       className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"
                     >
@@ -1619,34 +1225,16 @@ const ClientDatasetDetail = () => {
 
                   <select
                     value={assignmentMode}
-                    onChange={(event) =>
-                      setAssignmentMode(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(event) => setAssignmentMode(event.target.value)}
                     className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                   >
-                    <option value="full">
-                      Full data (
-                      {tableData.rows.length})
-                    </option>
+                    <option value="full">Full data ({tableData.rows.length})</option>
 
-                    <option value="half">
-                      Half data (
-                      {Math.ceil(
-                        tableData.rows.length / 2,
-                      )}
-                      )
-                    </option>
+                    <option value="half">Half data ({Math.ceil(tableData.rows.length / 2)})</option>
 
-                    <option value="limited">
-                      Limited records
-                    </option>
+                    <option value="limited">Limited records</option>
 
-                    <option value="selected">
-                      Selected rows (
-                      {selectedRows.length})
-                    </option>
+                    <option value="selected">Selected rows ({selectedRows.length})</option>
                   </select>
                 </label>
 
@@ -1668,46 +1256,32 @@ const ClientDatasetDetail = () => {
 
                     <div className="absolute right-0 z-40 mt-2 w-full min-w-80 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
                       <div className="max-h-60 space-y-1 overflow-y-auto">
-                        {eligibleEmployees.map(
-                          (employee) => {
-                            const checked =
-                              selectedEmployeeIds.includes(
-                                employee._id,
-                              );
+                        {eligibleEmployees.map((employee) => {
+                          const checked = selectedEmployeeIds.includes(employee._id);
 
-                            return (
-                              <label
-                                key={employee._id}
-                                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-50"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() =>
-                                    setSelectedEmployeeIds(
-                                      (previous) =>
-                                        checked
-                                          ? previous.filter(
-                                              (id) =>
-                                                id !==
-                                                employee._id,
-                                            )
-                                          : [
-                                              ...previous,
-                                              employee._id,
-                                            ],
-                                    )
-                                  }
-                                />
+                          return (
+                            <label
+                              key={employee._id}
+                              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setSelectedEmployeeIds((previous) =>
+                                    checked
+                                      ? previous.filter((id) => id !== employee._id)
+                                      : [...previous, employee._id],
+                                  )
+                                }
+                              />
 
-                                <span className="text-sm font-semibold text-slate-800">
-                                  {employee.name ||
-                                    employee.email}
-                                </span>
-                              </label>
-                            );
-                          },
-                        )}
+                              <span className="text-sm font-semibold text-slate-800">
+                                {employee.name || employee.email}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
                   </details>
@@ -1720,11 +1294,7 @@ const ClientDatasetDetail = () => {
                       min="1"
                       max={tableData.rows.length}
                       value={recordLimit}
-                      onChange={(event) =>
-                        setRecordLimit(
-                          event.target.value,
-                        )
-                      }
+                      onChange={(event) => setRecordLimit(event.target.value)}
                       placeholder="Qty"
                       className="h-10 w-24 rounded-lg border border-slate-300 bg-white px-3 text-sm"
                     />
@@ -1733,24 +1303,16 @@ const ClientDatasetDetail = () => {
                   <button
                     type="button"
                     onClick={handleAssignRows}
-                    disabled={
-                      isAssigning ||
-                      !selectedEmployeeIds.length
-                    }
+                    disabled={isAssigning || !selectedEmployeeIds.length}
                     className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
                   >
-                    {isAssigning
-                      ? 'Working...'
-                      : 'Assign'}
+                    {isAssigning ? 'Working...' : 'Assign'}
                   </button>
 
                   <button
                     type="button"
                     onClick={handleUnassignRows}
-                    disabled={
-                      isAssigning ||
-                      !selectedRows.length
-                    }
+                    disabled={isAssigning || !selectedRows.length}
                     className="h-10 rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 disabled:opacity-40"
                   >
                     Unassign
@@ -1759,15 +1321,11 @@ const ClientDatasetDetail = () => {
               </div>
 
               {assignmentMessage && (
-                <p className="mt-2 text-xs font-semibold text-emerald-600">
-                  {assignmentMessage}
-                </p>
+                <p className="mt-2 text-xs font-semibold text-emerald-600">{assignmentMessage}</p>
               )}
 
               {assignmentError && (
-                <p className="mt-2 text-xs font-semibold text-red-600">
-                  {assignmentError}
-                </p>
+                <p className="mt-2 text-xs font-semibold text-red-600">{assignmentError}</p>
               )}
             </div>
           )}
@@ -1787,38 +1345,29 @@ const ClientDatasetDetail = () => {
                   S.No.
                 </th>
 
-                {displayColumnIndexes.map(
-                  (columnIndex) => {
-                    const column =
-                      tableData.columns[
-                        columnIndex
-                      ];
+                {displayColumnIndexes.map((columnIndex) => {
+                  const column = tableData.columns[columnIndex];
 
-                    const normalizedColumn =
-                      normalizeColumnName(column);
+                  const normalizedColumn = normalizeColumnName(column);
 
-                    const label =
-                      columnIndex ===
-                      primaryPhoneIndex
-                        ? 'Mobile'
-                        : columnIndex ===
-                            primaryEmailIndex
-                          ? 'Email'
-                          : normalizedColumn ===
-                              'employee'
-                            ? 'Assigned To'
-                            : column;
+                  const label =
+                    columnIndex === primaryPhoneIndex
+                      ? 'Mobile'
+                      : columnIndex === primaryEmailIndex
+                        ? 'Email'
+                        : normalizedColumn === 'employee'
+                          ? 'Assigned To'
+                          : column;
 
-                    return (
-                      <th
-                        key={`${column}-${columnIndex}`}
-                        className="whitespace-nowrap border border-slate-300 px-3 py-2 font-semibold text-slate-800"
-                      >
-                        {label}
-                      </th>
-                    );
-                  },
-                )}
+                  return (
+                    <th
+                      key={`${column}-${columnIndex}`}
+                      className="whitespace-nowrap border border-slate-300 px-3 py-2 font-semibold text-slate-800"
+                    >
+                      {label}
+                    </th>
+                  );
+                })}
 
                 <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
                   Meeting
@@ -1831,380 +1380,261 @@ const ClientDatasetDetail = () => {
             </thead>
 
             <tbody>
-              {visibleRows.map(
-                (
-                  { row, rowIndex },
-                  visibleIndex,
-                ) => {
-                  const rowStatus =
-                    row[statusIndex] || '';
+              {visibleRows.map(({ row, rowIndex }, visibleIndex) => {
+                const rowStatus = row[statusIndex] || '';
 
-                  const isSchedulingMeeting =
-                    Boolean(
-                      schedulingRows[rowIndex],
-                    );
+                const isSchedulingMeeting = Boolean(schedulingRows[rowIndex]);
 
-                  const scheduleRowIssue =
-                    scheduleRowErrors[rowIndex] ||
-                    null;
+                const scheduleRowIssue = scheduleRowErrors[rowIndex] || null;
 
-                  const rowClass =
-                    STATUS_ROW_STYLES[
-                      rowStatus
-                    ] ||
-                    (visibleIndex % 2 === 0
-                      ? 'bg-white'
-                      : 'bg-slate-50');
+                const rowClass =
+                  STATUS_ROW_STYLES[rowStatus] ||
+                  (visibleIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50');
 
-                  const rowMeetings =
-                    getRowMeetings(rowIndex);
+                const rowMeetings = getRowMeetings(rowIndex);
 
-                  const primaryMeeting =
-                    getPrimaryMeeting(rowMeetings);
+                const primaryMeeting = getPrimaryMeeting(rowMeetings);
 
-                  const hasUpcomingScheduledMeeting =
-                    rowMeetings.some(
-                      (meeting) =>
-                        String(
-                          meeting.status ||
-                            'scheduled',
-                        ).toLowerCase() ===
-                          'scheduled' &&
-                        meeting.meetingDate >=
-                          todayDateKey,
-                    );
+                const hasUpcomingScheduledMeeting = rowMeetings.some(
+                  (meeting) =>
+                    String(meeting.status || 'scheduled').toLowerCase() === 'scheduled' &&
+                    meeting.meetingDate >= todayDateKey,
+                );
 
-                  const primaryMeetingId =
-                    primaryMeeting?._id ||
-                    primaryMeeting?.meetingId;
+                const primaryMeetingId = primaryMeeting?._id || primaryMeeting?.meetingId;
 
-                  const primaryMeetingStatus =
-                    String(
-                      primaryMeeting?.status ||
-                        'scheduled',
-                    ).toLowerCase();
+                const primaryMeetingStatus = String(
+                  primaryMeeting?.status || 'scheduled',
+                ).toLowerCase();
 
-                  const meetingStatusClass =
-                    primaryMeetingStatus ===
-                    'cancelled'
-                      ? 'bg-rose-50 text-rose-700'
-                      : primaryMeetingStatus ===
-                          'completed'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-blue-50 text-blue-700';
+                const meetingStatusClass =
+                  primaryMeetingStatus === 'cancelled'
+                    ? 'bg-rose-50 text-rose-700'
+                    : primaryMeetingStatus === 'completed'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-blue-50 text-blue-700';
 
-                  const meetingSummary =
-                    primaryMeeting ? (
-                      <>
-                        <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meetingStatusClass}`}
-                        >
-                          <CalendarIcon />
-                        </span>
-
-                        <span className="min-w-0 text-left">
-                          <span className="block whitespace-nowrap text-xs font-bold text-slate-800">
-                            {formatMeetingDateTime(
-                              primaryMeeting,
-                            )}
-                          </span>
-
-                          <span className="mt-0.5 block max-w-44 truncate text-[11px] font-medium text-slate-500">
-                            {primaryMeeting.meetingTitle ||
-                              primaryMeetingStatus}
-                          </span>
-                        </span>
-                      </>
-                    ) : null;
-
-                  return (
-                    <tr
-                      key={rowIndex}
-                      className={`${rowClass} transition hover:brightness-[0.99]`}
+                const meetingSummary = primaryMeeting ? (
+                  <>
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meetingStatusClass}`}
                     >
-                      {isAdmin && (
-                        <td className="border border-slate-300 px-3 py-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.includes(
-                              rowIndex,
-                            )}
-                            onChange={() =>
-                              toggleRowSelection(
-                                rowIndex,
-                              )
-                            }
-                            className="h-4 w-4 cursor-pointer rounded border-slate-300"
-                          />
-                        </td>
-                      )}
+                      <CalendarIcon />
+                    </span>
 
-                      <td className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-500">
-                        {getOriginalRowIndex(
-                          rowIndex,
-                        ) + 1}
+                    <span className="min-w-0 text-left">
+                      <span className="block whitespace-nowrap text-xs font-bold text-slate-800">
+                        {formatMeetingDateTime(primaryMeeting)}
+                      </span>
+
+                      <span className="mt-0.5 block max-w-44 truncate text-[11px] font-medium text-slate-500">
+                        {primaryMeeting.meetingTitle || primaryMeetingStatus}
+                      </span>
+                    </span>
+                  </>
+                ) : null;
+
+                return (
+                  <tr key={rowIndex} className={`${rowClass} transition hover:brightness-[0.99]`}>
+                    {isAdmin && (
+                      <td className="border border-slate-300 px-3 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(rowIndex)}
+                          onChange={() => toggleRowSelection(rowIndex)}
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                        />
                       </td>
+                    )}
 
-                      {displayColumnIndexes.map(
-                        (columnIndex) => {
-                          const column =
-                            tableData.columns[
-                              columnIndex
-                            ];
+                    <td className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-500">
+                      {getOriginalRowIndex(rowIndex) + 1}
+                    </td>
 
-                          const normalizedColumn =
-                            normalizeColumnName(
-                              column,
-                            );
+                    {displayColumnIndexes.map((columnIndex) => {
+                      const column = tableData.columns[columnIndex];
 
-                          if (
-                            columnIndex ===
-                            primaryPhoneIndex
-                          ) {
-                            return (
-                              <td
-                                key={`${rowIndex}-mobile`}
-                                className="border border-slate-300 px-3 py-2"
-                              >
-                                <ContactCell
-                                  values={getGroupedContactValues(
-                                    row,
-                                    phoneColumnIndexes,
-                                  )}
-                                  type="Mobile"
-                                />
-                              </td>
-                            );
-                          }
+                      const normalizedColumn = normalizeColumnName(column);
 
-                          if (
-                            columnIndex ===
-                            primaryEmailIndex
-                          ) {
-                            return (
-                              <td
-                                key={`${rowIndex}-email`}
-                                className="border border-slate-300 px-3 py-2"
-                              >
-                                <ContactCell
-                                  values={getGroupedContactValues(
-                                    row,
-                                    emailColumnIndexes,
-                                  )}
-                                  type="Email"
-                                />
-                              </td>
-                            );
-                          }
+                      if (columnIndex === primaryPhoneIndex) {
+                        return (
+                          <td
+                            key={`${rowIndex}-mobile`}
+                            className="border border-slate-300 px-3 py-2"
+                          >
+                            <ContactCell
+                              values={getGroupedContactValues(row, phoneColumnIndexes)}
+                              type="Mobile"
+                            />
+                          </td>
+                        );
+                      }
 
-                          if (
-                            normalizedColumn ===
-                            'employee'
-                          ) {
-                            const originalIndex =
-                              getOriginalRowIndex(
-                                rowIndex,
-                              );
+                      if (columnIndex === primaryEmailIndex) {
+                        return (
+                          <td
+                            key={`${rowIndex}-email`}
+                            className="border border-slate-300 px-3 py-2"
+                          >
+                            <ContactCell
+                              values={getGroupedContactValues(row, emailColumnIndexes)}
+                              type="Email"
+                            />
+                          </td>
+                        );
+                      }
 
-                            const assignments =
-                              assignmentMap.get(
-                                originalIndex,
-                              ) || [];
+                      if (normalizedColumn === 'employee') {
+                        const originalIndex = getOriginalRowIndex(rowIndex);
 
-                            const employeeNames =
-                              assignments
-                                .map(
-                                  (assignment) =>
-                                    assignment.employeeName,
-                                )
-                                .filter(Boolean);
+                        const assignments = assignmentMap.get(originalIndex) || [];
 
-                            if (
-                              !employeeNames.length &&
-                              row[columnIndex]
-                            ) {
-                              employeeNames.push(
-                                row[columnIndex],
-                              );
-                            }
+                        const employeeNames = assignments
+                          .map((assignment) => assignment.employeeName)
+                          .filter(Boolean);
 
-                            return (
-                              <td
-                                key={`${rowIndex}-${column}-${columnIndex}`}
-                                className="border border-slate-300 px-3 py-2"
-                              >
-                                {employeeNames.length ? (
-                                  <div className="flex min-w-44 flex-wrap gap-1.5">
-                                    {employeeNames.map(
-                                      (
-                                        employeeName,
-                                      ) => (
-                                        <span
-                                          key={
-                                            employeeName
-                                          }
-                                          className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
-                                        >
-                                          {
-                                            employeeName
-                                          }
-                                        </span>
-                                      ),
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-xs font-medium text-slate-400">
-                                    Unassigned
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          }
+                        if (!employeeNames.length && row[columnIndex]) {
+                          employeeNames.push(row[columnIndex]);
+                        }
 
-                          return (
-                            <td
-                              key={`${rowIndex}-${column}-${columnIndex}`}
-                              className="whitespace-nowrap border border-slate-300 px-3 py-2 text-slate-700"
-                            >
-                              {row[columnIndex] || ''}
-                            </td>
-                          );
-                        },
-                      )}
-
-                      <td className="min-w-56 border border-slate-300 px-3 py-2">
-                        {primaryMeeting ? (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              {primaryMeetingId && canViewMeetings ? (
-                                <Link
-                                  to={`/dashboard/meetings?meetingId=${encodeURIComponent(primaryMeetingId)}`}
-                                  title="Open meeting"
-                                  className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/60"
-                                >
-                                  {meetingSummary}
-                                </Link>
-                              ) : (
-                                <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                                  {meetingSummary}
-                                </div>
-                              )}
-
-                              {rowMeetings.length > 1 && (
-                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
-                                  +{rowMeetings.length - 1}
-                                </span>
-                              )}
-
-                              {rowStatus ===
-                                'Interested' &&
-                                canScheduleMeeting &&
-                                !scheduleRowIssue?.blocking &&
-                                !hasUpcomingScheduledMeeting && (
-                                  <button
-                                    type="button"
-                                    title="Schedule another meeting"
-                                    onClick={() =>
-                                      scheduleMeetingForRow(
-                                        rowIndex,
-                                      )
-                                    }
-                                    disabled={isSchedulingMeeting}
-                                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-2 text-[11px] font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                        return (
+                          <td
+                            key={`${rowIndex}-${column}-${columnIndex}`}
+                            className="border border-slate-300 px-3 py-2"
+                          >
+                            {employeeNames.length ? (
+                              <div className="flex min-w-44 flex-wrap gap-1.5">
+                                {employeeNames.map((employeeName) => (
+                                  <span
+                                    key={employeeName}
+                                    className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
                                   >
-                                    <CalendarIcon />
-                                    {isSchedulingMeeting
-                                      ? 'Checking...'
-                                      : 'New'}
-                                  </button>
-                                )}
-                            </div>
+                                    {employeeName}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs font-medium text-slate-400">Unassigned</span>
+                            )}
+                          </td>
+                        );
+                      }
 
-                            {rowStatus ===
-                              'Interested' &&
+                      return (
+                        <td
+                          key={`${rowIndex}-${column}-${columnIndex}`}
+                          className="whitespace-nowrap border border-slate-300 px-3 py-2 text-slate-700"
+                        >
+                          {row[columnIndex] || ''}
+                        </td>
+                      );
+                    })}
+
+                    <td className="min-w-56 border border-slate-300 px-3 py-2">
+                      {primaryMeeting ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            {primaryMeetingId && canViewMeetings ? (
+                              <Link
+                                to={`/dashboard/meetings?meetingId=${encodeURIComponent(primaryMeetingId)}`}
+                                title="Open meeting"
+                                className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-blue-300 hover:bg-blue-50/60"
+                              >
+                                {meetingSummary}
+                              </Link>
+                            ) : (
+                              <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                                {meetingSummary}
+                              </div>
+                            )}
+
+                            {rowMeetings.length > 1 && (
+                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                                +{rowMeetings.length - 1}
+                              </span>
+                            )}
+
+                            {rowStatus === 'Interested' &&
                               canScheduleMeeting &&
-                              !hasUpcomingScheduledMeeting &&
-                              scheduleRowIssue?.blocking && (
-                                <p className="max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
-                                  {scheduleRowIssue.message}
-                                </p>
-                              )}
-
-                            {scheduleRowIssue &&
-                              !scheduleRowIssue.blocking && (
-                                <p className="max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
-                                  {scheduleRowIssue.message}
-                                </p>
+                              !scheduleRowIssue?.blocking &&
+                              !hasUpcomingScheduledMeeting && (
+                                <button
+                                  type="button"
+                                  title="Schedule another meeting"
+                                  onClick={() => scheduleMeetingForRow(rowIndex)}
+                                  disabled={isSchedulingMeeting}
+                                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-2 text-[11px] font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                                >
+                                  <CalendarIcon />
+                                  {isSchedulingMeeting ? 'Checking...' : 'New'}
+                                </button>
                               )}
                           </div>
-                        ) : rowStatus ===
-                            'Interested' &&
-                          canScheduleMeeting ? (
-                          <div className="space-y-1.5 text-center">
-                            {!scheduleRowIssue?.blocking ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  scheduleMeetingForRow(
-                                    rowIndex,
-                                  )
-                                }
-                                disabled={isSchedulingMeeting}
-                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                              >
-                                <CalendarIcon />
-                                {isSchedulingMeeting
-                                  ? 'Checking access...'
-                                  : 'Schedule meeting'}
-                              </button>
-                            ) : (
-                              <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
+
+                          {rowStatus === 'Interested' &&
+                            canScheduleMeeting &&
+                            !hasUpcomingScheduledMeeting &&
+                            scheduleRowIssue?.blocking && (
+                              <p className="max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
                                 {scheduleRowIssue.message}
                               </p>
                             )}
 
-                            {scheduleRowIssue &&
-                              !scheduleRowIssue.blocking && (
-                                <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
-                                  {scheduleRowIssue.message}
-                                </p>
-                              )}
-                          </div>
-                        ) : (
-                          <span className="block text-center text-xs font-medium text-slate-400">
-                            —
-                          </span>
-                        )}
-                      </td>
+                          {scheduleRowIssue && !scheduleRowIssue.blocking && (
+                            <p className="max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
+                              {scheduleRowIssue.message}
+                            </p>
+                          )}
+                        </div>
+                      ) : rowStatus === 'Interested' && canScheduleMeeting ? (
+                        <div className="space-y-1.5 text-center">
+                          {!scheduleRowIssue?.blocking ? (
+                            <button
+                              type="button"
+                              onClick={() => scheduleMeetingForRow(rowIndex)}
+                              disabled={isSchedulingMeeting}
+                              className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                            >
+                              <CalendarIcon />
+                              {isSchedulingMeeting ? 'Checking access...' : 'Schedule meeting'}
+                            </button>
+                          ) : (
+                            <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-amber-700">
+                              {scheduleRowIssue.message}
+                            </p>
+                          )}
 
-                      <td className="border border-slate-300 px-3 py-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openActionModal(
-                              rowIndex,
-                              row,
-                            )
-                          }
-                          title="Open actions"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                        >
-                          <MessageIcon />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                },
-              )}
+                          {scheduleRowIssue && !scheduleRowIssue.blocking && (
+                            <p className="mx-auto max-w-64 text-[11px] font-semibold leading-4 text-rose-700">
+                              {scheduleRowIssue.message}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="block text-center text-xs font-medium text-slate-400">
+                          —
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="border border-slate-300 px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => openActionModal(rowIndex, row)}
+                        title="Open actions"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <MessageIcon />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {!visibleRows.length && (
                 <tr>
                   <td
-                    colSpan={
-                      displayColumnIndexes.length +
-                      3 +
-                      (isAdmin ? 1 : 0)
-                    }
+                    colSpan={displayColumnIndexes.length + 3 + (isAdmin ? 1 : 0)}
                     className="border border-slate-300 px-3 py-10 text-center text-slate-500"
                   >
                     {tableData.rows.length
@@ -2227,9 +1657,7 @@ const ClientDatasetDetail = () => {
                   Client actions
                 </p>
 
-                <h3 className="text-lg font-semibold text-slate-950">
-                  Status, remark & log
-                </h3>
+                <h3 className="text-lg font-semibold text-slate-950">Status, remark & log</h3>
               </div>
 
               <button
@@ -2274,53 +1702,35 @@ const ClientDatasetDetail = () => {
                         value={actionModal.status}
                         disabled={!canUpdate}
                         onChange={(event) => {
-                          const nextStatus =
-                            event.target.value;
+                          const nextStatus = event.target.value;
 
                           setSaveError('');
                           setActionMessage('');
 
-                          setActionModal(
-                            (previous) => ({
-                              ...previous,
+                          setActionModal((previous) => ({
+                            ...previous,
 
-                              status: nextStatus,
+                            status: nextStatus,
 
-                              followUpDate:
-                                nextStatus ===
-                                'Follow Up'
-                                  ? previous.followUpDate ||
-                                    ''
-                                  : '',
-                            }),
-                          );
+                            followUpDate:
+                              nextStatus === 'Follow Up' ? previous.followUpDate || '' : '',
+                          }));
                         }}
                         className={`h-10 w-full rounded-lg border px-3 text-sm font-bold outline-none transition focus:ring-2 focus:ring-blue-100 ${
-                          STATUS_SELECT_STYLES[
-                            actionModal.status
-                          ] ||
-                          STATUS_SELECT_STYLES['']
+                          STATUS_SELECT_STYLES[actionModal.status] || STATUS_SELECT_STYLES['']
                         }`}
                       >
-                        <option value="">
-                          Select status
-                        </option>
+                        <option value="">Select status</option>
 
-                        {CLIENT_STATUS_OPTIONS.map(
-                          (status) => (
-                            <option
-                              key={status}
-                              value={status}
-                            >
-                              {status}
-                            </option>
-                          ),
-                        )}
+                        {CLIENT_STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
                       </select>
                     </label>
 
-                    {actionModal.status ===
-                      'Follow Up' && (
+                    {actionModal.status === 'Follow Up' && (
                       <label className="mt-4 block">
                         <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-violet-700">
                           Follow-up date
@@ -2329,24 +1739,17 @@ const ClientDatasetDetail = () => {
                         <input
                           type="date"
                           min={todayDateKey}
-                          value={
-                            actionModal.followUpDate ||
-                            ''
-                          }
+                          value={actionModal.followUpDate || ''}
                           disabled={!canUpdate}
                           onChange={(event) => {
                             setSaveError('');
                             setActionMessage('');
 
-                            setActionModal(
-                              (previous) => ({
-                                ...previous,
+                            setActionModal((previous) => ({
+                              ...previous,
 
-                                followUpDate:
-                                  event.target
-                                    .value,
-                              }),
-                            );
+                              followUpDate: event.target.value,
+                            }));
                           }}
                           className="h-10 w-full rounded-lg border border-violet-300 bg-violet-50 px-3 text-sm font-semibold text-violet-800 outline-none focus:ring-2 focus:ring-violet-100"
                         />
@@ -2366,77 +1769,51 @@ const ClientDatasetDetail = () => {
                           setSaveError('');
                           setActionMessage('');
 
-                          setActionModal(
-                            (previous) => ({
-                              ...previous,
+                          setActionModal((previous) => ({
+                            ...previous,
 
-                              remark:
-                                event.target.value,
-                            }),
-                          );
+                            remark: event.target.value,
+                          }));
                         }}
                         placeholder="Write remark here..."
                         className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                       />
                     </label>
 
-                    {actionModal.status ===
-                      'Interested' &&
+                    {actionModal.status === 'Interested' &&
                       canScheduleMeeting &&
-                      scheduleRowErrors[
-                        actionModal.rowIndex
-                      ]?.blocking && (
+                      scheduleRowErrors[actionModal.rowIndex]?.blocking && (
                         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
-                          {
-                            scheduleRowErrors[
-                              actionModal
-                                .rowIndex
-                            ].message
-                          }
+                          {scheduleRowErrors[actionModal.rowIndex].message}
                         </p>
                       )}
 
                     {saveError && (
-                      <p className="mt-3 text-xs font-semibold text-red-600">
-                        {saveError}
-                      </p>
+                      <p className="mt-3 text-xs font-semibold text-red-600">{saveError}</p>
                     )}
 
                     {actionMessage && (
-                      <p className="mt-3 text-xs font-semibold text-emerald-600">
-                        {actionMessage}
-                      </p>
+                      <p className="mt-3 text-xs font-semibold text-emerald-600">{actionMessage}</p>
                     )}
 
                     {canUpdate && (
                       <div className="mt-4 flex flex-wrap justify-end gap-2">
-                        {actionModal.status ===
-                          'Interested' &&
+                        {actionModal.status === 'Interested' &&
                           canScheduleMeeting &&
-                          !scheduleRowErrors[
-                            actionModal.rowIndex
-                          ]?.blocking && (
+                          !scheduleRowErrors[actionModal.rowIndex]?.blocking && (
                             <button
                               type="button"
                               onClick={() =>
                                 saveActionChanges({
-                                  scheduleAfterSave:
-                                    true,
+                                  scheduleAfterSave: true,
                                 })
                               }
-                              disabled={
-                                savingRows[
-                                  actionModal
-                                    .rowIndex
-                                ]
-                              }
+                              disabled={savingRows[actionModal.rowIndex]}
                               className="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                             >
                               <CalendarIcon />
 
-                              {savingRows[
-                                actionModal.rowIndex
-                              ]
+                              {savingRows[actionModal.rowIndex]
                                 ? 'Saving...'
                                 : 'Save & schedule meeting'}
                             </button>
@@ -2444,23 +1821,13 @@ const ClientDatasetDetail = () => {
 
                         <button
                           type="button"
-                          onClick={() =>
-                            saveActionChanges()
-                          }
-                          disabled={
-                            savingRows[
-                              actionModal.rowIndex
-                            ]
-                          }
+                          onClick={() => saveActionChanges()}
+                          disabled={savingRows[actionModal.rowIndex]}
                           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300"
                         >
                           <CheckIcon />
 
-                          {savingRows[
-                            actionModal.rowIndex
-                          ]
-                            ? 'Saving...'
-                            : 'Save changes'}
+                          {savingRows[actionModal.rowIndex] ? 'Saving...' : 'Save changes'}
                         </button>
                       </div>
                     )}
@@ -2479,100 +1846,72 @@ const ClientDatasetDetail = () => {
                       </div>
 
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                        {
-                          currentActionEntries.length
-                        }{' '}
-                        entries
+                        {currentActionEntries.length} entries
                       </span>
                     </div>
 
                     <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
-                      {currentActionEntries.map(
-                        (entry, index) => (
-                          <div
-                            key={`${entry.changedAt}-${index}`}
-                            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                          >
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-950">
-                                  {entry.statusChanged &&
-                                  entry.remarkChanged
-                                    ? 'Status and remark updated'
-                                    : entry.statusChanged
-                                      ? 'Status updated'
-                                      : 'Remark updated'}
-                                </p>
+                      {currentActionEntries.map((entry, index) => (
+                        <div
+                          key={`${entry.changedAt}-${index}`}
+                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-950">
+                                {entry.statusChanged && entry.remarkChanged
+                                  ? 'Status and remark updated'
+                                  : entry.statusChanged
+                                    ? 'Status updated'
+                                    : 'Remark updated'}
+                              </p>
 
-                                <p className="mt-0.5 text-xs font-medium text-blue-700">
-                                  Updated by{' '}
-                                  {entry.changedByName ||
-                                    entry.changedBy
-                                      ?.name ||
-                                    entry.changedBy
-                                      ?.email ||
-                                    'Unknown user'}
-                                </p>
-                              </div>
-
-                              <p className="text-xs font-medium text-slate-500">
-                                {formatDate(
-                                  entry.changedAt,
-                                )}
+                              <p className="mt-0.5 text-xs font-medium text-blue-700">
+                                Updated by{' '}
+                                {entry.changedByName ||
+                                  entry.changedBy?.name ||
+                                  entry.changedBy?.email ||
+                                  'Unknown user'}
                               </p>
                             </div>
 
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              {entry.statusChanged && (
-                                <div className="rounded-lg bg-slate-50 p-3">
-                                  <p className="text-xs font-semibold text-slate-500">
-                                    Status
-                                  </p>
-
-                                  <p className="mt-1 text-sm text-slate-700">
-                                    {entry.previousStatus ||
-                                      'Empty'}{' '}
-                                    →{' '}
-                                    <strong>
-                                      {entry.currentStatus ||
-                                        'Empty'}
-                                    </strong>
-                                  </p>
-                                </div>
-                              )}
-
-                              {entry.remarkChanged && (
-                                <div className="rounded-lg bg-slate-50 p-3">
-                                  <p className="text-xs font-semibold text-slate-500">
-                                    Remark
-                                  </p>
-
-                                  <p className="mt-1 break-words text-sm text-slate-700">
-                                    {entry.previousRemark ||
-                                      'Empty'}{' '}
-                                    →{' '}
-                                    <strong>
-                                      {entry.currentRemark ||
-                                        'Empty'}
-                                    </strong>
-                                  </p>
-                                </div>
-                              )}
-                            </div>
+                            <p className="text-xs font-medium text-slate-500">
+                              {formatDate(entry.changedAt)}
+                            </p>
                           </div>
-                        ),
-                      )}
+
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {entry.statusChanged && (
+                              <div className="rounded-lg bg-slate-50 p-3">
+                                <p className="text-xs font-semibold text-slate-500">Status</p>
+
+                                <p className="mt-1 text-sm text-slate-700">
+                                  {entry.previousStatus || 'Empty'} →{' '}
+                                  <strong>{entry.currentStatus || 'Empty'}</strong>
+                                </p>
+                              </div>
+                            )}
+
+                            {entry.remarkChanged && (
+                              <div className="rounded-lg bg-slate-50 p-3">
+                                <p className="text-xs font-semibold text-slate-500">Remark</p>
+
+                                <p className="mt-1 break-words text-sm text-slate-700">
+                                  {entry.previousRemark || 'Empty'} →{' '}
+                                  <strong>{entry.currentRemark || 'Empty'}</strong>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
 
                       {!currentActionEntries.length && (
                         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
-                          <p className="text-sm font-semibold text-slate-700">
-                            No activity yet
-                          </p>
+                          <p className="text-sm font-semibold text-slate-700">No activity yet</p>
 
                           <p className="mt-1 text-xs text-slate-500">
-                            Status and remark
-                            updates will appear
-                            here.
+                            Status and remark updates will appear here.
                           </p>
                         </div>
                       )}

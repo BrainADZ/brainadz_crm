@@ -386,13 +386,14 @@ router.post('/preview', requirePermission('permissions', 'view'), async (req, re
           allowedModuleKeys.has(module.key) && module.resources.includes(permission.resource),
       );
     });
-    const visibleModules = MODULES.filter((module) =>
-      (!allowedModuleKeys || allowedModuleKeys.has(module.key)) &&
-      module.resources.some((resource) =>
-        permissions.some(
-          (permission) => permission.resource === resource && permission.actions.includes('view'),
+    const visibleModules = MODULES.filter(
+      (module) =>
+        (!allowedModuleKeys || allowedModuleKeys.has(module.key)) &&
+        module.resources.some((resource) =>
+          permissions.some(
+            (permission) => permission.resource === resource && permission.actions.includes('view'),
+          ),
         ),
-      ),
     ).map((module) => module.key);
     return res.json({
       bypass: role.roleKey === 'super_admin',

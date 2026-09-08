@@ -24,11 +24,7 @@ const activeAccessQuery = (userId) => ({
 const ASSIGNED_SCOPES = new Set(['assigned', 'ASSIGNED', 'self', 'OWN']);
 const TEAM_SCOPES = new Set(['team', 'TEAM', 'MULTIPLE_TEAMS']);
 const DEPARTMENT_SCOPES = new Set(['department', 'DEPARTMENT']);
-const BUSINESS_UNIT_SCOPES = new Set([
-  'community',
-  'BUSINESS_UNIT',
-  'MULTIPLE_BUSINESS_UNITS',
-]);
+const BUSINESS_UNIT_SCOPES = new Set(['community', 'BUSINESS_UNIT', 'MULTIPLE_BUSINESS_UNITS']);
 const COMPANY_SCOPES = new Set(['all', 'COMPANY']);
 const CLIENT_WORK_COLUMNS = ['Status', 'Remark', 'Employee'];
 
@@ -50,9 +46,7 @@ const isValidDateKey = (value) => {
   if (year < 1000) return false;
   const date = new Date(Date.UTC(year, month - 1, day));
   return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   );
 };
 
@@ -65,9 +59,7 @@ const addWorkColumnsAfterWebsite = (columns = [], rows = []) => {
   const workIndexes = new Map(
     CLIENT_WORK_COLUMNS.map((column) => [
       column,
-      normalizedColumns.findIndex(
-        (item) => normalizeColumnName(item) === column.toLowerCase(),
-      ),
+      normalizedColumns.findIndex((item) => normalizeColumnName(item) === column.toLowerCase()),
     ]),
   );
   const dataIndexes = normalizedColumns
@@ -80,10 +72,7 @@ const addWorkColumnsAfterWebsite = (columns = [], rows = []) => {
     );
 
   return {
-    columns: [
-      ...dataIndexes.map((index) => normalizedColumns[index]),
-      ...CLIENT_WORK_COLUMNS,
-    ],
+    columns: [...dataIndexes.map((index) => normalizedColumns[index]), ...CLIENT_WORK_COLUMNS],
     rows: rows.map((row) => [
       ...dataIndexes.map((index) => normalizeCell(row?.[index])),
       ...CLIENT_WORK_COLUMNS.map((column) => {
@@ -107,10 +96,7 @@ const getDatasetRowContext = (dataset, rowIndex) => {
   const row = normalized.rows[rowIndex];
   if (!row) return null;
 
-  const companyName = getCellValue(normalized.columns, row, [
-    'Company Name',
-    'Account Name',
-  ]);
+  const companyName = getCellValue(normalized.columns, row, ['Company Name', 'Account Name']);
   const clientName =
     getCellValue(normalized.columns, row, ['Client Name', 'Full Name', 'MR Name']) ||
     companyName ||
@@ -215,16 +201,11 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     Boolean(dataset.uploadedBy) &&
     String(dataset.uploadedBy?._id || dataset.uploadedBy) === String(req.user._id);
   const schedulableUserIds = [
-    ...new Set([
-      ...assignmentUserIds,
-      ...(actorOwnsDataset ? [String(req.user._id)] : []),
-    ]),
+    ...new Set([...assignmentUserIds, ...(actorOwnsDataset ? [String(req.user._id)] : [])]),
   ];
   const actorIsAssigned = assignmentUserIds.includes(String(req.user._id));
-  const {
-    businessUnits: actorBusinessUnits,
-    assignments: actorAssignments = [],
-  } = await getAccessibleOrganization(req.user);
+  const { businessUnits: actorBusinessUnits, assignments: actorAssignments = [] } =
+    await getAccessibleOrganization(req.user);
   const actorBusinessUnitIds = new Set(actorBusinessUnits.map((unit) => String(unit._id)));
   const actorUnitDepartmentIds = new Set(
     actorAssignments
@@ -236,8 +217,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   );
   if (
     req.user.roleKey !== 'super_admin' &&
-    (!actorBusinessUnitIds.has(String(businessUnit._id)) ||
-      (!actorIsAssigned && !actorOwnsDataset))
+    (!actorBusinessUnitIds.has(String(businessUnit._id)) || (!actorIsAssigned && !actorOwnsDataset))
   ) {
     const error = new Error('You cannot schedule a meeting for this client row');
     error.status = 403;
@@ -285,9 +265,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     current.businessUnitIds = [
       ...new Set([...current.businessUnitIds, ...(membership.businessUnitIds || []).map(String)]),
     ];
-    current.teamIds = [
-      ...new Set([...current.teamIds, ...(membership.teamIds || []).map(String)]),
-    ];
+    current.teamIds = [...new Set([...current.teamIds, ...(membership.teamIds || []).map(String)])];
     membershipMap.set(userId, current);
   });
 
@@ -364,8 +342,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   } else if (!employeesWithActiveUnitDepartment.size) {
     schedulingIssue = {
       code: 'CLIENT_ROW_ASSIGNEE_NO_DEPARTMENT_ACCESS',
-      message:
-        'No assigned employee has active Department access for this client Business Unit',
+      message: 'No assigned employee has active Department access for this client Business Unit',
     };
   } else if (!assignedEmployees.length) {
     const error = new Error(
@@ -539,17 +516,12 @@ router.get('/', requirePermission('meetings', 'view'), async (req, res, next) =>
         ),
       ];
       const scope = req.permission?.scope;
-      const ownMeetingClauses = [
-        { employee: req.user._id },
-        { participantUserIds: req.user._id },
-      ];
+      const ownMeetingClauses = [{ employee: req.user._id }, { participantUserIds: req.user._id }];
       const ownMeetings = {
         $or: ownMeetingClauses,
       };
       const departmentClauses = assignments
-        .filter(
-          (assignment) => assignment.departmentId && assignment.businessUnitIds?.length,
-        )
+        .filter((assignment) => assignment.departmentId && assignment.businessUnitIds?.length)
         .map((assignment) => ({
           departmentId: assignment.departmentId,
           businessUnitId: { $in: assignment.businessUnitIds },
@@ -576,9 +548,7 @@ router.get('/', requirePermission('meetings', 'view'), async (req, res, next) =>
           )
           .map((assignment) => {
             const teamFilters = [
-              ...(assignment.teamIds?.length
-                ? [{ teamIds: { $in: assignment.teamIds } }]
-                : []),
+              ...(assignment.teamIds?.length ? [{ teamIds: { $in: assignment.teamIds } }] : []),
               ...(teamNames.length ? [{ team: { $in: teamNames } }] : []),
             ];
             return {
@@ -694,9 +664,7 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
     if (linkedContext) {
       meetingEmployeeId =
         normalizeCell(req.body.employeeId) ||
-        (linkedContext.suggestedEmployee?._id
-          ? String(linkedContext.suggestedEmployee._id)
-          : '');
+        (linkedContext.suggestedEmployee?._id ? String(linkedContext.suggestedEmployee._id) : '');
       assignedEmployee = linkedContext.assignedEmployees.find(
         (employee) => String(employee._id) === meetingEmployeeId,
       );
@@ -737,11 +705,7 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
       ...new Set(
         (Array.isArray(req.body.participantUserIds) ? req.body.participantUserIds : [])
           .map(String)
-          .filter(
-            (id) =>
-              mongoose.isValidObjectId(id) &&
-              id !== meetingEmployeeId,
-          ),
+          .filter((id) => mongoose.isValidObjectId(id) && id !== meetingEmployeeId),
       ),
     ];
     let participantUsers = [];
@@ -775,10 +739,7 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
       meetingDate,
       meetingTime,
       status: 'scheduled',
-      $or: [
-        { employee: { $in: attendeeIds } },
-        { participantUserIds: { $in: attendeeIds } },
-      ],
+      $or: [{ employee: { $in: attendeeIds } }, { participantUserIds: { $in: attendeeIds } }],
     });
     if (conflict)
       return res
@@ -847,8 +808,7 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
       notificationRecipientIds.map((recipientId) =>
         createNotification({
           communityKey: businessUnit.legacyCommunityKey,
-          recipientRole:
-            recipientRoleMap.get(recipientId) === 'admin' ? 'admin' : 'employee',
+          recipientRole: recipientRoleMap.get(recipientId) === 'admin' ? 'admin' : 'employee',
           recipientUser: recipientId,
           actorUser: req.user._id,
           actorName,

@@ -83,10 +83,7 @@ const buildDueQuery = ({ today, now, employeeId, emailEnabled }) => {
         ],
       },
       {
-        $or: [
-          { reminderProcessingAt: null },
-          { reminderProcessingAt: { $lte: staleBefore } },
-        ],
+        $or: [{ reminderProcessingAt: null }, { reminderProcessingAt: { $lte: staleBefore } }],
       },
     ],
   };
@@ -349,21 +346,18 @@ const runMeetingReminderProcessor = async (options = {}) => {
 
   const outcomes = new Array(candidates.length);
   let nextCandidate = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, candidates.length) },
-    async () => {
-      while (nextCandidate < candidates.length) {
-        const index = nextCandidate;
-        nextCandidate += 1;
-        outcomes[index] = await processClaimedMeeting({
-          candidateId: candidates[index]._id,
-          dueQuery,
-          claimedAt: now,
-          emailEnabled,
-        });
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.min(concurrency, candidates.length) }, async () => {
+    while (nextCandidate < candidates.length) {
+      const index = nextCandidate;
+      nextCandidate += 1;
+      outcomes[index] = await processClaimedMeeting({
+        candidateId: candidates[index]._id,
+        dueQuery,
+        claimedAt: now,
+        emailEnabled,
+      });
+    }
+  });
   await Promise.all(workers);
 
   outcomes.forEach((outcome) => {

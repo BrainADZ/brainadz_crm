@@ -419,13 +419,15 @@ const resolveUserAccess = async (userId) => {
     teamIds: [...new Set(assignments.flatMap((item) => (item.teamIds || []).map(String)))],
     permissions: permissions.filter((permission) => permission.actions.length),
     visibleModules: modules
-      .filter((module) =>
-        (!hasDepartmentModuleRestriction || departmentModuleKeys.has(module.moduleKey)) &&
-        module.resources.some((resource) =>
-          permissions.some(
-            (permission) => permission.resource === resource && permission.actions.includes('view'),
+      .filter(
+        (module) =>
+          (!hasDepartmentModuleRestriction || departmentModuleKeys.has(module.moduleKey)) &&
+          module.resources.some((resource) =>
+            permissions.some(
+              (permission) =>
+                permission.resource === resource && permission.actions.includes('view'),
+            ),
           ),
-        ),
       )
       .map((module) => module.moduleKey),
     conflicts: permissions
