@@ -8,7 +8,8 @@
     "seed:admin": "node scripts/addAdminUser.js",
     "migrate:rbac": "node scripts/migrateRbac.js",
     "migrate:organization-access": "node scripts/migrateOrganizationAccess.js",
-    "setup:quotations": "node scripts/ensureQuotationPermissions.js"
+    "setup:quotations": "node scripts/ensureQuotationPermissions.js",
+    "seed:dashboard-demo": "node scripts/seedDashboardDemo.js"
   },
   "keywords": [],
   "author": "",

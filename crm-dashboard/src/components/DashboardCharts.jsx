@@ -1,10 +1,10 @@
 const palette = ['#165DFF', '#EF4444', '#14B8A6', '#F59E0B', '#7C3AED', '#94A3B8'];
 
 export const Panel = ({ title, subtitle, action, children, className = '' }) => (
-  <article className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+  <article className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] ${className}`}>
     <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
       <div>
-        <h2 className="text-sm font-bold text-slate-950">{title}</h2>
+        <h2 className="text-sm font-bold tracking-tight text-slate-950">{title}</h2>
         {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
       </div>
       {action}
@@ -82,19 +82,38 @@ export const BarChart = ({ items, valueSuffix = '' }) => {
 export const ConversionGauge = ({ value = 0 }) => {
   const safeValue = Math.max(0, Math.min(100, Number(value || 0)));
   return (
-    <div className="flex flex-col items-center justify-center p-5">
-      <div className="relative h-24 w-48 overflow-hidden">
-        <div className="absolute left-0 top-0 h-48 w-48 rounded-full bg-slate-100" />
-        <div
-          className="absolute left-0 top-0 h-48 w-48 rounded-full"
-          style={{
-            background: `conic-gradient(from 270deg, #165DFF 0deg ${safeValue * 1.8}deg, transparent ${safeValue * 1.8}deg 180deg, transparent 180deg)`,
-          }}
-        />
-        <div className="absolute left-5 top-5 h-40 w-40 rounded-full bg-white" />
+    <div className="flex min-h-52 flex-col items-center justify-center px-5 py-4">
+      <div className="relative h-28 w-52">
+        <svg viewBox="0 0 200 112" className="h-full w-full overflow-visible" aria-hidden="true">
+          <path
+            d="M 18 100 A 82 82 0 0 1 182 100"
+            fill="none"
+            stroke="#E8EEF7"
+            strokeWidth="18"
+            strokeLinecap="round"
+            pathLength="100"
+          />
+          <path
+            d="M 18 100 A 82 82 0 0 1 182 100"
+            fill="none"
+            stroke="url(#conversion-gradient)"
+            strokeWidth="18"
+            strokeLinecap="round"
+            pathLength="100"
+            strokeDasharray={`${safeValue} 100`}
+          />
+          <defs>
+            <linearGradient id="conversion-gradient" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#165DFF" />
+              <stop offset="100%" stopColor="#EF4444" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-x-0 bottom-0 text-center">
+          <p className="text-3xl font-bold leading-none text-slate-950">{safeValue}%</p>
+        </div>
       </div>
-      <p className="-mt-4 text-3xl font-bold text-slate-950">{safeValue}%</p>
-      <p className="mt-1 text-xs font-medium text-slate-500">Lead-to-win conversion</p>
+      <p className="mt-3 text-xs font-medium text-slate-500">Lead-to-win conversion</p>
     </div>
   );
 };

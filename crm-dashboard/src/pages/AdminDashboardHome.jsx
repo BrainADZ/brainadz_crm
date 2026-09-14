@@ -42,9 +42,9 @@ const getInitials = (name = '') =>
     .toUpperCase() || 'AD';
 
 const StatCard = ({ label, value, note, tone, icon, to, action, loading }) => (
-  <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-px hover:border-blue-200 hover:shadow-md">
+  <article className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-px hover:border-blue-300 hover:shadow-md">
     <div className="flex items-start justify-between gap-4">
-      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${tone}`}>
+      <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}>
         <svg
           viewBox="0 0 24 24"
           className="h-5 w-5 fill-none stroke-current"
@@ -63,7 +63,7 @@ const StatCard = ({ label, value, note, tone, icon, to, action, loading }) => (
       </div>
     ) : (
       <>
-        <p className="mt-4 text-[1.75rem] font-semibold leading-none text-slate-950">{value}</p>
+        <p className="mt-3 text-2xl font-bold leading-none tracking-tight text-slate-950">{value}</p>
         <p className="mt-2 text-sm font-semibold text-slate-700">{label}</p>
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="truncate text-xs text-slate-500">{note}</p>
@@ -76,6 +76,7 @@ const StatCard = ({ label, value, note, tone, icon, to, action, loading }) => (
         </div>
       </>
     )}
+    <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-blue-600 via-blue-400 to-red-500 opacity-0 transition group-hover:opacity-100" />
   </article>
 );
 
@@ -253,16 +254,16 @@ const AdminDashboardHome = () => {
 
   return (
     <div className="mx-auto w-full max-w-[100rem] space-y-4">
-      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
-        <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-blue-600 to-red-500" />
-        <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100/70 blur-3xl" />
+      <section className="relative overflow-hidden rounded-xl bg-[#0b1f4d] px-6 py-5 text-white shadow-lg shadow-blue-950/10">
+        <span className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-blue-600/40 to-transparent" />
+        <span className="absolute -right-8 -top-20 h-52 w-52 rounded-full border-[35px] border-white/5" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">{todayLabel}</p>
-              <h1 className="mt-2 text-2xl font-bold text-slate-950">Company performance</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Welcome, {profile?.name || 'Admin'}. A live view of sales, people and operations.
+              <div className="mb-2 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-500" /><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-200">{todayLabel}</p></div>
+              <h1 className="text-2xl font-bold tracking-tight">Executive overview</h1>
+              <p className="mt-1.5 text-sm text-blue-100/80">
+                Welcome, {profile?.name || 'Admin'} — live performance across teams and operations.
               </p>
             </div>
           </div>
@@ -270,7 +271,7 @@ const AdminDashboardHome = () => {
             <button
               type="button"
               onClick={refreshDashboard}
-              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -289,7 +290,7 @@ const AdminDashboardHome = () => {
             </Link>
             <Link
               to="/dashboard/tasks"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white px-4 py-2 text-sm font-semibold text-[#0b1f4d] transition hover:bg-blue-50"
             >
               View tasks
             </Link>

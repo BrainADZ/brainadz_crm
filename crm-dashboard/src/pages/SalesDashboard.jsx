@@ -180,18 +180,20 @@ const SalesDashboard = () => {
 
   return (
     <div className="mx-auto max-w-[100rem] space-y-4">
-      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
-        <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-blue-600 to-red-500" />
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100/70 blur-3xl" />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <section className="relative overflow-hidden rounded-xl bg-[#0b1f4d] px-6 py-5 text-white shadow-lg shadow-blue-950/10">
+        <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-blue-600/40 to-transparent" />
+        <div className="absolute -right-8 -top-20 h-52 w-52 rounded-full border-[35px] border-white/5" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-red-500" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-200">
               {formatRole(user?.roleKey || user?.crmRole || 'sales')}
-            </p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950">Sales performance</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Welcome, {user?.name || 'Sales Team'}. Track your live pipeline and next actions.
-              Your leads, follow-ups, interested clients and upcoming meetings in one view.
+              </p>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Sales command center</h1>
+            <p className="mt-1.5 max-w-2xl text-sm text-blue-100/80">
+              Welcome, {user?.name || 'Sales Team'} — focus on pipeline movement and today&apos;s actions.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -199,7 +201,7 @@ const SalesDashboard = () => {
               type="button"
               disabled={refreshing}
               onClick={() => load({ silent: true })}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
               Refresh
@@ -220,22 +222,24 @@ const SalesDashboard = () => {
         </div>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ label, value, note, icon: Icon, tone }) => (
           <article
             key={label}
-            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+            className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
           >
-            <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
-              <Icon size={18} />
-            </span>
+            <div className="flex items-start justify-between">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}><Icon size={17} /></span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Live</span>
+            </div>
             {loading ? (
               <div className="mt-4 h-8 w-16 animate-pulse rounded bg-slate-200" />
             ) : (
-              <p className="mt-4 text-3xl font-semibold text-slate-950">{value}</p>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
             )}
             <p className="mt-1 text-sm font-semibold text-slate-800">{label}</p>
             <p className="mt-1 text-xs text-slate-500">{note}</p>
+            <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-blue-600 via-blue-400 to-red-500 opacity-0 transition group-hover:opacity-100" />
           </article>
         ))}
       </section>
