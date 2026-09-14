@@ -405,6 +405,33 @@ const normalizeAssignments = (rowAssignments = []) =>
     assignedAt: assignment.assignedAt || new Date(),
   }));
 
+const getEffectiveAssignments = (dataset) => {
+  const assignments = normalizeAssignments(dataset.rowAssignments || []);
+  if (assignments.length || dataset.uploaderAssignmentResolved === true) return assignments;
+
+  const uploader = dataset.uploadedBy;
+  if (!uploader || uploader.role !== 'employee') return assignments;
+
+  return (dataset.rows || []).map((_, rowIndex) => ({
+    rowIndex,
+    employee: uploader._id || uploader,
+    employeeName: uploader.name || uploader.email || 'Uploader',
+    assignedBy: uploader._id || uploader,
+    assignedAt: dataset.createdAt || new Date(),
+  }));
+};
+
+const getUploaderAssignments = (req, rowCount) =>
+  req.user.role === 'employee'
+    ? Array.from({ length: rowCount }, (_, rowIndex) => ({
+        rowIndex,
+        employee: req.user.id,
+        employeeName: req.user.name || req.user.email || 'Uploader',
+        assignedBy: req.user.id,
+        assignedAt: new Date(),
+      }))
+    : [];
+
 const getDatasetSalesSummary = (dataset) => {
   const normalizedData = addWorkColumnsAfterWebsite(
     dataset.columns || [],
@@ -432,7 +459,7 @@ const getDatasetSalesSummary = (dataset) => {
     }
   });
 
-  const normalizedAssignments = normalizeAssignments(dataset.rowAssignments || []);
+  const normalizedAssignments = getEffectiveAssignments(dataset);
 
   const assignedRows = normalizedData.rows.filter(
     (row, rowIndex) =>
@@ -553,7 +580,10 @@ const getDatasetListItem = (dataset) => ({
 
   source: dataset.source || 'Excel Import',
 
-  ownerAlias: dataset.ownerAlias || 'Admin',
+  ownerAlias:
+    dataset.uploadedBy?.role === 'employee'
+      ? dataset.uploadedBy.name || dataset.uploadedBy.email || dataset.ownerAlias
+      : dataset.ownerAlias || 'Admin',
 
   salesStage: dataset.salesStage || 'Prospecting',
 
@@ -704,7 +734,7 @@ const prepareDatasetResponse = (dataset, includeLogs = false, meetings = []) => 
 
   const rowLogs = includeLogs ? datasetObject.rowLogs || [] : undefined;
 
-  const rowAssignments = includeLogs ? datasetObject.rowAssignments || [] : undefined;
+  const rowAssignments = includeLogs ? getEffectiveAssignments(datasetObject) : undefined;
 
   return {
     ...datasetObject,
@@ -962,6 +992,7 @@ router.get('/', authMiddleware, requireAdmin, async (req, res) => {
 
     const datasets = await ClientDataset.find(query)
       .populate('businessUnitId', 'name slug legacyCommunityKey')
+      .populate('uploadedBy', 'name email role')
       .sort({
         createdAt: -1,
       });
@@ -1010,6 +1041,7 @@ router.get('/assigned/me', authMiddleware, async (req, res) => {
     })
       .select('-rowLogs')
       .populate('businessUnitId', 'name slug legacyCommunityKey')
+      .populate('uploadedBy', 'name email role')
       .sort({
         updatedAt: -1,
       });
@@ -1124,6 +1156,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       ...datasetVisibilityFilter(req),
     })
       .populate('businessUnitId', 'name slug legacyCommunityKey')
+      .populate('uploadedBy', 'name email role')
       .populate('rowLogs.entries.changedBy', 'name email employeeId');
 
     if (!dataset) {
@@ -1712,6 +1745,8 @@ router.patch('/:id/assign', authMiddleware, requireAdmin, async (req, res) => {
 
     dataset.rowAssignments = nextAssignments;
 
+    dataset.uploaderAssignmentResolved = true;
+
     dataset.markModified('columns');
 
     dataset.markModified('rows');
@@ -1884,6 +1919,8 @@ router.patch('/:id/unassign', authMiddleware, requireAdmin, async (req, res) => 
     dataset.rows = rows;
 
     dataset.rowAssignments = nextAssignments;
+
+    dataset.uploaderAssignmentResolved = true;
 
     dataset.markModified('columns');
 
@@ -2149,7 +2186,9 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
     const source = normalizeCell(req.body.source) || 'Manual';
 
     const ownerAlias =
-      normalizeCell(req.body.ownerAlias) || req.user.name || req.user.email || 'Admin';
+      req.user.role === 'employee'
+        ? req.user.name || req.user.email || 'Sales User'
+        : normalizeCell(req.body.ownerAlias) || req.user.name || req.user.email || 'Admin';
 
     const salesStage = normalizeCell(req.body.salesStage) || 'Prospecting';
 
@@ -2306,6 +2345,10 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
 
       rowCount: normalizedAccountData.rows.length,
 
+      rowAssignments: getUploaderAssignments(req, normalizedAccountData.rows.length),
+
+      uploaderAssignmentResolved: req.user.role === 'employee',
+
       uploadedBy: req.user.id,
     });
 
@@ -2458,7 +2501,10 @@ router.post('/upload', authMiddleware, requireAdmin, upload.single('file'), asyn
 
       source: normalizeCell(req.body.source) || 'Excel Import',
 
-      ownerAlias: normalizeCell(req.body.ownerAlias) || req.user.name || req.user.email || 'Admin',
+      ownerAlias:
+        req.user.role === 'employee'
+          ? req.user.name || req.user.email || 'Sales User'
+          : normalizeCell(req.body.ownerAlias) || req.user.name || req.user.email || 'Admin',
 
       salesStage: normalizeCell(req.body.salesStage) || 'Prospecting',
 
@@ -2469,6 +2515,10 @@ router.post('/upload', authMiddleware, requireAdmin, upload.single('file'), asyn
       rows: filledRows,
 
       rowCount: filledRows.length,
+
+      rowAssignments: getUploaderAssignments(req, filledRows.length),
+
+      uploaderAssignmentResolved: req.user.role === 'employee',
 
       uploadedBy: req.user.id,
     });

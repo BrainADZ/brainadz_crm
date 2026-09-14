@@ -393,7 +393,7 @@ const Employees = () => {
           <span className="text-xs font-semibold text-slate-500">{filtered.length} results</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[72rem] w-full text-left text-sm">
+          <table className="compact-crm-table min-w-[62rem] w-full text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Employee</th>

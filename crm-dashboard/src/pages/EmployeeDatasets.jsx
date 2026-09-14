@@ -103,7 +103,7 @@ const EmployeeDatasets = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="compact-crm-table min-w-full text-left">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500">
               <tr>
                 <th className="px-5 py-3">Dataset</th>

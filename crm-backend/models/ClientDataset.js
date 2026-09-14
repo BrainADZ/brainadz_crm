@@ -188,6 +188,11 @@ const clientDatasetSchema = new mongoose.Schema(
 
     rowAssignments: [rowAssignmentSchema],
 
+    uploaderAssignmentResolved: {
+      type: Boolean,
+      default: false,
+    },
+
     rowFollowUps: [rowFollowUpSchema],
 
     rowCount: {

@@ -768,7 +768,7 @@ const AccountSettings = ({ role }) => {
         </div>
         <Subsection title="Login History">
           <div className="overflow-x-auto rounded-md border border-slate-200">
-            <table className="min-w-[62rem] w-full text-left text-xs">
+            <table className="compact-crm-table min-w-[54rem] w-full text-left">
               <thead className="bg-slate-100 text-slate-700">
                 <tr>
                   {[

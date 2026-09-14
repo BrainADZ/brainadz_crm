@@ -287,7 +287,7 @@ export default function MarketingEnquiries() {
           </div>
         </div>
         <div className="overflow-auto">
-          <table className="min-w-[100rem] w-full border-collapse text-left text-sm">
+          <table className="compact-crm-table min-w-[80rem] w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="bg-slate-100">
                 <TH center>Select</TH>
@@ -525,7 +525,7 @@ function Label({ children }) {
 function TH({ children, center }) {
   return (
     <th
-      className={`whitespace-nowrap border border-slate-300 px-3 py-2 font-semibold text-slate-800 ${center ? 'text-center' : ''}`}
+      className={`whitespace-normal border border-slate-300 px-3 py-2 font-semibold leading-4 text-slate-800 ${center ? 'text-center' : ''}`}
     >
       {children}
     </th>
@@ -534,9 +534,9 @@ function TH({ children, center }) {
 function TD({ children, center }) {
   return (
     <td
-      className={`whitespace-nowrap border border-slate-300 px-3 py-2 text-slate-700 ${center ? 'text-center' : ''}`}
+      className={`border border-slate-300 px-3 py-2 text-slate-700 ${center ? 'text-center' : ''}`}
     >
-      {children}
+      <div className={center ? '' : 'two-line-cell'}>{children}</div>
     </td>
   );
 }

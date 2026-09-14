@@ -597,7 +597,7 @@ const Quotations = () => {
           </select>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[72rem] w-full text-left text-sm">
+          <table className="compact-crm-table min-w-[62rem] w-full text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Quotation</th>

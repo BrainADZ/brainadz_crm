@@ -569,7 +569,7 @@ const AdminTasks = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[78rem] w-full table-fixed border-collapse text-left text-sm">
+          <table className="compact-crm-table min-w-[68rem] w-full table-fixed border-collapse text-left">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
                 <th className="w-72 border-b border-r border-slate-300 px-4 py-2 font-bold">

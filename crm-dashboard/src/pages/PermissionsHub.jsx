@@ -1194,7 +1194,7 @@ const PermissionsHub = () => {
               </div>
             </div>
             <div className="mt-5 max-h-80 overflow-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs">
+              <table className="compact-crm-table w-full text-left">
                 <thead className="sticky top-0 bg-slate-50 text-slate-500">
                   <tr>
                     <th className="px-3 py-2">Resource</th>
