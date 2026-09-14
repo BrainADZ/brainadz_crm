@@ -604,3 +604,23 @@ html[data-theme='dark'] .app-shell *::-webkit-scrollbar-thumb:hover {
     transition: none !important;
   }
 }
+
+/* Dense CRM tables optimized for smaller laptop screens. */
+.compact-crm-table { font-size: 0.72rem; line-height: 1.25; }
+.compact-crm-table th { padding: 0.42rem 0.55rem !important; font-size: 0.68rem; line-height: 1.15; vertical-align: middle; }
+.compact-crm-table td { padding: 0.4rem 0.55rem !important; vertical-align: middle; }
+.compact-crm-table .two-line-cell {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.25;
+  max-height: 2.5em;
+  white-space: normal;
+}
+@media (max-width: 1366px) {
+  .compact-crm-table { font-size: 0.69rem; }
+  .compact-crm-table th, .compact-crm-table td { padding-left: 0.42rem !important; padding-right: 0.42rem !important; }
+}

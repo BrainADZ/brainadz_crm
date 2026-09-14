@@ -1070,10 +1070,10 @@ const Clients = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[86rem] w-full table-fixed border-collapse text-left text-sm">
+          <table className="compact-crm-table min-w-[68rem] w-full table-fixed border-collapse text-left">
             <thead className="bg-slate-50 text-slate-700">
               <tr>
-                <th className="w-12 border-b border-r border-slate-300 px-4 py-2 text-center">
+                <th className="w-10 border-b border-r border-slate-300 px-4 py-2 text-center">
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -1081,37 +1081,37 @@ const Clients = () => {
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                 </th>
-                <th className="w-64 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-48 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Account Name
                 </th>
-                <th className="w-44 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-32 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Business Unit
                 </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Owner
                 </th>
-                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-24 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Priority
                 </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Label
                 </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Stage
                 </th>
-                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
+                <th className="w-20 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
                   Follow-up
                 </th>
-                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
+                <th className="w-20 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
                   Converted
                 </th>
-                <th className="w-32 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
+                <th className="w-24 border-b border-r border-slate-300 px-4 py-2 text-right font-bold">
                   Conversion
                 </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                <th className="w-28 border-b border-r border-slate-300 px-4 py-2 font-bold">
                   Source
                 </th>
-                <th className="w-32 border-b border-slate-300 px-4 py-2 text-right font-bold">
+                <th className="w-24 border-b border-slate-300 px-4 py-2 text-right font-bold">
                   Actions
                 </th>
               </tr>
@@ -1133,11 +1133,12 @@ const Clients = () => {
                     <td className="border-b border-r border-slate-200 px-4 py-3">
                       <Link
                         to={`${datasetBasePath}/${dataset._id}`}
-                        className="font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                        className="two-line-cell font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                        title={dataset.name}
                       >
                         {dataset.name}
                       </Link>
-                      <p className="mt-1 truncate text-xs font-medium text-slate-500">
+                      <p className="two-line-cell mt-0.5 text-[10px] font-medium text-slate-500">
                         {dataset.originalFileName || 'Manual account list'}
                       </p>
                       <p className="mt-1 text-[11px] font-semibold text-slate-400">
@@ -1145,12 +1146,12 @@ const Clients = () => {
                       </p>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                      <span className="two-line-cell rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
                         {dataset.businessUnitName || dataset.communityKey || 'Legacy data'}
                       </span>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3 font-semibold text-slate-700">
-                      {dataset.ownerAlias || 'Unassigned'}
+                      <span className="two-line-cell">{dataset.ownerAlias || 'Unassigned'}</span>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3">
                       <span
@@ -1160,10 +1161,10 @@ const Clients = () => {
                       </span>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3 font-semibold text-slate-700">
-                      {dataset.label || 'Prospect List'}
+                      <span className="two-line-cell">{dataset.label || 'Prospect List'}</span>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3 font-semibold text-slate-700">
-                      {dataset.salesStage || 'Prospecting'}
+                      <span className="two-line-cell">{dataset.salesStage || 'Prospecting'}</span>
                     </td>
                     <td className="border-b border-r border-slate-200 px-4 py-3 text-right font-semibold text-amber-700">
                       {summary.followUpRows}

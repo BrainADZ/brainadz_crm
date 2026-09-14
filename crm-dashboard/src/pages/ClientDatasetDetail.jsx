@@ -144,16 +144,16 @@ const ContactCell = ({ values, type }) => {
 
   if (values.length === 1) {
     return (
-      <span className="whitespace-nowrap text-sm font-medium text-slate-700">{values[0]}</span>
+      <span className="two-line-cell min-w-24 max-w-36 text-xs font-medium text-slate-700" title={values[0]}>{values[0]}</span>
     );
   }
 
   return (
-    <div className="min-w-44">
+    <div className="min-w-32 max-w-40">
       <select
         defaultValue={values[0]}
         aria-label={`${type} options`}
-        className="h-9 w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-7 w-full cursor-pointer rounded-md border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
       >
         {values.map((value, index) => (
           <option key={`${value}-${index}`} value={value}>
@@ -1332,7 +1332,7 @@ const ClientDatasetDetail = () => {
         </div>
 
         <div className="overflow-auto">
-          <table className="min-w-full border-collapse text-left text-sm">
+          <table className="compact-crm-table min-w-full border-collapse text-left">
             <thead>
               <tr className="bg-slate-100">
                 {isAdmin && (
@@ -1362,7 +1362,7 @@ const ClientDatasetDetail = () => {
                   return (
                     <th
                       key={`${column}-${columnIndex}`}
-                      className="whitespace-nowrap border border-slate-300 px-3 py-2 font-semibold text-slate-800"
+                      className="min-w-24 max-w-40 whitespace-normal border border-slate-300 px-3 py-2 font-semibold leading-4 text-slate-800"
                     >
                       {label}
                     </th>
@@ -1503,7 +1503,7 @@ const ClientDatasetDetail = () => {
                             className="border border-slate-300 px-3 py-2"
                           >
                             {employeeNames.length ? (
-                              <div className="flex min-w-44 flex-wrap gap-1.5">
+                              <div className="flex min-w-32 max-w-44 flex-wrap gap-1">
                                 {employeeNames.map((employeeName) => (
                                   <span
                                     key={employeeName}
@@ -1523,14 +1523,16 @@ const ClientDatasetDetail = () => {
                       return (
                         <td
                           key={`${rowIndex}-${column}-${columnIndex}`}
-                          className="whitespace-nowrap border border-slate-300 px-3 py-2 text-slate-700"
+                          className="min-w-24 max-w-40 border border-slate-300 px-3 py-2 text-slate-700"
                         >
-                          {row[columnIndex] || ''}
+                          <span className="two-line-cell" title={String(row[columnIndex] || '')}>
+                            {row[columnIndex] || ''}
+                          </span>
                         </td>
                       );
                     })}
 
-                    <td className="min-w-56 border border-slate-300 px-3 py-2">
+                    <td className="min-w-44 max-w-56 border border-slate-300 px-3 py-2">
                       {primaryMeeting ? (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
@@ -1622,7 +1624,7 @@ const ClientDatasetDetail = () => {
                         type="button"
                         onClick={() => openActionModal(rowIndex, row)}
                         title="Open actions"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                       >
                         <MessageIcon />
                       </button>
