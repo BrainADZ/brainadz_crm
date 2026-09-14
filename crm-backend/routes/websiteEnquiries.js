@@ -21,24 +21,24 @@ router.post('/public', authenticateWebsiteIngestion, createPublicEnquiry);
 
 router.use(authMiddleware, loadAuthorization);
 
-router.get('/options', requirePermission('communication', 'view'), getOptions);
+router.get('/options', requirePermission('website_enquiries', 'view'), getOptions);
 router.get(
   '/',
-  requirePermission('communication', 'view'),
-  applyAccessScope('communication'),
+  requirePermission('website_enquiries', 'view'),
+  applyAccessScope('website_enquiries'),
   listEnquiries,
 );
-router.post('/', requirePermission('communication', 'create'), createEnquiry);
+router.post('/', requirePermission('website_enquiries', 'create'), createEnquiry);
 router.patch(
   '/assign',
-  requirePermission('communication', 'assign'),
-  applyAccessScope('communication'),
+  requirePermission('website_enquiries', 'assign'),
+  applyAccessScope('website_enquiries'),
   assignEnquiries,
 );
 router.patch(
   '/:id/action',
-  requirePermission('communication', 'update'),
-  applyAccessScope('communication'),
+  requirePermission('website_enquiries', 'update'),
+  applyAccessScope('website_enquiries'),
   updateAction,
 );
 

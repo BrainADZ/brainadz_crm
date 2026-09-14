@@ -3,11 +3,13 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Database, UsersRound } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
+import { getValidToken } from '../utils/auth';
 import BusinessOverview from './BusinessOverview';
 
-const getAdminHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
-});
+const getAuthHeaders = () => {
+  const token = getValidToken('admin') || getValidToken('employee') || '';
+  return { Authorization: `Bearer ${token}` };
+};
 
 const formatDateTime = (date, time) => {
   if (!date) return 'No date';
@@ -104,16 +106,24 @@ const AdminDashboardHome = () => {
     setError('');
 
     try {
-      const headers = getAdminHeaders();
-      const [profileResponse, summaryResponse, datasetsResponse] = await Promise.all([
+      const headers = getAuthHeaders();
+      const summaryRequest = axios.get(`${API_BASE_URL}/api/tasks/admin-summary`, { headers });
+
+      const [profileResult, summaryResult, datasetsResult] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/api/profile`, { headers }),
-        axios.get(`${API_BASE_URL}/api/tasks/admin-summary`, { headers }),
+        summaryRequest,
         axios.get(`${API_BASE_URL}/api/client-datasets`, { headers }),
       ]);
 
-      setProfile(profileResponse.data.user);
-      setTaskSummary(summaryResponse.data);
-      setDatasets(datasetsResponse.data);
+      if (profileResult.status === 'rejected') throw profileResult.reason;
+
+      setProfile(profileResult.value.data.user);
+      setTaskSummary(
+        summaryResult.status === 'fulfilled'
+          ? summaryResult.value.data
+          : { employees: [], meetings: [], totals: {} },
+      );
+      setDatasets(datasetsResult.status === 'fulfilled' ? datasetsResult.value.data : []);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to load dashboard');
     } finally {

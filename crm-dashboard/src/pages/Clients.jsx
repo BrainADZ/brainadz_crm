@@ -56,6 +56,23 @@ const emptyImportForm = {
   salesStage: 'Prospecting',
 };
 
+const emptyManualForm = {
+  ...emptyImportForm,
+  source: 'Manual Call',
+  accountName: '',
+  contactName: '',
+  phone: '',
+  alternatePhone: '',
+  email: '',
+  alternateEmail: '',
+  website: '',
+  billingCity: '',
+  billingState: '',
+  designation: '',
+  requirement: '',
+  product: '',
+};
+
 const iconButtonClass =
   'inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 hover:text-blue-700';
 const fieldClass =
@@ -278,10 +295,12 @@ const Clients = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingDataset, setEditingDataset] = useState(null);
   const [importFormData, setImportFormData] = useState(emptyImportForm);
+  const [manualFormData, setManualFormData] = useState(emptyManualForm);
   const [labelFormData, setLabelFormData] = useState({
     label: 'Hot Accounts',
     priority: 'High',
@@ -457,6 +476,7 @@ const Clients = () => {
   const selectedDatasets = datasets.filter((dataset) => selectedDatasetIds.includes(dataset._id));
   const datasetBasePath = '/dashboard/clients';
   const canImport = salesActions.includes('import');
+  const canCreate = salesActions.includes('create');
   const canUpdate = salesActions.includes('update');
   const canAssign = salesActions.includes('assign');
   const canDelete = salesActions.includes('delete');
@@ -527,6 +547,29 @@ const Clients = () => {
       setMessage(response.data.message);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Upload failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleManualCreate = async (event) => {
+    event.preventDefault();
+    setMessage('');
+    setError('');
+    setIsSaving(true);
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/client-datasets`,
+        manualFormData,
+        { headers: getAuthHeaders() },
+      );
+      setDatasets((previous) => [response.data.dataset, ...previous]);
+      setManualFormData(emptyManualForm);
+      setIsManualModalOpen(false);
+      setMessage(response.data.message);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to add lead manually');
     } finally {
       setIsSaving(false);
     }
@@ -754,9 +797,18 @@ const Clients = () => {
           </div>
         </div>
 
-        {(canImport || canUpdate || canAssign) && (
+        {(canImport || canCreate || canUpdate || canAssign) && (
           <div className="flex flex-wrap items-start justify-end gap-2">
             <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-full border border-slate-400 bg-white shadow-sm">
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="border-r border-slate-300 px-5 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
+                >
+                  Add Manually
+                </button>
+              )}
               {canImport && (
                 <button
                   type="button"
@@ -1211,16 +1263,29 @@ const Clients = () => {
                         Accounts show where your contacts work
                       </h2>
                       <p className="mt-3 text-sm text-slate-500">
-                        Import an Excel file to start tracking your sales pipeline.
+                        Add a lead manually or import an Excel file to start tracking your pipeline.
                       </p>
-                      {canImport && (
+                      {(canCreate || canImport) && (
+                        <div className="mt-5 flex flex-wrap justify-center gap-2">
+                          {canCreate && (
+                            <button
+                              type="button"
+                              onClick={() => setIsManualModalOpen(true)}
+                              className="rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
+                            >
+                              Add Manually
+                            </button>
+                          )}
+                          {canImport && (
                         <button
                           type="button"
                           onClick={() => setIsImportModalOpen(true)}
-                          className="mt-5 rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
+                              className="rounded-full border border-blue-600 bg-white px-5 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
                         >
                           Import Accounts
                         </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -1271,6 +1336,90 @@ const Clients = () => {
                 className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300"
               >
                 {isSaving ? 'Importing...' : 'Import'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {isManualModalOpen && (
+        <Modal
+          title="Add Lead Manually"
+          eyebrow="Phone call or direct enquiry"
+          onClose={() => setIsManualModalOpen(false)}
+        >
+          <form onSubmit={handleManualCreate} className="space-y-5 p-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className={labelClass}>Business Unit *</span>
+                <select
+                  className={fieldClass}
+                  value={manualFormData.businessUnitId}
+                  onChange={(event) =>
+                    setManualFormData((previous) => ({
+                      ...previous,
+                      businessUnitId: event.target.value,
+                    }))
+                  }
+                  required
+                >
+                  <option value="">Select Business Unit</option>
+                  {businessUnits.map((unit) => (
+                    <option key={unit._id} value={unit._id}>{unit.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block sm:col-span-2">
+                <span className={labelClass}>Lead list name *</span>
+                <input className={fieldClass} value={manualFormData.name} onChange={(event) => setManualFormData((previous) => ({ ...previous, name: event.target.value }))} placeholder="e.g. Phone Enquiries - September" required />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Company name *</span>
+                <input className={fieldClass} value={manualFormData.accountName} onChange={(event) => setManualFormData((previous) => ({ ...previous, accountName: event.target.value }))} placeholder="Company / account name" required={!manualFormData.contactName.trim()} />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Contact person *</span>
+                <input className={fieldClass} value={manualFormData.contactName} onChange={(event) => setManualFormData((previous) => ({ ...previous, contactName: event.target.value }))} placeholder="Caller name" required={!manualFormData.accountName.trim()} />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Phone number</span>
+                <input type="tel" className={fieldClass} value={manualFormData.phone} onChange={(event) => setManualFormData((previous) => ({ ...previous, phone: event.target.value }))} placeholder="+91..." />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Email</span>
+                <input type="email" className={fieldClass} value={manualFormData.email} onChange={(event) => setManualFormData((previous) => ({ ...previous, email: event.target.value }))} placeholder="name@company.com" />
+              </label>
+              <label className="block">
+                <span className={labelClass}>City</span>
+                <input className={fieldClass} value={manualFormData.billingCity} onChange={(event) => setManualFormData((previous) => ({ ...previous, billingCity: event.target.value }))} />
+              </label>
+              <label className="block">
+                <span className={labelClass}>State</span>
+                <input className={fieldClass} value={manualFormData.billingState} onChange={(event) => setManualFormData((previous) => ({ ...previous, billingState: event.target.value }))} />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className={labelClass}>Website</span>
+                <input type="url" className={fieldClass} value={manualFormData.website} onChange={(event) => setManualFormData((previous) => ({ ...previous, website: event.target.value }))} placeholder="https://..." />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className={labelClass}>Requirement / notes</span>
+                <textarea className={`${fieldClass} min-h-24 resize-y`} value={manualFormData.requirement} onChange={(event) => setManualFormData((previous) => ({ ...previous, requirement: event.target.value }))} placeholder="What is the lead looking for?" />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Priority</span>
+                <select className={fieldClass} value={manualFormData.priority} onChange={(event) => setManualFormData((previous) => ({ ...previous, priority: event.target.value }))}>
+                  {priorityOptions.map((priority) => <option key={priority}>{priority}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className={labelClass}>Lead source</span>
+                <input className={fieldClass} value={manualFormData.source} onChange={(event) => setManualFormData((previous) => ({ ...previous, source: event.target.value }))} />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
+              <button type="button" onClick={() => setIsManualModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100">Cancel</button>
+              <button type="submit" disabled={isSaving} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300">
+                {isSaving ? 'Adding...' : 'Add Lead'}
               </button>
             </div>
           </form>

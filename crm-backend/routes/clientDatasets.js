@@ -509,9 +509,16 @@ const getDatasetPreview = (dataset) => {
       'Account Name',
       'Client Name',
       'Company Name',
+      'Full Name',
     ]),
 
-    phone: getCellValue(normalizedData.columns, firstRow, ['Phone', 'Mobile', 'Contact Number']),
+    phone: getCellValue(normalizedData.columns, firstRow, [
+      'Phone',
+      'Phone Number',
+      'Mobile',
+      'Mobile 1',
+      'Contact Number',
+    ]),
 
     website: getCellValue(normalizedData.columns, firstRow, ['Website', 'URL']),
 
@@ -566,7 +573,8 @@ const getDatasetListItem = (dataset) => ({
 });
 
 const getRowClientLabel = (columns, row, rowIndex) =>
-  getCellValue(columns, row, ['Client Name', 'Company Name', 'Website']) || `Row ${rowIndex + 1}`;
+  getCellValue(columns, row, ['Client Name', 'Full Name', 'Company Name', 'Website']) ||
+  `Row ${rowIndex + 1}`;
 
 const getUserLabel = async (userId) => {
   const user = await User.findById(userId).select('name email');
@@ -2112,13 +2120,27 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
 
     const accountName = normalizeCell(req.body.accountName);
 
+    const contactName = normalizeCell(req.body.contactName);
+
     const phone = normalizeCell(req.body.phone);
+
+    const alternatePhone = normalizeCell(req.body.alternatePhone);
+
+    const email = normalizeCell(req.body.email).toLowerCase();
+
+    const alternateEmail = normalizeCell(req.body.alternateEmail).toLowerCase();
 
     const website = normalizeCell(req.body.website);
 
     const billingCity = normalizeCell(req.body.billingCity);
 
     const billingState = normalizeCell(req.body.billingState);
+
+    const designation = normalizeCell(req.body.designation);
+
+    const requirement = normalizeCell(req.body.requirement);
+
+    const product = normalizeCell(req.body.product);
 
     const label = normalizeCell(req.body.label) || 'Prospect List';
 
@@ -2153,22 +2175,105 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
       });
     }
 
-    if (!accountName) {
+    if (!accountName && !contactName) {
       return res.status(400).json({
-        message: 'Account name is required',
+        message: 'Company or contact name is required',
       });
     }
 
-    const accountColumns = [
-      'Account Name',
-      'Phone',
-      'Website',
-      'Billing City',
-      'Billing State/Province',
-      'Account Owner Alias',
-    ];
+    let accountColumns;
 
-    const accountRow = [accountName, phone, website, billingCity, billingState, ownerAlias];
+    let accountRow;
+
+    if (communityKey === 'marketing') {
+      accountColumns = [
+        ...SALES_TABLE_FORMATS.marketing,
+        'State',
+        'Requirement',
+        'Product',
+        'Source',
+        'Account Owner Alias',
+      ];
+
+      accountRow = [
+        '1',
+        accountName,
+        contactName,
+        billingCity,
+        designation,
+        phone,
+        alternatePhone,
+        email,
+        alternateEmail,
+        website,
+        billingState,
+        requirement,
+        product,
+        source,
+        ownerAlias,
+      ];
+    } else if (communityKey === 'live') {
+      accountColumns = [
+        ...SALES_TABLE_FORMATS.live,
+        'Company Name',
+        'Website',
+        'Alternate Phone',
+        'Alternate Email',
+        'Designation / Department',
+      ];
+
+      accountRow = [
+        new Date().toISOString().slice(0, 10),
+        ownerAlias,
+        contactName || accountName,
+        email,
+        phone,
+        billingCity,
+        billingState,
+        requirement,
+        source,
+        product,
+        accountName,
+        website,
+        alternatePhone,
+        alternateEmail,
+        designation,
+      ];
+    } else {
+      accountColumns = [
+        'Company Name',
+        'Client Name',
+        'Phone',
+        'Alternate Phone',
+        'Email',
+        'Alternate Email',
+        'Website',
+        'City',
+        'State',
+        'Designation / Department',
+        'Requirement',
+        'Product',
+        'Source',
+        'Account Owner Alias',
+      ];
+
+      accountRow = [
+        accountName,
+        contactName,
+        phone,
+        alternatePhone,
+        email,
+        alternateEmail,
+        website,
+        billingCity,
+        billingState,
+        designation,
+        requirement,
+        product,
+        source,
+        ownerAlias,
+      ];
+    }
 
     const normalizedAccountData = addWorkColumnsAfterWebsite(accountColumns, [accountRow]);
 
@@ -2193,7 +2298,7 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
 
       salesStage,
 
-      originalFileName: 'Manual account list',
+      originalFileName: 'Manual entry',
 
       columns: normalizedAccountData.columns,
 
@@ -2209,7 +2314,7 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
     await dataset.populate('businessUnitId', 'name slug legacyCommunityKey');
 
     return res.status(201).json({
-      message: 'Account list created successfully',
+      message: 'Lead added manually successfully',
 
       dataset: getDatasetListItem(dataset),
     });

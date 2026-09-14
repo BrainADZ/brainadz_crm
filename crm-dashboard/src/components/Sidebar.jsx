@@ -111,7 +111,7 @@ const navItems = [
     label: 'Website Enquiry',
     icon: Inbox,
     children: websiteEnquiryItems,
-    moduleKey: 'communication',
+    moduleKey: 'website_enquiries',
   },
   {
     to: '/dashboard/marketing',

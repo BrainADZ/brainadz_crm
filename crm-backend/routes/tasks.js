@@ -3,23 +3,71 @@ const ClientDataset = require('../models/ClientDataset');
 const Meeting = require('../models/Meeting');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
+const { loadAuthorization, requirePermission } = require('../middleware/authorization');
 
 const router = express.Router();
 
 const CLIENT_WORK_COLUMNS = ['Status', 'Remark', 'Employee'];
-
-const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Access denied: Admins only' });
-  }
-  return next();
-};
 
 const requireEmployee = (req, res, next) => {
   if (req.user.role !== 'employee') {
     return res.status(403).json({ message: 'Access denied: Employees only' });
   }
   return next();
+};
+
+const getDashboardScopeQueries = (req) => {
+  const scope = req.permission?.scope || 'none';
+  if (req.user.roleKey === 'super_admin' || ['all', 'COMPANY'].includes(scope)) {
+    return { users: {}, datasets: {}, meetings: {} };
+  }
+
+  const communities = req.selectedCommunity
+    ? [req.selectedCommunity]
+    : req.user.communities || [];
+  const communityQuery = { communityKey: { $in: communities } };
+  const userCommunityQuery = { communities: { $in: communities } };
+
+  if (['community', 'BUSINESS_UNIT', 'MULTIPLE_BUSINESS_UNITS'].includes(scope)) {
+    return {
+      users: userCommunityQuery,
+      datasets: communityQuery,
+      meetings: communityQuery,
+    };
+  }
+
+  if (['department', 'DEPARTMENT'].includes(scope)) {
+    return {
+      users: { ...userCommunityQuery, officeModule: req.user.officeModule },
+      datasets: { ...communityQuery, officeModule: req.user.officeModule },
+      meetings: { ...communityQuery, officeModule: req.user.officeModule },
+    };
+  }
+
+  if (['team', 'TEAM', 'MULTIPLE_TEAMS'].includes(scope)) {
+    return {
+      users: { ...userCommunityQuery, team: req.user.team },
+      datasets: { ...communityQuery, team: req.user.team },
+      meetings: { ...communityQuery, team: req.user.team },
+    };
+  }
+
+  if (['self', 'OWN', 'assigned', 'ASSIGNED'].includes(scope)) {
+    return {
+      users: { _id: req.user.id },
+      datasets: {
+        ...communityQuery,
+        $or: [{ uploadedBy: req.user.id }, { 'rowAssignments.employee': req.user.id }],
+      },
+      meetings: { ...communityQuery, employee: req.user.id },
+    };
+  }
+
+  return {
+    users: { _id: null },
+    datasets: { _id: null },
+    meetings: { _id: null },
+  };
 };
 
 const normalizeCell = (cell) => {
@@ -158,12 +206,18 @@ router.post('/meetings', authMiddleware, requireEmployee, (req, res) => {
   });
 });
 
-router.get('/admin-summary', authMiddleware, requireAdmin, async (req, res) => {
+router.get(
+  '/admin-summary',
+  authMiddleware,
+  loadAuthorization,
+  requirePermission('dashboard', 'view'),
+  async (req, res) => {
   try {
+    const scopeQueries = getDashboardScopeQueries(req);
     const [employees, datasets, meetings] = await Promise.all([
-      User.find({ role: 'employee' }).select('name email position imageUrl'),
-      ClientDataset.find(),
-      Meeting.find()
+      User.find({ role: 'employee', ...scopeQueries.users }).select('name email position imageUrl'),
+      ClientDataset.find(scopeQueries.datasets),
+      Meeting.find(scopeQueries.meetings)
         .populate('employee', 'name email position')
         .sort({ meetingDate: 1, meetingTime: 1 }),
     ]);
@@ -307,6 +361,7 @@ router.get('/admin-summary', authMiddleware, requireAdmin, async (req, res) => {
     console.error('Error fetching admin task summary:', error);
     return res.status(500).json({ message: 'Server error' });
   }
-});
+  },
+);
 
 module.exports = router;

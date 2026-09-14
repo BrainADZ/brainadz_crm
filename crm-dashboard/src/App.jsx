@@ -143,7 +143,7 @@ const AppRoutes = () => {
         <Route
           path="website-enquiries/marketing"
           element={
-            <AccessRoute moduleKey="communication">
+            <AccessRoute moduleKey="website_enquiries">
               <MarketingEnquiries />
             </AccessRoute>
           }
