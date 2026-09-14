@@ -387,20 +387,23 @@ const ensureDefaults = async (createdBy) => {
     ),
   );
 
-  if ((await BusinessCampaign.countDocuments()) === 0) {
-    await BusinessCampaign.insertMany(defaultCampaigns.map((item) => ({ ...item, createdBy })));
-  }
+  // Demo business records must never be recreated during normal API requests.
+  // Enable this explicitly only for a disposable demo environment.
+  if (process.env.SEED_DEMO_DATA === 'true') {
+    if ((await BusinessCampaign.countDocuments()) === 0) {
+      await BusinessCampaign.insertMany(defaultCampaigns.map((item) => ({ ...item, createdBy })));
+    }
 
-  if ((await FinanceRecord.countDocuments()) === 0) {
-    await FinanceRecord.insertMany(defaultFinance.map((item) => ({ ...item, createdBy })));
-  }
+    if ((await FinanceRecord.countDocuments()) === 0) {
+      await FinanceRecord.insertMany(defaultFinance.map((item) => ({ ...item, createdBy })));
+    }
 
-  if ((await BusinessProject.countDocuments()) === 0) {
-    const projects = await BusinessProject.insertMany(
-      defaultProjects.map((item) => ({ ...item, createdBy })),
-    );
-    const [fortis, hyatt] = projects;
-    await BusinessProjectTask.insertMany([
+    if ((await BusinessProject.countDocuments()) === 0) {
+      const projects = await BusinessProject.insertMany(
+        defaultProjects.map((item) => ({ ...item, createdBy })),
+      );
+      const [fortis, hyatt] = projects;
+      await BusinessProjectTask.insertMany([
       {
         project: fortis._id,
         projectName: fortis.name,
@@ -455,17 +458,18 @@ const ensureDefaults = async (createdBy) => {
         milestone: true,
         createdBy,
       },
-    ]);
-  }
+      ]);
+    }
 
-  if ((await DocumentRecord.countDocuments()) === 0) {
-    await DocumentRecord.insertMany(defaultDocuments.map((item) => ({ ...item, createdBy })));
-  }
+    if ((await DocumentRecord.countDocuments()) === 0) {
+      await DocumentRecord.insertMany(defaultDocuments.map((item) => ({ ...item, createdBy })));
+    }
 
-  if ((await CommunicationLog.countDocuments()) === 0) {
-    await CommunicationLog.insertMany(
-      defaultCommunications.map((item) => ({ ...item, createdBy })),
-    );
+    if ((await CommunicationLog.countDocuments()) === 0) {
+      await CommunicationLog.insertMany(
+        defaultCommunications.map((item) => ({ ...item, createdBy })),
+      );
+    }
   }
 };
 
