@@ -14,6 +14,7 @@ import {
 import { API_BASE_URL } from '../config/api';
 import { getAdminHeaders } from '../services/businessApi';
 import { getAuthenticatedUser } from '../utils/auth';
+import { BarChart, ConversionGauge, DonutChart, Panel } from '../components/DashboardCharts';
 
 const formatRole = (value = '') =>
   value
@@ -38,6 +39,8 @@ const emptySummary = {
   followUpRows: 0,
   interestedRows: 0,
   convertedRows: 0,
+  contactedRows: 0,
+  lostRows: 0,
 };
 const summaryFor = (dataset) => {
   if (dataset.summary) return { ...emptySummary, ...dataset.summary };
@@ -60,6 +63,10 @@ const summaryFor = (dataset) => {
     followUpRows: statuses.filter((status) => status === 'follow up').length,
     interestedRows: statuses.filter((status) => status === 'interested').length,
     convertedRows: statuses.filter((status) => status === 'converted').length,
+    contactedRows: statuses.filter((status) => status === 'contacted').length,
+    lostRows: statuses.filter((status) =>
+      ['lost', 'not interested', 'not reachable'].includes(status),
+    ).length,
   };
 };
 
@@ -155,17 +162,35 @@ const SalesDashboard = () => {
     },
   ];
 
+  const conversionRate = totals.totalRows
+    ? Math.round((totals.convertedRows / totals.totalRows) * 100)
+    : 0;
+  const pipelineItems = [
+    { label: 'New / pending', value: Math.max(0, totals.totalRows - totals.contactedRows - totals.followUpRows - totals.interestedRows - totals.convertedRows - totals.lostRows), color: '#94A3B8' },
+    { label: 'Contacted', value: totals.contactedRows, color: '#165DFF' },
+    { label: 'Follow-up', value: totals.followUpRows, color: '#F59E0B' },
+    { label: 'Interested', value: totals.interestedRows, color: '#7C3AED' },
+    { label: 'Converted', value: totals.convertedRows, color: '#14B8A6' },
+    { label: 'Lost', value: totals.lostRows, color: '#EF4444' },
+  ];
+  const listPerformance = datasets.slice(0, 6).map((dataset) => ({
+    label: dataset.name,
+    value: summaryFor(dataset).convertedRows,
+  }));
+
   return (
-    <div className="mx-auto max-w-[96rem] space-y-5">
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 p-6 text-white shadow-lg">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+    <div className="mx-auto max-w-[100rem] space-y-4">
+      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+        <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-blue-600 to-red-500" />
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100/70 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
               {formatRole(user?.roleKey || user?.crmRole || 'sales')}
             </p>
-            <h1 className="mt-2 text-2xl font-semibold">Welcome, {user?.name || 'Sales Team'}</h1>
-            <p className="mt-2 max-w-2xl text-sm text-blue-100">
+            <h1 className="mt-2 text-2xl font-bold text-slate-950">Sales performance</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Welcome, {user?.name || 'Sales Team'}. Track your live pipeline and next actions.
               Your leads, follow-ups, interested clients and upcoming meetings in one view.
             </p>
           </div>
@@ -174,14 +199,14 @@ const SalesDashboard = () => {
               type="button"
               disabled={refreshing}
               onClick={() => load({ silent: true })}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/15 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
               Refresh
             </button>
             <Link
               to="/dashboard/clients"
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
             >
               Open Sales Data <ArrowRight size={16} />
             </Link>
@@ -199,7 +224,7 @@ const SalesDashboard = () => {
         {cards.map(({ label, value, note, icon: Icon, tone }) => (
           <article
             key={label}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
           >
             <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
               <Icon size={18} />
@@ -213,6 +238,22 @@ const SalesDashboard = () => {
             <p className="mt-1 text-xs text-slate-500">{note}</p>
           </article>
         ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr_0.72fr]">
+        <Panel title="Sales pipeline" subtitle="Current status of all visible leads">
+          <DonutChart items={pipelineItems} centerValue={totals.totalRows} centerLabel="Leads" />
+        </Panel>
+        <Panel title="Wins by account list" subtitle="Converted leads across recent lists">
+          <BarChart items={listPerformance.length ? listPerformance : [{ label: 'No conversions yet', value: 0 }]} />
+        </Panel>
+        <Panel title="Conversion health" subtitle="Overall sales efficiency">
+          <ConversionGauge value={conversionRate} />
+          <div className="grid grid-cols-2 border-t border-slate-100 text-center">
+            <div className="p-3"><p className="text-lg font-bold text-blue-700">{totals.interestedRows}</p><p className="text-[10px] uppercase text-slate-400">Interested</p></div>
+            <div className="border-l border-slate-100 p-3"><p className="text-lg font-bold text-red-500">{totals.lostRows}</p><p className="text-[10px] uppercase text-slate-400">Lost</p></div>
+          </div>
+        </Panel>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">

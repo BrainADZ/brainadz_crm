@@ -5,6 +5,7 @@ import { CalendarDays, Database, UsersRound } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { getValidToken } from '../utils/auth';
 import BusinessOverview from './BusinessOverview';
+import { BarChart, ConversionGauge, DonutChart, Panel } from '../components/DashboardCharts';
 
 const getAuthHeaders = () => {
   const token = getValidToken('admin') || getValidToken('employee') || '';
@@ -221,20 +222,47 @@ const AdminDashboardHome = () => {
     },
   ];
 
+  const salesTotals = datasets.reduce(
+    (totals, dataset) => {
+      const summary = dataset.summary || {};
+      totals.total += Number(summary.totalRows || dataset.rowCount || 0);
+      totals.contacted += Number(summary.contactedRows || 0);
+      totals.followUp += Number(summary.followUpRows || 0);
+      totals.interested += Number(summary.interestedRows || 0);
+      totals.converted += Number(summary.convertedRows || 0);
+      totals.lost += Number(summary.lostRows || 0);
+      return totals;
+    },
+    { total: 0, contacted: 0, followUp: 0, interested: 0, converted: 0, lost: 0 },
+  );
+  const pipelineItems = [
+    { label: 'Open', value: Math.max(0, salesTotals.total - salesTotals.contacted - salesTotals.followUp - salesTotals.interested - salesTotals.converted - salesTotals.lost), color: '#94A3B8' },
+    { label: 'Contacted', value: salesTotals.contacted, color: '#165DFF' },
+    { label: 'Follow-up', value: salesTotals.followUp, color: '#F59E0B' },
+    { label: 'Interested', value: salesTotals.interested, color: '#7C3AED' },
+    { label: 'Converted', value: salesTotals.converted, color: '#14B8A6' },
+    { label: 'Lost', value: salesTotals.lost, color: '#EF4444' },
+  ];
+  const workloadChart = busiestEmployees.map((employee) => ({
+    label: employee.name || employee.email || 'Employee',
+    value: employee.assignedCount || 0,
+  }));
+  const conversionRate = salesTotals.total
+    ? Math.round((salesTotals.converted / salesTotals.total) * 100)
+    : 0;
+
   return (
-    <div className="w-full space-y-4">
-      <section className="ui-hero relative overflow-hidden rounded-2xl border ui-border p-5 shadow-sm">
-        <span className="dashboard-hero-glow absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" />
+    <div className="mx-auto w-full max-w-[100rem] space-y-4">
+      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+        <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-blue-600 to-red-500" />
+        <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-100/70 blur-3xl" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center">
             <div>
-              <p className="text-xs font-semibold text-blue-600">{todayLabel}</p>
-              <h1 className="mt-1 text-2xl font-semibold text-slate-950">
-                Welcome back, {profile?.name || 'Admin'}
-              </h1>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">{todayLabel}</p>
+              <h1 className="mt-2 text-2xl font-bold text-slate-950">Company performance</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Live company overview across sales, finance, projects, uploaded data, tasks, and
-                meetings.
+                Welcome, {profile?.name || 'Admin'}. A live view of sales, people and operations.
               </p>
             </div>
           </div>
@@ -279,6 +307,22 @@ const AdminDashboardHome = () => {
         {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} loading={isLoading} />
         ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr_0.72fr]">
+        <Panel title="Company sales pipeline" subtitle="Live lead distribution across all visible data">
+          <DonutChart items={pipelineItems} centerValue={salesTotals.total} centerLabel="Records" />
+        </Panel>
+        <Panel title="Team workload" subtitle="Assigned records by top team members">
+          <BarChart items={workloadChart.length ? workloadChart : [{ label: 'No assignments yet', value: 0 }]} />
+        </Panel>
+        <Panel title="Conversion performance" subtitle="Company-wide lead efficiency">
+          <ConversionGauge value={conversionRate} />
+          <div className="grid grid-cols-2 border-t border-slate-100 text-center">
+            <div className="p-3"><p className="text-lg font-bold text-blue-700">{salesTotals.interested}</p><p className="text-[10px] uppercase text-slate-400">Interested</p></div>
+            <div className="border-l border-slate-100 p-3"><p className="text-lg font-bold text-red-500">{salesTotals.lost}</p><p className="text-[10px] uppercase text-slate-400">Lost</p></div>
+          </div>
+        </Panel>
       </section>
 
       <BusinessOverview embedded refreshToken={businessRefreshToken} />
