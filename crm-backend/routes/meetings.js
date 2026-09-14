@@ -217,7 +217,8 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   );
   if (
     req.user.roleKey !== 'super_admin' &&
-    (!actorBusinessUnitIds.has(String(businessUnit._id)) || (!actorIsAssigned && !actorOwnsDataset))
+    !actorOwnsDataset &&
+    (!actorBusinessUnitIds.has(String(businessUnit._id)) || !actorIsAssigned)
   ) {
     const error = new Error('You cannot schedule a meeting for this client row');
     error.status = 403;
@@ -285,10 +286,17 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     if (employeeUnitDepartmentIds.length) {
       employeesWithActiveUnitDepartment.add(String(employee._id));
     }
-    const schedulableDepartmentIds = employeeUnitDepartmentIds.filter(
-      (departmentId) =>
-        req.user.roleKey === 'super_admin' || actorUnitDepartmentIds.has(String(departmentId)),
-    );
+    const employeeIsDatasetOwner =
+      actorOwnsDataset && String(employee._id) === String(req.user._id);
+    if (employeeIsDatasetOwner) {
+      employeesWithActiveUnitDepartment.add(String(employee._id));
+    }
+    const schedulableDepartmentIds = employeeIsDatasetOwner
+      ? unitDepartments.map((department) => String(department._id))
+      : employeeUnitDepartmentIds.filter(
+          (departmentId) =>
+            req.user.roleKey === 'super_admin' || actorUnitDepartmentIds.has(String(departmentId)),
+        );
     return {
       ...employee,
       ...organization,
@@ -321,6 +329,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
   const assignedEmployees = enrichedAssignedEmployees.filter((employee) => {
     if (!employee.canSchedule) return false;
     if (req.user.roleKey === 'super_admin') return true;
+    if (actorOwnsDataset && String(employee._id) === String(req.user._id)) return true;
     if (ASSIGNED_SCOPES.has(scope)) {
       return String(employee._id) === String(req.user._id);
     }
@@ -380,6 +389,7 @@ const loadLinkedMeetingContext = async (req, datasetId, rowIndex) => {
     businessUnit,
     rowContext,
     assignmentUserIds: schedulableUserIds,
+    actorOwnsDataset,
     assignedEmployees,
     suggestedEmployee,
     suggestedDepartment,
@@ -641,7 +651,10 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
         .status(400)
         .json({ message: 'Department is not available in the selected Business Unit' });
     let meetingTeamIds = [];
-    if (req.user.roleKey !== 'super_admin') {
+    const ownerSchedulingOwnData =
+      Boolean(linkedContext?.actorOwnsDataset) &&
+      String(linkedContext?.suggestedEmployee?._id || '') === String(req.user._id);
+    if (req.user.roleKey !== 'super_admin' && !ownerSchedulingOwnData) {
       const actorMeetingAccess = await UserAccessAssignment.find({
         ...activeAccessQuery(req.user._id),
         departmentId: department._id,
@@ -685,20 +698,24 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
           message: 'You can schedule linked meetings only for your own assigned client data',
         });
 
-      const employeeMeetingAccess = await UserAccessAssignment.find({
-        ...activeAccessQuery(meetingEmployeeId),
-        departmentId: department._id,
-        businessUnitIds: businessUnit._id,
-      })
-        .select('teamIds')
-        .lean();
-      if (!employeeMeetingAccess.length)
-        return res.status(400).json({
-          message: 'The selected employee does not belong to this Department and Business Unit',
-        });
-      meetingTeamIds = [
-        ...new Set(employeeMeetingAccess.flatMap((access) => access.teamIds || []).map(String)),
-      ];
+      const employeeIsOwner =
+        linkedContext.actorOwnsDataset && meetingEmployeeId === String(req.user._id);
+      if (!employeeIsOwner) {
+        const employeeMeetingAccess = await UserAccessAssignment.find({
+          ...activeAccessQuery(meetingEmployeeId),
+          departmentId: department._id,
+          businessUnitIds: businessUnit._id,
+        })
+          .select('teamIds')
+          .lean();
+        if (!employeeMeetingAccess.length)
+          return res.status(400).json({
+            message: 'The selected employee does not belong to this Department and Business Unit',
+          });
+        meetingTeamIds = [
+          ...new Set(employeeMeetingAccess.flatMap((access) => access.teamIds || []).map(String)),
+        ];
+      }
     }
 
     const participantIds = [
