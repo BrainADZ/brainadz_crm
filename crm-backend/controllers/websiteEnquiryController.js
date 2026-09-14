@@ -3,6 +3,10 @@ const Counter = require('../models/Counter');
 const User = require('../models/User');
 const WebsiteEnquiry = require('../models/WebsiteEnquiry');
 const {
+  isEmailDeliveryConfigured,
+  sendWebsiteEnquiryNotification,
+} = require('../services/emailService');
+const {
   COMMUNITIES,
   NUMBER_PREFIXES,
   PRIORITIES,
@@ -151,6 +155,21 @@ const createPublicEnquiry = async (req, res, next) => {
         },
       ],
     });
+
+    if (isEmailDeliveryConfigured()) {
+      try {
+        await sendWebsiteEnquiryNotification({ enquiry });
+      } catch (emailError) {
+        console.error('Website enquiry notification email failed', {
+          enquiryNumber: enquiry.enquiryNumber,
+          message: emailError.message,
+        });
+      }
+    } else {
+      console.warn('Website enquiry email skipped because SMTP is not configured', {
+        enquiryNumber: enquiry.enquiryNumber,
+      });
+    }
 
     return res.status(201).json({
       message: 'Enquiry submitted successfully',
