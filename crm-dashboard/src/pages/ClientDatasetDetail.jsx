@@ -2220,58 +2220,57 @@ const ClientDatasetDetail = () => {
                       </span>
                     </div>
 
-                    <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
+                    <div className="relative mt-4 max-h-80 overflow-y-auto pr-1">
+                      {currentActionEntries.length > 0 && (
+                        <span className="absolute bottom-5 left-4 top-4 w-px bg-slate-200" />
+                      )}
+
                       {currentActionEntries.map((entry, index) => (
                         <div
                           key={`${entry.changedAt}-${index}`}
-                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                          className="relative pb-6 pl-12 last:pb-1"
                         >
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-950">
-                                {entry.changedByName ||
-                                  entry.changedBy?.name ||
-                                  entry.changedBy?.email ||
-                                  'Unknown user'}
-                              </p>
+                          <span className="absolute left-0 top-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700 ring-4 ring-white">
+                            {String(
+                              entry.changedByName ||
+                                entry.changedBy?.name ||
+                                entry.changedBy?.email ||
+                                'User',
+                            )
+                              .split(/\s+/)
+                              .map((part) => part[0])
+                              .join('')
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </span>
 
-                              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                                {entry.statusChanged && entry.remarkChanged
-                                  ? 'Status and comment updated'
-                                  : entry.statusChanged
-                                    ? 'Status updated'
-                                    : 'Comment updated'}
-                              </p>
-                            </div>
-
-                            <p className="text-xs font-medium text-slate-500">
+                          <div>
+                            <p className="text-sm font-bold text-slate-950">
+                              {entry.changedByName ||
+                                entry.changedBy?.name ||
+                                entry.changedBy?.email ||
+                                'Unknown user'}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
                               {formatDate(entry.changedAt)}
                             </p>
                           </div>
 
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="mt-3 space-y-2">
                             {entry.statusChanged && (
-                              <div className="rounded-lg bg-slate-50 p-3">
-                                <p className="text-xs font-semibold text-slate-500">Status</p>
-
-                                <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
+                              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
                                   <span>Status set to</span>
                                   <span
                                     className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATUS_SELECT_STYLES[entry.currentStatus] || STATUS_SELECT_STYLES['']}`}
                                   >
                                     {entry.currentStatus || 'Not set'}
                                   </span>
-                                </div>
                               </div>
                             )}
 
-                            {entry.remarkChanged && (
-                              <div className="rounded-lg bg-slate-50 p-3">
-                                <p className="text-xs font-semibold text-slate-500">Remark</p>
-
-                                <p className="mt-1 break-words text-sm text-slate-700">
-                                  {entry.currentRemark || 'Comment removed'}
-                                </p>
+                            {entry.remarkChanged && entry.currentRemark && (
+                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                                <p className="break-words text-sm text-slate-700">{entry.currentRemark}</p>
                               </div>
                             )}
                           </div>
