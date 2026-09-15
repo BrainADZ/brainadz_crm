@@ -327,6 +327,19 @@ const ClientDatasetDetail = () => {
 
   const sourceIndex = getColumnIndex(tableData.columns, 'Source');
 
+  const addressIndex = getColumnIndex(tableData.columns, 'Address');
+
+  const cityIndex = getColumnIndex(tableData.columns, 'City');
+
+  const stateIndex = getColumnIndex(tableData.columns, 'State');
+
+  const pinIndex = getColumnIndex(tableData.columns, 'PIN');
+
+  const servicesDescriptionIndex = getColumnIndex(
+    tableData.columns,
+    'Services / Description on Card',
+  );
+
   const phoneColumnIndexes = useMemo(
     () =>
       tableData.columns
@@ -350,6 +363,9 @@ const ClientDatasetDetail = () => {
   const displayColumnIndexes = useMemo(() => {
     const hiddenIndexes = new Set([
       remarkIndex,
+      servicesDescriptionIndex,
+
+      ...(addressIndex !== -1 ? [cityIndex, stateIndex, pinIndex] : []),
 
       ...phoneColumnIndexes.slice(1),
       ...emailColumnIndexes.slice(1),
@@ -360,7 +376,17 @@ const ClientDatasetDetail = () => {
     ]);
 
     return tableData.columns.map((_, index) => index).filter((index) => !hiddenIndexes.has(index));
-  }, [tableData.columns, remarkIndex, phoneColumnIndexes, emailColumnIndexes]);
+  }, [
+    tableData.columns,
+    remarkIndex,
+    servicesDescriptionIndex,
+    addressIndex,
+    cityIndex,
+    stateIndex,
+    pinIndex,
+    phoneColumnIndexes,
+    emailColumnIndexes,
+  ]);
 
   if (isLoading) {
     return <div className="h-32 animate-pulse rounded-xl border border-slate-200 bg-white" />;
@@ -1503,6 +1529,28 @@ const ClientDatasetDetail = () => {
                               values={getGroupedContactValues(row, emailColumnIndexes)}
                               type="Email"
                             />
+                          </td>
+                        );
+                      }
+
+                      if (columnIndex === addressIndex) {
+                        const addressParts = [
+                          row[addressIndex],
+                          row[cityIndex],
+                          row[stateIndex],
+                          row[pinIndex],
+                        ].filter((value) => String(value || '').trim());
+
+                        const fullAddress = addressParts.join(', ');
+
+                        return (
+                          <td
+                            key={`${rowIndex}-address`}
+                            className="w-36 min-w-36 max-w-36 border border-slate-300 px-2 py-2 text-[10px] leading-4 text-slate-700"
+                          >
+                            <span className="block whitespace-normal break-words" title={fullAddress}>
+                              {fullAddress || '—'}
+                            </span>
                           </td>
                         );
                       }
