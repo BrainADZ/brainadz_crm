@@ -42,16 +42,25 @@ const SALES_TABLE_FORMATS = {
   ],
 
   live: [
-    'Date',
-    'MR Name',
-    'Full Name',
-    'Email',
-    'Phone Number',
+    'Company / Organisation',
+    'Contact Person',
+    'Designation',
+    'Secondary Contact',
+    'Secondary Designation',
+    'Mobile 1',
+    'Mobile 2',
+    'Telephone / Office',
+    'Email 1',
+    'Email 2',
+    'Website',
+    'Social / Instagram',
+    'Address',
     'City',
-    'Targeted State',
-    'Your Requirement',
-    'Source',
-    'Product',
+    'State',
+    'PIN',
+    'Industry / Business Type',
+    'Services / Description on Card',
+    'Product / Service Interest',
   ],
 };
 
@@ -2252,31 +2261,28 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
         ownerAlias,
       ];
     } else if (communityKey === 'live') {
-      accountColumns = [
-        ...SALES_TABLE_FORMATS.live,
-        'Company Name',
-        'Website',
-        'Alternate Phone',
-        'Alternate Email',
-        'Designation / Department',
-      ];
+      accountColumns = SALES_TABLE_FORMATS.live;
 
       accountRow = [
-        new Date().toISOString().slice(0, 10),
-        ownerAlias,
-        contactName || accountName,
-        email,
+        accountName,
+        contactName,
+        designation,
+        '',
+        '',
         phone,
+        alternatePhone,
+        '',
+        email,
+        alternateEmail,
+        website,
+        '',
+        '',
         billingCity,
         billingState,
+        '',
+        '',
         requirement,
-        source,
         product,
-        accountName,
-        website,
-        alternatePhone,
-        alternateEmail,
-        designation,
       ];
     } else {
       accountColumns = [

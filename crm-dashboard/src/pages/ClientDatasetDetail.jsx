@@ -78,7 +78,8 @@ const isPhoneColumn = (column) => {
   return (
     /^(mobile|mobile no|mobile number)(\s*\d+)?$/.test(header) ||
     /^(phone|phone no|phone number)(\s*\d+)?$/.test(header) ||
-    /^(contact no|contact number)(\s*\d+)?$/.test(header)
+    /^(contact no|contact number)(\s*\d+)?$/.test(header) ||
+    /^(telephone|telephone no|telephone number)(\s*\/\s*office)?$/.test(header)
   );
 };
 
@@ -348,7 +349,6 @@ const ClientDatasetDetail = () => {
 
   const displayColumnIndexes = useMemo(() => {
     const hiddenIndexes = new Set([
-      statusIndex,
       remarkIndex,
 
       ...phoneColumnIndexes.slice(1),
@@ -360,7 +360,7 @@ const ClientDatasetDetail = () => {
     ]);
 
     return tableData.columns.map((_, index) => index).filter((index) => !hiddenIndexes.has(index));
-  }, [tableData.columns, statusIndex, remarkIndex, phoneColumnIndexes, emailColumnIndexes]);
+  }, [tableData.columns, remarkIndex, phoneColumnIndexes, emailColumnIndexes]);
 
   if (isLoading) {
     return <div className="h-32 animate-pulse rounded-xl border border-slate-200 bg-white" />;
@@ -1480,6 +1480,25 @@ const ClientDatasetDetail = () => {
                               values={getGroupedContactValues(row, emailColumnIndexes)}
                               type="Email"
                             />
+                          </td>
+                        );
+                      }
+
+                      if (columnIndex === statusIndex) {
+                        const status = row[columnIndex] || '';
+
+                        return (
+                          <td
+                            key={`${rowIndex}-status`}
+                            className="whitespace-nowrap border border-slate-300 px-3 py-2"
+                          >
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${
+                                STATUS_SELECT_STYLES[status] || STATUS_SELECT_STYLES['']
+                              }`}
+                            >
+                              {status || 'Not set'}
+                            </span>
                           </td>
                         );
                       }
