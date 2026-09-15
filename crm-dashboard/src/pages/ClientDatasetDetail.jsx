@@ -1032,7 +1032,30 @@ const ClientDatasetDetail = () => {
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-300 bg-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">Client data table</h2>
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+            <h2 className="shrink-0 text-sm font-semibold text-slate-800">Client data table</h2>
+
+            <div className="flex flex-wrap items-center gap-1.5 xl:justify-end" aria-label="Row color guide">
+              <span className="mr-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                Row color guide
+              </span>
+
+              {CLIENT_STATUS_OPTIONS.map((status) => (
+                <span
+                  key={status}
+                  className={`inline-flex items-center gap-1.5 rounded-full border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-700 ${STATUS_ROW_STYLES[status]}`}
+                >
+                  <span className={`h-2 w-2 rounded-full border ${STATUS_SELECT_STYLES[status]}`} />
+                  {status}
+                </span>
+              ))}
+
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600">
+                <span className="h-2 w-2 rounded-full border border-slate-300 bg-slate-100" />
+                Not set
+              </span>
+            </div>
+          </div>
 
           <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">

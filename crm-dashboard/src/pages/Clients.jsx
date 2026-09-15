@@ -35,8 +35,6 @@ const salesTableFormats = {
     'Company / Organisation',
     'Contact Person',
     'Designation',
-    'Secondary Contact',
-    'Secondary Designation',
     'Mobile 1',
     'Mobile 2',
     'Telephone / Office',
