@@ -2430,8 +2430,6 @@ router.patch('/labels/bulk', authMiddleware, requireAdmin, async (req, res) => {
 
 router.post('/', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    const name = normalizeCell(req.body.name);
-
     const year = normalizeCell(req.body.year);
 
     const accountName = normalizeCell(req.body.accountName);
@@ -2486,12 +2484,6 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
     }
 
     const communityKey = businessUnit.legacyCommunityKey;
-
-    if (!name) {
-      return res.status(400).json({
-        message: 'Account list name is required',
-      });
-    }
 
     if (!accountName && !contactName) {
       return res.status(400).json({
@@ -2590,6 +2582,61 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
 
     const normalizedAccountData = addWorkColumnsAfterWebsite(accountColumns, [accountRow]);
 
+    const manualList = await ClientDataset.findOne({
+      businessUnitId: businessUnit._id,
+      communityKey,
+      isManualEntryList: true,
+    });
+
+    if (manualList) {
+      const existingData = addWorkColumnsAfterWebsite(manualList.columns || [], manualList.rows || []);
+      const nextRowIndex = existingData.rows.length;
+      const nextRow = [...normalizedAccountData.rows[0]];
+
+      if (communityKey === 'marketing') {
+        const serialIndex = getColumnIndex(existingData.columns, 'Sr. No.');
+        if (serialIndex !== -1) nextRow[serialIndex] = String(nextRowIndex + 1);
+      }
+
+      if (JSON.stringify(existingData.columns) !== JSON.stringify(normalizedAccountData.columns)) {
+        return res.status(409).json({
+          message: 'Manual lead list format changed. Please contact an administrator.',
+        });
+      }
+
+      manualList.columns = existingData.columns;
+      manualList.rows = [...existingData.rows, nextRow];
+      manualList.rowCount = manualList.rows.length;
+
+      if (req.user.role === 'employee') {
+        manualList.rowAssignments = [
+          ...normalizeAssignments(manualList.rowAssignments || []),
+          {
+            rowIndex: nextRowIndex,
+            employee: req.user.id,
+            employeeName: req.user.name || req.user.email || 'Uploader',
+            assignedBy: req.user.id,
+            assignedAt: new Date(),
+          },
+        ];
+        manualList.uploaderAssignmentResolved = true;
+      }
+
+      manualList.markModified('columns');
+      manualList.markModified('rows');
+      manualList.markModified('rowAssignments');
+      await manualList.save();
+      await manualList.populate('businessUnitId', 'name slug legacyCommunityKey');
+
+      return res.json({
+        message: `Lead added to ${manualList.name}`,
+        appended: true,
+        dataset: getDatasetListItem(manualList),
+      });
+    }
+
+    const name = `${businessUnit.name} Manual Leads`;
+
     const dataset = new ClientDataset({
       businessUnitId: businessUnit._id,
 
@@ -2612,6 +2659,8 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
       salesStage,
 
       originalFileName: 'Manual entry',
+
+      isManualEntryList: true,
 
       columns: normalizedAccountData.columns,
 

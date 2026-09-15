@@ -2015,14 +2015,13 @@ const ClientDatasetDetail = () => {
 
       {actionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
-                  Client actions
+                <h3 className="text-2xl font-bold tracking-tight text-slate-950">Client activity</h3>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Manage status, notes and next steps.
                 </p>
-
-                <h3 className="text-lg font-semibold text-slate-950">Status, remark & log</h3>
               </div>
 
               <button
@@ -2057,10 +2056,10 @@ const ClientDatasetDetail = () => {
             ) : (
               <div className="max-h-[calc(90vh-74px)] overflow-y-auto p-5">
                 <div className="space-y-5">
-                  <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <section>
                     <label className="block">
                       <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-600">
-                        Status
+                        Current status
                       </span>
 
                       <select
@@ -2123,7 +2122,7 @@ const ClientDatasetDetail = () => {
 
                     <label className="mt-4 block">
                       <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-600">
-                        Remark
+                        Add a comment
                       </span>
 
                       <textarea
@@ -2140,9 +2139,12 @@ const ClientDatasetDetail = () => {
                             remark: event.target.value,
                           }));
                         }}
-                        placeholder="Write remark here..."
-                        className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                        placeholder="What happened? Add key details and the next step..."
+                        className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                       />
+                      <span className="mt-1.5 block text-[11px] text-slate-500">
+                        Internal note · Visible to your team
+                      </span>
                     </label>
 
                     {actionModal.status === 'Interested' &&
@@ -2162,7 +2164,15 @@ const ClientDatasetDetail = () => {
                     )}
 
                     {canUpdate && (
-                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+                        <button
+                          type="button"
+                          onClick={closeActionModal}
+                          className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                        >
+                          Cancel
+                        </button>
+
                         {actionModal.status === 'Interested' &&
                           canScheduleMeeting &&
                           !scheduleRowErrors[actionModal.rowIndex]?.blocking && (
@@ -2192,7 +2202,7 @@ const ClientDatasetDetail = () => {
                         >
                           <CheckIcon />
 
-                          {savingRows[actionModal.rowIndex] ? 'Saving...' : 'Save changes'}
+                          {savingRows[actionModal.rowIndex] ? 'Saving...' : 'Save update'}
                         </button>
                       </div>
                     )}
@@ -2201,17 +2211,12 @@ const ClientDatasetDetail = () => {
                   <section>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">
-                          Activity log
-                        </p>
-
-                        <h4 className="mt-0.5 text-base font-semibold text-slate-950">
-                          Client history
-                        </h4>
+                        <h4 className="text-lg font-bold text-slate-950">Activity</h4>
                       </div>
 
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                        {currentActionEntries.length} entries
+                        {currentActionEntries.length}{' '}
+                        {currentActionEntries.length === 1 ? 'update' : 'updates'}
                       </span>
                     </div>
 
@@ -2224,19 +2229,18 @@ const ClientDatasetDetail = () => {
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="text-sm font-semibold text-slate-950">
-                                {entry.statusChanged && entry.remarkChanged
-                                  ? 'Status and remark updated'
-                                  : entry.statusChanged
-                                    ? 'Status updated'
-                                    : 'Remark updated'}
-                              </p>
-
-                              <p className="mt-0.5 text-xs font-medium text-blue-700">
-                                Updated by{' '}
                                 {entry.changedByName ||
                                   entry.changedBy?.name ||
                                   entry.changedBy?.email ||
                                   'Unknown user'}
+                              </p>
+
+                              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                                {entry.statusChanged && entry.remarkChanged
+                                  ? 'Status and comment updated'
+                                  : entry.statusChanged
+                                    ? 'Status updated'
+                                    : 'Comment updated'}
                               </p>
                             </div>
 
@@ -2250,10 +2254,14 @@ const ClientDatasetDetail = () => {
                               <div className="rounded-lg bg-slate-50 p-3">
                                 <p className="text-xs font-semibold text-slate-500">Status</p>
 
-                                <p className="mt-1 text-sm text-slate-700">
-                                  {entry.previousStatus || 'Empty'} →{' '}
-                                  <strong>{entry.currentStatus || 'Empty'}</strong>
-                                </p>
+                                <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
+                                  <span>Status set to</span>
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATUS_SELECT_STYLES[entry.currentStatus] || STATUS_SELECT_STYLES['']}`}
+                                  >
+                                    {entry.currentStatus || 'Not set'}
+                                  </span>
+                                </div>
                               </div>
                             )}
 
@@ -2262,8 +2270,7 @@ const ClientDatasetDetail = () => {
                                 <p className="text-xs font-semibold text-slate-500">Remark</p>
 
                                 <p className="mt-1 break-words text-sm text-slate-700">
-                                  {entry.previousRemark || 'Empty'} →{' '}
-                                  <strong>{entry.currentRemark || 'Empty'}</strong>
+                                  {entry.currentRemark || 'Comment removed'}
                                 </p>
                               </div>
                             )}

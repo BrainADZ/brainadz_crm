@@ -571,7 +571,15 @@ const Clients = () => {
         manualFormData,
         { headers: getAuthHeaders() },
       );
-      setDatasets((previous) => [response.data.dataset, ...previous]);
+      setDatasets((previous) =>
+        response.data.appended
+          ? previous.some((dataset) => dataset._id === response.data.dataset._id)
+            ? previous.map((dataset) =>
+                dataset._id === response.data.dataset._id ? response.data.dataset : dataset,
+              )
+            : [response.data.dataset, ...previous]
+          : [response.data.dataset, ...previous],
+      );
       setManualFormData(emptyManualForm);
       setIsManualModalOpen(false);
       setMessage(response.data.message);
@@ -1377,10 +1385,9 @@ const Clients = () => {
                   ))}
                 </select>
               </label>
-              <label className="block sm:col-span-2">
-                <span className={labelClass}>Lead list name *</span>
-                <input className={fieldClass} value={manualFormData.name} onChange={(event) => setManualFormData((previous) => ({ ...previous, name: event.target.value }))} placeholder="e.g. Phone Enquiries - September" required />
-              </label>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 sm:col-span-2">
+                This lead will be added to the selected Business Unit&apos;s shared Manual Leads list.
+              </div>
               <label className="block">
                 <span className={labelClass}>Company name *</span>
                 <input className={fieldClass} value={manualFormData.accountName} onChange={(event) => setManualFormData((previous) => ({ ...previous, accountName: event.target.value }))} placeholder="Company / account name" required={!manualFormData.contactName.trim()} />

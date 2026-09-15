@@ -189,6 +189,12 @@ const clientDatasetSchema = new mongoose.Schema(
 
     originalFileName: String,
 
+    isManualEntryList: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
     columns: [
       {
         type: String,
@@ -230,6 +236,11 @@ clientDatasetSchema.index({
   communityKey: 1,
   createdAt: -1,
 });
+
+clientDatasetSchema.index(
+  { businessUnitId: 1, isManualEntryList: 1 },
+  { unique: true, partialFilterExpression: { isManualEntryList: true } },
+);
 
 clientDatasetSchema.index({
   businessUnitId: 1,
