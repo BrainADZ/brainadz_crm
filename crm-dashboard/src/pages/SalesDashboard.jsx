@@ -7,20 +7,12 @@ import {
   CheckCircle2,
   Clock3,
   Flame,
-  RefreshCw,
   Target,
   UsersRound,
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { getAdminHeaders } from '../services/businessApi';
-import { getAuthenticatedUser } from '../utils/auth';
 import { BarChart, ConversionGauge, DonutChart, Panel } from '../components/DashboardCharts';
-
-const formatRole = (value = '') =>
-  value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 
 const formatMeeting = (meeting) => {
   const value = new Date(`${meeting.meetingDate}T${meeting.meetingTime || '00:00'}`);
@@ -71,16 +63,13 @@ const summaryFor = (dataset) => {
 };
 
 const SalesDashboard = () => {
-  const user = getAuthenticatedUser();
   const [datasets, setDatasets] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async ({ silent = false } = {}) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     setError('');
     try {
       const headers = getAdminHeaders();
@@ -94,7 +83,6 @@ const SalesDashboard = () => {
       setError(requestError.response?.data?.message || 'Unable to load your sales dashboard');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -165,8 +153,17 @@ const SalesDashboard = () => {
   const conversionRate = totals.totalRows
     ? Math.round((totals.convertedRows / totals.totalRows) * 100)
     : 0;
+  const pendingRows = Math.max(
+    0,
+    totals.totalRows -
+      totals.contactedRows -
+      totals.followUpRows -
+      totals.interestedRows -
+      totals.convertedRows -
+      totals.lostRows,
+  );
   const pipelineItems = [
-    { label: 'New / pending', value: Math.max(0, totals.totalRows - totals.contactedRows - totals.followUpRows - totals.interestedRows - totals.convertedRows - totals.lostRows), color: '#94A3B8' },
+    { label: 'New / pending', value: pendingRows, color: '#94A3B8' },
     { label: 'Contacted', value: totals.contactedRows, color: '#165DFF' },
     { label: 'Follow-up', value: totals.followUpRows, color: '#F59E0B' },
     { label: 'Interested', value: totals.interestedRows, color: '#7C3AED' },
@@ -180,39 +177,25 @@ const SalesDashboard = () => {
 
   return (
     <div className="mx-auto max-w-[100rem] space-y-4">
-      <section className="relative overflow-hidden rounded-xl bg-[#0b1f4d] px-6 py-5 text-white shadow-lg shadow-blue-950/10">
-        <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-blue-600/40 to-transparent" />
-        <div className="absolute -right-8 -top-20 h-52 w-52 rounded-full border-[35px] border-white/5" />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <section className="border-b border-slate-200 px-1 py-4 sm:px-2 sm:py-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-200">
-              {formatRole(user?.roleKey || user?.crmRole || 'sales')}
-              </p>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight">Sales command center</h1>
-            <p className="mt-1.5 max-w-2xl text-sm text-blue-100/80">
-              Welcome, {user?.name || 'Sales Team'} — focus on pipeline movement and today&apos;s actions.
+            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+              Your sales overview
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {loading
+                ? 'Loading your latest sales opportunities...'
+                : `${pendingRows} ${pendingRows === 1 ? 'lead is' : 'leads are'} marked new or pending. Review your next opportunity.`}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={refreshing}
-              onClick={() => load({ silent: true })}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-            <Link
-              to="/dashboard/clients"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-            >
-              Open Sales Data <ArrowRight size={16} />
-            </Link>
-          </div>
+
+          <Link
+            to="/dashboard/clients"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            Review pending leads <ArrowRight size={16} />
+          </Link>
         </div>
       </section>
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getValidToken } from '../utils/auth';
+import { getAuthenticatedUser, getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '../config/api';
 
 const CLIENT_WORK_COLUMNS = ['Status', 'Remark', 'Employee'];
@@ -218,6 +218,7 @@ const formatMeetingDateTime = (meeting) => {
 const ClientDatasetDetail = () => {
   const { datasetId } = useParams();
   const navigate = useNavigate();
+  const currentUser = getAuthenticatedUser();
 
   const [dataset, setDataset] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -260,6 +261,13 @@ const ClientDatasetDetail = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [actionModal, setActionModal] = useState(null);
   const [actionSaved, setActionSaved] = useState(false);
+  const [assigneeModal, setAssigneeModal] = useState(null);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
+  const [managedEmployeeIds, setManagedEmployeeIds] = useState([]);
+  const [isSavingAssignees, setIsSavingAssignees] = useState(false);
+  const [assigneeError, setAssigneeError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
 
   useEffect(() => {
     const fetchDataset = async () => {
@@ -278,6 +286,15 @@ const ClientDatasetDetail = () => {
         const [datasetResponse, optionsResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/client-datasets/${datasetId}`, {
             headers,
+            params: {
+              serverPaging: '1',
+              page,
+              pageSize: 50,
+              search: searchTerm.trim(),
+              status: statusFilter,
+              employeeId: employeeFilter,
+              assignment: assignmentFilter,
+            },
           }),
 
           axios
@@ -290,6 +307,7 @@ const ClientDatasetDetail = () => {
         ]);
 
         setDataset(datasetResponse.data);
+        setPagination(datasetResponse.data.pagination || null);
 
         setFollowUpDates(datasetResponse.data.followUpDates || {});
 
@@ -305,8 +323,10 @@ const ClientDatasetDetail = () => {
       }
     };
 
-    fetchDataset();
-  }, [datasetId]);
+    const timer = window.setTimeout(fetchDataset, searchTerm ? 300 : 0);
+
+    return () => window.clearTimeout(timer);
+  }, [datasetId, page, searchTerm, statusFilter, employeeFilter, assignmentFilter]);
 
   const tableData = useMemo(() => {
     if (!dataset) {
@@ -406,6 +426,7 @@ const ClientDatasetDetail = () => {
 
   const isAdmin = salesActions.includes('assign');
   const canUpdate = salesActions.includes('update');
+  const isLive = dataset.communityKey === 'live';
   const canViewMeetings = meetingActions.includes('view');
   const canScheduleMeeting = meetingActions.includes('create');
 
@@ -465,6 +486,15 @@ const ClientDatasetDetail = () => {
 
     assignmentMap.set(originalIndex, [...(assignmentMap.get(originalIndex) || []), assignment]);
   });
+
+  const currentUserId = String(currentUser?._id || currentUser?.id || '');
+
+  const rowIsAssignedToCurrentUser = (rowIndex) =>
+    (assignmentMap.get(getOriginalRowIndex(rowIndex)) || []).some(
+      (assignment) =>
+        String(assignment.employee?._id || assignment.employee || assignment.employeeId || '') ===
+        currentUserId,
+    );
 
   const eligibleEmployees = employees.filter(
     (employee) =>
@@ -668,7 +698,8 @@ const ClientDatasetDetail = () => {
       const matchesAssignment =
         assignmentFilter === 'all' ||
         (assignmentFilter === 'assigned' && isAssigned) ||
-        (assignmentFilter === 'unassigned' && !isAssigned);
+        (assignmentFilter === 'unassigned' && !isAssigned) ||
+        (assignmentFilter === 'mine' && rowIsAssignedToCurrentUser(rowIndex));
 
       const matchesSource =
         sourceFilter === 'all' ||
@@ -762,14 +793,63 @@ const ClientDatasetDetail = () => {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      params: {
+        serverPaging: '1',
+        page,
+        pageSize: 50,
+        search: searchTerm.trim(),
+        status: statusFilter,
+        employeeId: employeeFilter,
+        assignment: assignmentFilter,
+      },
     });
 
     setDataset(response.data);
+    setPagination(response.data.pagination || null);
 
     setFollowUpDates(response.data.followUpDates || {});
     setScheduleRowErrors({});
 
     return response.data;
+  };
+
+  const openAssigneeManager = (rowIndex) => {
+    const assignments = assignmentMap.get(getOriginalRowIndex(rowIndex)) || [];
+
+    setManagedEmployeeIds(
+      assignments.map((assignment) =>
+        String(assignment.employee?._id || assignment.employee || assignment.employeeId || ''),
+      ),
+    );
+    setAssigneeSearch('');
+    setAssigneeError('');
+    setAssigneeModal({ rowIndex });
+  };
+
+  const saveManagedAssignees = async () => {
+    if (!assigneeModal) return;
+
+    const token = getAuthToken();
+    const originalRowIndex = getOriginalRowIndex(assigneeModal.rowIndex);
+
+    setIsSavingAssignees(true);
+    setAssigneeError('');
+
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/api/client-datasets/${datasetId}/rows/${originalRowIndex}/assignees`,
+        { employeeIds: managedEmployeeIds },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      await refreshDataset();
+      setAssigneeModal(null);
+      setAssignmentMessage('LIVE assignees updated successfully');
+    } catch (requestError) {
+      setAssigneeError(requestError.response?.data?.message || 'Unable to update assignees');
+    } finally {
+      setIsSavingAssignees(false);
+    }
   };
 
   const handleAssignRows = async () => {
@@ -815,6 +895,8 @@ const ClientDatasetDetail = () => {
       );
 
       updateAssignmentState(response.data);
+
+      if (isLive) await refreshDataset();
 
       setAssignmentMessage(response.data.message || 'Data assigned successfully');
     } catch (requestError) {
@@ -1088,7 +1170,10 @@ const ClientDatasetDetail = () => {
               <input
                 type="search"
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search client, phone, email, city, source..."
                 className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 xl:max-w-sm"
               />
@@ -1100,6 +1185,7 @@ const ClientDatasetDetail = () => {
                     const value = event.target.value;
 
                     setStatusFilter(value);
+                    setPage(1);
 
                     if (value !== 'Follow Up') {
                       setFollowUpDateFilter('');
@@ -1118,7 +1204,10 @@ const ClientDatasetDetail = () => {
 
                 <select
                   value={employeeFilter}
-                  onChange={(event) => setEmployeeFilter(event.target.value)}
+                  onChange={(event) => {
+                    setEmployeeFilter(event.target.value);
+                    setPage(1);
+                  }}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                 >
                   <option value="all">All employees</option>
@@ -1132,10 +1221,15 @@ const ClientDatasetDetail = () => {
 
                 <select
                   value={assignmentFilter}
-                  onChange={(event) => setAssignmentFilter(event.target.value)}
+                  onChange={(event) => {
+                    setAssignmentFilter(event.target.value);
+                    setPage(1);
+                  }}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                 >
-                  <option value="all">All assignments</option>
+                  <option value="all">{isLive ? 'All LIVE' : 'All assignments'}</option>
+
+                  {isLive && <option value="mine">My Assigned</option>}
 
                   <option value="assigned">Assigned</option>
 
@@ -1384,6 +1478,10 @@ const ClientDatasetDetail = () => {
           <table className="compact-crm-table min-w-full border-collapse text-left">
             <thead>
               <tr className="bg-slate-100">
+                <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
+                  Actions
+                </th>
+
                 {isAdmin && (
                   <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
                     Select
@@ -1422,9 +1520,6 @@ const ClientDatasetDetail = () => {
                   Meeting
                 </th>
 
-                <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
-                  Actions
-                </th>
               </tr>
             </thead>
 
@@ -1485,6 +1580,17 @@ const ClientDatasetDetail = () => {
 
                 return (
                   <tr key={rowIndex} className={`${rowClass} transition hover:brightness-[0.99]`}>
+                    <td className="border border-slate-300 px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => openActionModal(rowIndex, row)}
+                        title="Open actions"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <MessageIcon />
+                      </button>
+                    </td>
+
                     {isAdmin && (
                       <td className="border border-slate-300 px-3 py-2 text-center">
                         <input
@@ -1593,8 +1699,8 @@ const ClientDatasetDetail = () => {
                             className="border border-slate-300 px-3 py-2"
                           >
                             {employeeNames.length ? (
-                              <div className="flex min-w-32 max-w-44 flex-wrap gap-1">
-                                {employeeNames.map((employeeName) => (
+                              <div className="flex min-w-32 max-w-44 flex-wrap items-center gap-1">
+                                {employeeNames.slice(0, 2).map((employeeName) => (
                                   <span
                                     key={employeeName}
                                     className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
@@ -1602,9 +1708,30 @@ const ClientDatasetDetail = () => {
                                     {employeeName}
                                   </span>
                                 ))}
+                                {employeeNames.length > 2 && (
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                                    +{employeeNames.length - 2}
+                                  </span>
+                                )}
+                                {isLive && isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openAssigneeManager(rowIndex)}
+                                    className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                                  >
+                                    Manage
+                                  </button>
+                                )}
                               </div>
                             ) : (
-                              <span className="text-xs font-medium text-slate-400">Unassigned</span>
+                              <button
+                                type="button"
+                                disabled={!isLive || !isAdmin}
+                                onClick={() => openAssigneeManager(rowIndex)}
+                                className="text-xs font-medium text-slate-400 enabled:font-bold enabled:text-blue-600 enabled:hover:text-blue-800"
+                              >
+                                {isLive && isAdmin ? '+ Assign users' : 'Unassigned'}
+                              </button>
                             )}
                           </td>
                         );
@@ -1709,16 +1836,6 @@ const ClientDatasetDetail = () => {
                       )}
                     </td>
 
-                    <td className="border border-slate-300 px-3 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => openActionModal(rowIndex, row)}
-                        title="Open actions"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        <MessageIcon />
-                      </button>
-                    </td>
                   </tr>
                 );
               })}
@@ -1738,7 +1855,163 @@ const ClientDatasetDetail = () => {
             </tbody>
           </table>
         </div>
+
+        {isLive && pagination && (
+          <div className="flex flex-col gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-medium text-slate-500">
+              Page {pagination.page} of {pagination.totalPages} · {pagination.totalRows} matching
+              clients
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pagination.page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={pagination.page >= pagination.totalPages}
+                onClick={() => setPage((current) => current + 1)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </section>
+
+      {assigneeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                  LIVE assignment
+                </p>
+                <h3 className="text-lg font-semibold text-slate-950">Manage assignees</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssigneeModal(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <input
+                type="search"
+                value={assigneeSearch}
+                onChange={(event) => setAssigneeSearch(event.target.value)}
+                placeholder="Search salesperson..."
+                className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
+                {eligibleEmployees
+                  .filter((employee) =>
+                    [employee.name, employee.email, employee.employeeId].some((value) =>
+                      String(value || '')
+                        .toLowerCase()
+                        .includes(assigneeSearch.trim().toLowerCase()),
+                    ),
+                  )
+                  .map((employee) => {
+                    const employeeId = String(employee._id);
+                    const checked = managedEmployeeIds.includes(employeeId);
+
+                    return (
+                      <label
+                        key={employeeId}
+                        className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 ${checked ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'}`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-slate-800">
+                            {employee.name || employee.email}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {employee.employeeId || employee.email}
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setManagedEmployeeIds((previous) =>
+                              checked
+                                ? previous.filter((id) => id !== employeeId)
+                                : [...previous, employeeId],
+                            )
+                          }
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                        />
+                      </label>
+                    );
+                  })}
+              </div>
+
+              {(dataset.rowAssignmentHistory || []).some(
+                (entry) =>
+                  Number(entry.rowIndex) ===
+                  Number(getOriginalRowIndex(assigneeModal.rowIndex)),
+              ) && (
+                <div>
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    Recent assignment activity
+                  </p>
+                  <div className="max-h-32 space-y-1.5 overflow-y-auto">
+                    {[...(dataset.rowAssignmentHistory || [])]
+                      .filter(
+                        (entry) =>
+                          Number(entry.rowIndex) ===
+                          Number(getOriginalRowIndex(assigneeModal.rowIndex)),
+                      )
+                      .reverse()
+                      .slice(0, 5)
+                      .map((entry, index) => (
+                        <p
+                          key={`${entry.changedAt}-${index}`}
+                          className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                        >
+                          <strong>{entry.employeeName || 'Employee'}</strong>{' '}
+                          {entry.action === 'removed' ? 'removed' : 'added'} by{' '}
+                          {entry.changedByName || 'User'} · {formatDate(entry.changedAt)}
+                        </p>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {assigneeError && (
+                <p className="text-xs font-semibold text-red-600">{assigneeError}</p>
+              )}
+
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setAssigneeModal(null)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveManagedAssignees}
+                  disabled={isSavingAssignees}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300"
+                >
+                  {isSavingAssignees ? 'Saving...' : 'Save assignees'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {actionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">

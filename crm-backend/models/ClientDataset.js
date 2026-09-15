@@ -60,6 +60,19 @@ const rowAssignmentSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const rowAssignmentHistorySchema = new mongoose.Schema(
+  {
+    rowIndex: { type: Number, required: true },
+    action: { type: String, enum: ['added', 'removed'], required: true },
+    employee: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    employeeName: { type: String, default: '' },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    changedByName: { type: String, default: '' },
+    changedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const rowFollowUpSchema = new mongoose.Schema(
   {
     rowIndex: {
@@ -188,6 +201,9 @@ const clientDatasetSchema = new mongoose.Schema(
 
     rowAssignments: [rowAssignmentSchema],
 
+    // Assignment remains row-based; this additive log keeps old datasets compatible.
+    rowAssignmentHistory: [rowAssignmentHistorySchema],
+
     uploaderAssignmentResolved: {
       type: Boolean,
       default: false,
@@ -226,6 +242,12 @@ clientDatasetSchema.index({
 });
 
 clientDatasetSchema.index({
+  'rowAssignments.employee': 1,
+  updatedAt: -1,
+});
+
+clientDatasetSchema.index({
+  communityKey: 1,
   'rowAssignments.employee': 1,
   updatedAt: -1,
 });

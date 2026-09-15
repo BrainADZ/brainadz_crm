@@ -195,6 +195,11 @@ const datasetVisibilityFilter = (req) =>
     ? {}
     : {
         $or: [
+          // LIVE is collaborative: department access controls visibility, not ownership.
+          // communityFilter still prevents users without LIVE access from reaching these rows.
+          {
+            communityKey: 'live',
+          },
           {
             uploadedBy: req.user.id,
           },
@@ -411,6 +416,11 @@ const normalizeAssignments = (rowAssignments = []) =>
 
     assignedAt: assignment.assignedAt || new Date(),
   }));
+
+const hasFullDatasetAccess = (req, dataset) =>
+  dataset.communityKey === 'live' ||
+  req.user.roleKey === 'super_admin' ||
+  isDatasetOwner(dataset, req.user.id);
 
 const getEffectiveAssignments = (dataset) => {
   const assignments = normalizeAssignments(dataset.rowAssignments || []);
@@ -766,6 +776,74 @@ const prepareDatasetResponse = (dataset, includeLogs = false, meetings = []) => 
   };
 };
 
+const preparePagedLiveResponse = (
+  dataset,
+  query = {},
+  currentUserId,
+  includeLogs = false,
+  meetings = [],
+) => {
+  const response = prepareDatasetResponse(dataset, includeLogs, meetings);
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const pageSize = Math.min(100, Math.max(10, Number.parseInt(query.pageSize, 10) || 50));
+  const search = normalizeCell(query.search).toLowerCase();
+  const statusFilter = normalizeCell(query.status);
+  const employeeFilter = normalizeCell(query.employeeId);
+  const assignmentFilter = normalizeCell(query.assignment);
+  const statusIndex = getColumnIndex(response.columns, 'Status');
+  const assignmentMap = getAssignmentsByRow(response.rowAssignments || []);
+
+  const filtered = response.rows
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ row, rowIndex }) => {
+      const assignments = assignmentMap.get(rowIndex) || [];
+      const matchesSearch =
+        !search || row.some((cell) => normalizeCell(cell).toLowerCase().includes(search));
+      const matchesStatus =
+        !statusFilter || statusFilter === 'all' || normalizeCell(row[statusIndex]) === statusFilter;
+      const matchesEmployee =
+        !employeeFilter ||
+        employeeFilter === 'all' ||
+        assignments.some(
+          (assignment) => String(assignment.employee) === String(employeeFilter),
+        );
+      const matchesAssignment =
+        !assignmentFilter ||
+        assignmentFilter === 'all' ||
+        (assignmentFilter === 'assigned' && assignments.length > 0) ||
+        (assignmentFilter === 'unassigned' && assignments.length === 0) ||
+        (assignmentFilter === 'mine' &&
+          assignments.some(
+            (assignment) => String(assignment.employee) === String(currentUserId),
+          ));
+
+      return matchesSearch && matchesStatus && matchesEmployee && matchesAssignment;
+    });
+
+  const totalRows = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const originalRowIndexes = pageItems.map((item) => item.rowIndex);
+  const allowedIndexes = new Set(originalRowIndexes);
+
+  return {
+    ...response,
+    rows: pageItems.map((item) => item.row),
+    originalRowIndexes,
+    rowAssignments: (response.rowAssignments || []).filter((assignment) =>
+      allowedIndexes.has(Number(assignment.rowIndex)),
+    ),
+    rowLogs: includeLogs
+      ? (response.rowLogs || []).filter((rowLog) => allowedIndexes.has(Number(rowLog.rowIndex)))
+      : undefined,
+    rowAssignmentHistory: (response.rowAssignmentHistory || []).filter((entry) =>
+      allowedIndexes.has(Number(entry.rowIndex)),
+    ),
+    pagination: { page: safePage, pageSize, totalRows, totalPages },
+  };
+};
+
 const getEmployeeDatasetResponse = (dataset, employeeId, meetings = []) => {
   const datasetObject = dataset.toObject();
 
@@ -1007,9 +1085,7 @@ router.get('/', authMiddleware, requireAdmin, async (req, res) => {
     return res.json(
       datasets.map((dataset) => {
         const listItem = getDatasetListItem(dataset);
-        const hasFullDatasetAccess =
-          req.user.roleKey === 'super_admin' || isDatasetOwner(dataset, req.user.id);
-        if (hasFullDatasetAccess) {
+        if (hasFullDatasetAccess(req, dataset)) {
           return {
             ...listItem,
             isOwner: isDatasetOwner(dataset, req.user.id),
@@ -1187,10 +1263,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       })
       .lean();
 
-    const hasFullDatasetAccess =
-      req.user.roleKey === 'super_admin' || isDatasetOwner(dataset, req.user.id);
-
-    if (!hasFullDatasetAccess) {
+    if (!hasFullDatasetAccess(req, dataset)) {
       const assignedDataset = getEmployeeDatasetResponse(dataset, req.user.id, meetings);
 
       if (assignedDataset.rows.length === 0) {
@@ -1210,8 +1283,13 @@ router.get('/:id', authMiddleware, async (req, res) => {
       getPermission(req.effectivePermissions, 'leads', 'assign'),
     );
 
+    const response =
+      dataset.communityKey === 'live' && req.query.serverPaging === '1'
+        ? preparePagedLiveResponse(dataset, req.query, req.user.id, includeLogs, meetings)
+        : prepareDatasetResponse(dataset, includeLogs, meetings);
+
     return res.json({
-      ...prepareDatasetResponse(dataset, includeLogs, meetings),
+      ...response,
       isOwner: isDatasetOwner(dataset, req.user.id),
     });
   } catch (error) {
@@ -1220,6 +1298,148 @@ router.get('/:id', authMiddleware, async (req, res) => {
     return res.status(500).json({
       message: 'Server error',
     });
+  }
+});
+
+router.patch('/:id/rows/:rowIndex/assignees', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const rowIndex = Number(req.params.rowIndex);
+    const employeeIds = [
+      ...new Set((Array.isArray(req.body.employeeIds) ? req.body.employeeIds : []).map(normalizeCell)),
+    ].filter(Boolean);
+
+    if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+      return res.status(400).json({ message: 'Invalid row index' });
+    }
+
+    if (employeeIds.some((id) => !mongoose.isValidObjectId(id))) {
+      return res.status(400).json({ message: 'Select valid employees' });
+    }
+
+    const dataset = await ClientDataset.findOne({
+      _id: req.params.id,
+      communityKey: 'live',
+      ...communityFilter(req),
+      ...datasetVisibilityFilter(req),
+    });
+
+    if (!dataset) return res.status(404).json({ message: 'LIVE client dataset not found' });
+
+    const { columns, rows } = addWorkColumnsAfterWebsite(dataset.columns || [], dataset.rows || []);
+    if (rowIndex >= rows.length) return res.status(404).json({ message: 'Client row not found' });
+
+    const employees = employeeIds.length
+      ? await User.find({
+          _id: { $in: employeeIds },
+          $or: [{ userType: 'employee' }, { role: 'employee' }],
+          isDeleted: { $ne: true },
+          accountStatus: 'active',
+        }).select('name email communities')
+      : [];
+
+    if (employees.length !== employeeIds.length) {
+      return res.status(404).json({ message: 'One or more selected employees were not found' });
+    }
+
+    const businessUnit = dataset.businessUnitId
+      ? await BusinessUnit.findById(dataset.businessUnitId)
+      : await BusinessUnit.findOne({ legacyCommunityKey: 'live', status: 'active' });
+    const accessChecks = await Promise.all(
+      employees.map((employee) => employeeHasBusinessUnit(employee, businessUnit)),
+    );
+
+    if (accessChecks.some((allowed) => !allowed)) {
+      return res.status(403).json({ message: 'A selected employee cannot access LIVE' });
+    }
+
+    const currentAssignments = normalizeAssignments(dataset.rowAssignments || []);
+    const rowAssignments = currentAssignments.filter(
+      (assignment) => Number(assignment.rowIndex) === rowIndex,
+    );
+    const requestedIds = new Set(employeeIds);
+    const existingIds = new Set(rowAssignments.map((assignment) => String(assignment.employee)));
+    const removed = rowAssignments.filter(
+      (assignment) => !requestedIds.has(String(assignment.employee)),
+    );
+    const addedEmployees = employees.filter((employee) => !existingIds.has(String(employee._id)));
+
+    if (!removed.length && !addedEmployees.length) {
+      return res.json({
+        message: 'Assignees are already up to date',
+        columns,
+        rows,
+        rowAssignments: currentAssignments,
+        rowAssignmentHistory: dataset.rowAssignmentHistory || [],
+      });
+    }
+
+    const changedAt = new Date();
+    const actorName = await getUserLabel(req.user.id);
+    const keptAssignments = currentAssignments.filter(
+      (assignment) =>
+        Number(assignment.rowIndex) !== rowIndex || requestedIds.has(String(assignment.employee)),
+    );
+    const addedAssignments = addedEmployees.map((employee) => ({
+      rowIndex,
+      employee: employee._id,
+      employeeName: employee.name || employee.email || 'Employee',
+      assignedBy: req.user.id,
+      assignedAt: changedAt,
+    }));
+    const nextAssignments = [...keptAssignments, ...addedAssignments];
+    const employeeIndex = getColumnIndex(columns, 'Employee');
+    rows[rowIndex][employeeIndex] = nextAssignments
+      .filter((assignment) => Number(assignment.rowIndex) === rowIndex)
+      .map((assignment) => assignment.employeeName)
+      .filter(Boolean)
+      .join(', ');
+
+    dataset.columns = columns;
+    dataset.rows = rows;
+    dataset.rowAssignments = nextAssignments;
+    dataset.rowAssignmentHistory = [
+      ...(dataset.rowAssignmentHistory || []),
+      ...addedAssignments.map((assignment) => ({
+        rowIndex,
+        action: 'added',
+        employee: assignment.employee,
+        employeeName: assignment.employeeName,
+        changedBy: req.user.id,
+        changedByName: actorName,
+        changedAt,
+      })),
+      ...removed.map((assignment) => ({
+        rowIndex,
+        action: 'removed',
+        employee: assignment.employee,
+        employeeName: assignment.employeeName,
+        changedBy: req.user.id,
+        changedByName: actorName,
+        changedAt,
+      })),
+    ];
+    dataset.uploaderAssignmentResolved = true;
+    dataset.markModified('columns');
+    dataset.markModified('rows');
+    dataset.markModified('rowAssignments');
+    dataset.markModified('rowAssignmentHistory');
+    await dataset.save();
+
+    return res.json({
+      message: 'LIVE assignees updated successfully',
+      columns,
+      rows,
+      rowAssignments: nextAssignments,
+      rowAssignmentHistory: dataset.rowAssignmentHistory,
+    });
+  } catch (error) {
+    console.error('Error managing LIVE row assignees:', error);
+    if (error.name === 'VersionError') {
+      return res.status(409).json({
+        message: 'Assignments changed by another user. Refresh and try again.',
+      });
+    }
+    return res.status(500).json({ message: error.message || 'Server error' });
   }
 });
 
@@ -1283,7 +1503,7 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
 
     const ownsDataset = isDatasetOwner(dataset, req.user.id);
 
-    if (req.user.roleKey !== 'super_admin' && !ownsDataset) {
+    if (dataset.communityKey !== 'live' && req.user.roleKey !== 'super_admin' && !ownsDataset) {
       const assignmentMap = getAssignmentsByRow(dataset.rowAssignments || []);
 
       const rowAssignments = assignmentMap.get(rowIndex) || [];
@@ -1737,6 +1957,27 @@ router.patch('/:id/assign', authMiddleware, requireAdmin, async (req, res) => {
       });
     }
 
+    const actorName = await getUserLabel(req.user.id);
+
+    if (dataset.communityKey === 'live') {
+      dataset.rowAssignmentHistory = [
+        ...(dataset.rowAssignmentHistory || []),
+        ...Array.from(assignmentsByEmployee.entries()).flatMap(([employeeId, indexes]) => {
+          const employee = employees.find((item) => String(item._id) === employeeId);
+
+          return indexes.map((rowIndex) => ({
+            rowIndex,
+            action: 'added',
+            employee: employee._id,
+            employeeName: employee.name || employee.email || 'Employee',
+            changedBy: req.user.id,
+            changedByName: actorName,
+            changedAt: assignedAt,
+          }));
+        }),
+      ];
+    }
+
     const nextAssignmentMap = getAssignmentsByRow(nextAssignments);
 
     rowIndexes.forEach((rowIndex) => {
@@ -1760,9 +2001,9 @@ router.patch('/:id/assign', authMiddleware, requireAdmin, async (req, res) => {
 
     dataset.markModified('rowAssignments');
 
-    await dataset.save();
+    if (dataset.communityKey === 'live') dataset.markModified('rowAssignmentHistory');
 
-    const actorName = await getUserLabel(req.user.id);
+    await dataset.save();
 
     await Promise.all(
       employees.map((employee) => {
@@ -1819,6 +2060,12 @@ router.patch('/:id/assign', authMiddleware, requireAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error assigning client dataset rows:', error);
+
+    if (error.name === 'VersionError') {
+      return res.status(409).json({
+        message: 'Assignments changed by another user. Refresh and try again.',
+      });
+    }
 
     return res.status(500).json({
       message: error.message || 'Server error',
@@ -1912,6 +2159,25 @@ router.patch('/:id/unassign', authMiddleware, requireAdmin, async (req, res) => 
       (assignment) => !shouldRemoveAssignment(assignment),
     );
 
+    const actorName = await getUserLabel(req.user.id);
+
+    if (dataset.communityKey === 'live') {
+      const removedAt = new Date();
+
+      dataset.rowAssignmentHistory = [
+        ...(dataset.rowAssignmentHistory || []),
+        ...removedAssignments.map((assignment) => ({
+          rowIndex: Number(assignment.rowIndex),
+          action: 'removed',
+          employee: assignment.employee,
+          employeeName: assignment.employeeName || 'Employee',
+          changedBy: req.user.id,
+          changedByName: actorName,
+          changedAt: removedAt,
+        })),
+      ];
+    }
+
     const nextAssignmentMap = getAssignmentsByRow(nextAssignments);
 
     rowIndexes.forEach((rowIndex) => {
@@ -1935,6 +2201,8 @@ router.patch('/:id/unassign', authMiddleware, requireAdmin, async (req, res) => 
 
     dataset.markModified('rowAssignments');
 
+    if (dataset.communityKey === 'live') dataset.markModified('rowAssignmentHistory');
+
     await dataset.save();
 
     const removedByEmployee = new Map();
@@ -1946,8 +2214,6 @@ router.patch('/:id/unassign', authMiddleware, requireAdmin, async (req, res) => 
 
       removedByEmployee.set(employeeId, [...existingRows, Number(assignment.rowIndex)]);
     });
-
-    const actorName = await getUserLabel(req.user.id);
 
     await Promise.all(
       Array.from(removedByEmployee.entries()).map(([employeeId, removedRows]) =>
@@ -1998,6 +2264,12 @@ router.patch('/:id/unassign', authMiddleware, requireAdmin, async (req, res) => 
     });
   } catch (error) {
     console.error('Error unassigning client dataset rows:', error);
+
+    if (error.name === 'VersionError') {
+      return res.status(409).json({
+        message: 'Assignments changed by another user. Refresh and try again.',
+      });
+    }
 
     return res.status(500).json({
       message: error.message || 'Server error',
