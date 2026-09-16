@@ -4,6 +4,7 @@ const quotationItemSchema = new mongoose.Schema(
   {
     description: { type: String, required: true, trim: true },
     quantity: { type: Number, min: 0.01, default: 1 },
+    days: { type: Number, min: 1, default: 1 },
     unitRate: { type: Number, min: 0, default: 0 },
     taxRate: { type: Number, min: 0, max: 100, default: 18 },
     amount: { type: Number, min: 0, default: 0 },
@@ -42,6 +43,7 @@ const quotationSchema = new mongoose.Schema(
     clientPhone: { type: String, default: '', trim: true },
     clientAddress: { type: String, default: '', trim: true },
     subject: { type: String, required: true, trim: true },
+    quotationMode: { type: String, enum: ['sale', 'rental'], default: 'sale' },
     documentType: {
       type: String,
       enum: ['quotation', 'marketing-proposal', 'social-media-proposal'],

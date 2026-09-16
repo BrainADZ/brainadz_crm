@@ -52,16 +52,18 @@ const generateQuotationPdf = (quotation) =>
         .fontSize(25)
         .text('B', 42, 31, { width: 48, align: 'center' });
     }
-    doc
-      .fillColor('#111827')
-      .font('Helvetica-Bold')
-      .fontSize(17)
-      .text(unitName, logoDrawn ? 148 : 104, 28, { width: 255 });
-    doc
-      .fillColor('#64748B')
-      .font('Helvetica')
-      .fontSize(8.5)
-      .text(brand.tagline, logoDrawn ? 148 : 104, 52, { width: 255 });
+    if (quotation.communityKey !== 'live') {
+      doc
+        .fillColor('#111827')
+        .font('Helvetica-Bold')
+        .fontSize(17)
+        .text(unitName, logoDrawn ? 148 : 104, 28, { width: 255 });
+      doc
+        .fillColor('#64748B')
+        .font('Helvetica')
+        .fontSize(8.5)
+        .text(brand.tagline, logoDrawn ? 148 : 104, 52, { width: 255 });
+    }
     doc
       .fillColor(brand.color)
       .font('Helvetica-Bold')
@@ -79,6 +81,9 @@ const generateQuotationPdf = (quotation) =>
     doc.font('Helvetica').fontSize(9).fillColor('#4B5563');
     doc.text(`Date: ${quotation.quotationDate}`, 42, y + 19);
     doc.text(`Valid until: ${quotation.validUntil}`, 42, y + 34);
+    if (quotation.communityKey === 'live') {
+      doc.text(`Type: ${quotation.quotationMode === 'rental' ? 'Rental' : 'Sale'}`, 42, y + 49);
+    }
     doc.font('Helvetica-Bold').fillColor('#111827').text('BILL TO', 330, y);
     doc
       .font('Helvetica')
@@ -129,8 +134,11 @@ const generateQuotationPdf = (quotation) =>
       y += 4;
     }
 
-    const widths = [28, 220, 48, 72, 52, 91];
-    const headers = ['#', 'Description', 'Qty', 'Rate', 'Tax', 'Amount'];
+    const rental = quotation.communityKey === 'live' && quotation.quotationMode === 'rental';
+    const widths = rental ? [24, 190, 42, 40, 65, 45, 105] : [28, 220, 48, 72, 52, 91];
+    const headers = rental
+      ? ['#', 'Description', 'Qty', 'Days', 'Rate', 'Tax', 'Amount']
+      : ['#', 'Description', 'Qty', 'Rate', 'Tax', 'Amount'];
     const drawRow = (values, top, header = false) => {
       const height = header ? 27 : 34;
       doc
@@ -166,17 +174,25 @@ const generateQuotationPdf = (quotation) =>
         y = 48;
         y = drawRow(headers, y, true);
       }
-      y = drawRow(
-        [
-          index + 1,
-          item.description,
-          item.quantity,
-          money(item.unitRate),
-          `${item.taxRate}%`,
-          money(item.amount),
-        ],
-        y,
-      );
+      const values = rental
+        ? [
+            index + 1,
+            item.description,
+            item.quantity,
+            item.days || 1,
+            money(item.unitRate),
+            `${item.taxRate}%`,
+            money(item.amount),
+          ]
+        : [
+            index + 1,
+            item.description,
+            item.quantity,
+            money(item.unitRate),
+            `${item.taxRate}%`,
+            money(item.amount),
+          ];
+      y = drawRow(values, y);
     });
 
     y += 16;
@@ -227,6 +243,20 @@ const generateQuotationPdf = (quotation) =>
       .font('Helvetica')
       .fontSize(8.5)
       .text(safe(quotation.terms), 42, y + 15, { width: 500 });
+
+    if (quotation.communityKey === 'live') {
+      y = doc.y + 14;
+      if (y > 700) {
+        doc.addPage();
+        y = 48;
+      }
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('BANK DETAILS', 42, y);
+      doc.fillColor('#4B5563').font('Helvetica').fontSize(8.5);
+      doc.text("A/c Holder's Name : Brainadz Live Pvt. Ltd.", 42, y + 15, { width: 300 });
+      doc.text('Bank Name : ICICI Bank', 42, y + 29, { width: 300 });
+      doc.text('A/c No. : 057105004479', 42, y + 43, { width: 300 });
+      doc.text('RTGS/NEFT/ & IFS Code : ICIC0000571', 42, y + 57, { width: 300 });
+    }
 
     const footerY = 770;
     doc.moveTo(42, footerY).lineTo(553, footerY).strokeColor('#D1D5DB').stroke();

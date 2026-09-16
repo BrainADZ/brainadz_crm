@@ -68,15 +68,18 @@ const accessOrganization = async (user) => {
   return { businessUnits, departments };
 };
 
-const calculateTotals = (items, discountType, discountValue) => {
+const calculateTotals = (items, discountType, discountValue, quotationMode = 'sale') => {
   const normalizedItems = (Array.isArray(items) ? items : []).map((item) => {
     const quantity = Number(item.quantity);
+    const days = quotationMode === 'rental' ? Number(item.days) : 1;
     const unitRate = Number(item.unitRate);
     const taxRate = Number(item.taxRate ?? 18);
     if (
       !String(item.description || '').trim() ||
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
+      !Number.isFinite(days) ||
+      days < 1 ||
       !Number.isFinite(unitRate) ||
       unitRate < 0 ||
       !Number.isFinite(taxRate) ||
@@ -84,15 +87,18 @@ const calculateTotals = (items, discountType, discountValue) => {
       taxRate > 100
     )
       throw Object.assign(
-        new Error('Complete every quotation item with valid description, quantity, rate and GST'),
+        new Error(
+          `Complete every quotation item with valid description, quantity${quotationMode === 'rental' ? ', days' : ''}, rate and GST`,
+        ),
         { status: 400 },
       );
     return {
       description: String(item.description).trim(),
       quantity,
+      days,
       unitRate,
       taxRate,
-      amount: Number((quantity * unitRate).toFixed(2)),
+      amount: Number((quantity * days * unitRate).toFixed(2)),
     };
   });
   if (!normalizedItems.length)
@@ -285,7 +291,16 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       req.body.validUntil < req.body.quotationDate
     )
       return res.status(400).json({ message: 'Select valid quotation and expiry dates' });
-    const totals = calculateTotals(req.body.items, req.body.discountType, req.body.discountValue);
+    const quotationMode =
+      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental'
+        ? 'rental'
+        : 'sale';
+    const totals = calculateTotals(
+      req.body.items,
+      req.body.discountType,
+      req.body.discountValue,
+      quotationMode,
+    );
     const customFields = normalizeCustomFields(req.body.customFields);
     const logoDataUrl = normalizeLogo(req.body.logoDataUrl);
     const quotationNumber = await nextQuotationNumber(unit.legacyCommunityKey);
@@ -301,6 +316,7 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
       subject: String(req.body.subject).trim(),
+      quotationMode,
       logoDataUrl,
       customFields,
       ...normalizeProposal(req.body, department),
@@ -354,7 +370,16 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       req.body.validUntil < req.body.quotationDate
     )
       return res.status(400).json({ message: 'Select valid quotation and expiry dates' });
-    const totals = calculateTotals(req.body.items, req.body.discountType, req.body.discountValue);
+    const quotationMode =
+      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental'
+        ? 'rental'
+        : 'sale';
+    const totals = calculateTotals(
+      req.body.items,
+      req.body.discountType,
+      req.body.discountValue,
+      quotationMode,
+    );
     const previousValue = {
       clientEmail: quotation.clientEmail,
       grandTotal: quotation.grandTotal,
@@ -370,6 +395,7 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
       subject: String(req.body.subject).trim(),
+      quotationMode,
       logoDataUrl: normalizeLogo(req.body.logoDataUrl),
       customFields: normalizeCustomFields(req.body.customFields),
       ...normalizeProposal(req.body, department),

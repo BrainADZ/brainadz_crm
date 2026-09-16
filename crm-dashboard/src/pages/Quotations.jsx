@@ -28,7 +28,7 @@ const dateValue = (offset = 0) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 const idOf = (value) => String(value?._id || value || '');
-const blankItem = () => ({ description: '', quantity: '1', unitRate: '', taxRate: '18' });
+const blankItem = () => ({ description: '', quantity: '1', days: '1', unitRate: '', taxRate: '18' });
 const blankCustomField = () => ({ label: '', value: '' });
 const MARKETING_SERVICES = [
   'Social Media Marketing',
@@ -47,6 +47,7 @@ const blankForm = () => ({
   clientPhone: '',
   clientAddress: '',
   subject: '',
+  quotationMode: 'sale',
   documentType: 'quotation',
   proposalServices: [],
   deliverables: [''],
@@ -288,7 +289,11 @@ const Quotations = () => {
 
   const totals = useMemo(() => {
     const subtotal = form.items.reduce(
-      (total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitRate) || 0),
+      (total, item) =>
+        total +
+        (Number(item.quantity) || 0) *
+          (form.quotationMode === 'rental' ? Number(item.days) || 0 : 1) *
+          (Number(item.unitRate) || 0),
       0,
     );
     const discountValue = Math.max(0, Number(form.discountValue) || 0);
@@ -303,13 +308,14 @@ const Quotations = () => {
         (total, item) =>
           total +
           ((Number(item.quantity) || 0) *
+            (form.quotationMode === 'rental' ? Number(item.days) || 0 : 1) *
             (Number(item.unitRate) || 0) *
             (Number(item.taxRate) || 0)) /
             100,
         0,
       ) * ratio;
     return { subtotal, discount, taxable, tax, grandTotal: taxable + tax };
-  }, [form.discountType, form.discountValue, form.items]);
+  }, [form.discountType, form.discountValue, form.items, form.quotationMode]);
 
   const filtered = useMemo(
     () =>
@@ -359,6 +365,7 @@ const Quotations = () => {
       clientPhone: quotation.clientPhone || '',
       clientAddress: quotation.clientAddress || '',
       subject: quotation.subject || '',
+      quotationMode: quotation.quotationMode || 'sale',
       documentType: quotation.documentType || 'quotation',
       proposalServices: quotation.proposalServices || [],
       deliverables: quotation.deliverables?.length ? [...quotation.deliverables] : [''],
@@ -372,6 +379,7 @@ const Quotations = () => {
       items: (quotation.items || []).map((item) => ({
         description: item.description || '',
         quantity: String(item.quantity ?? 1),
+        days: String(item.days ?? 1),
         unitRate: String(item.unitRate ?? ''),
         taxRate: String(item.taxRate ?? 18),
       })),
@@ -392,6 +400,10 @@ const Quotations = () => {
   const selectedDepartment = options.departments.find(
     (department) => idOf(department) === form.departmentId,
   );
+  const selectedBusinessUnit = options.businessUnits.find(
+    (unit) => idOf(unit) === form.businessUnitId,
+  );
+  const liveBusinessUnit = selectedBusinessUnit?.legacyCommunityKey === 'live';
   const marketingDepartment = /marketing/i.test(
     `${selectedDepartment?.name || ''} ${selectedDepartment?.slug || ''}`,
   );
@@ -792,6 +804,23 @@ const Quotations = () => {
                     The selected department automatically controls the document format.
                   </p>
                 </div>
+                {liveBusinessUnit && (
+                  <div className="mb-5 grid w-full max-w-sm grid-cols-2 rounded-xl bg-slate-100 p-1">
+                    {[
+                      ['sale', 'Sale'],
+                      ['rental', 'Rental'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => updateForm({ quotationMode: value })}
+                        className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${form.quotationMode === value ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <label>
                     <span className={labelClass}>Business Unit *</span>
@@ -803,7 +832,15 @@ const Quotations = () => {
                         const department = options.departments.find((item) =>
                           (item.businessUnitIds || []).map(idOf).includes(businessUnitId),
                         );
-                        updateForm({ businessUnitId, departmentId: idOf(department) });
+                        const unit = options.businessUnits.find(
+                          (item) => idOf(item) === businessUnitId,
+                        );
+                        updateForm({
+                          businessUnitId,
+                          departmentId: idOf(department),
+                          quotationMode:
+                            unit?.legacyCommunityKey === 'live' ? form.quotationMode : 'sale',
+                        });
                       }}
                       className={inputClass}
                     >
@@ -1026,7 +1063,7 @@ const Quotations = () => {
                   {form.items.map((item, index) => (
                     <div
                       key={index}
-                      className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(18rem,1fr)_6rem_9rem_6rem_8rem_2.5rem]"
+                      className={`grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 ${liveBusinessUnit && form.quotationMode === 'rental' ? 'lg:grid-cols-[minmax(16rem,1fr)_5rem_5rem_8rem_5rem_8rem_2.5rem]' : 'lg:grid-cols-[minmax(18rem,1fr)_6rem_9rem_6rem_8rem_2.5rem]'}`}
                     >
                       <label>
                         <span className={labelClass}>Description *</span>
@@ -1039,6 +1076,20 @@ const Quotations = () => {
                           className={inputClass}
                         />
                       </label>
+                      {liveBusinessUnit && form.quotationMode === 'rental' && (
+                        <label>
+                          <span className={labelClass}>Days</span>
+                          <input
+                            required
+                            min="1"
+                            step="1"
+                            type="number"
+                            value={item.days}
+                            onChange={(event) => updateItem(index, { days: event.target.value })}
+                            className={inputClass}
+                          />
+                        </label>
+                      )}
                       <label>
                         <span className={labelClass}>Qty</span>
                         <input
@@ -1079,7 +1130,13 @@ const Quotations = () => {
                       <div>
                         <span className={labelClass}>Amount</span>
                         <div className="flex h-10 items-center justify-end rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold">
-                          {money((Number(item.quantity) || 0) * (Number(item.unitRate) || 0))}
+                          {money(
+                            (Number(item.quantity) || 0) *
+                              (liveBusinessUnit && form.quotationMode === 'rental'
+                                ? Number(item.days) || 0
+                                : 1) *
+                              (Number(item.unitRate) || 0),
+                          )}
                         </div>
                       </div>
                       <button
@@ -1119,6 +1176,19 @@ const Quotations = () => {
                       className={`${inputClass} h-auto py-3`}
                     />
                   </label>
+                  {liveBusinessUnit && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                        Default bank details
+                      </p>
+                      <div className="mt-2 grid gap-1 text-xs text-emerald-950 sm:grid-cols-2">
+                        <p><strong>A/c Holder:</strong> Brainadz Live Pvt. Ltd.</p>
+                        <p><strong>Bank:</strong> ICICI Bank</p>
+                        <p><strong>A/c No.:</strong> 057105004479</p>
+                        <p><strong>IFSC:</strong> ICIC0000571</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h3 className="text-sm font-semibold text-slate-900">Quotation total</h3>
