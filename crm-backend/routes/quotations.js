@@ -96,6 +96,7 @@ const calculateTotals = (items, discountType, discountValue, quotationMode = 'sa
       description: String(item.description).trim(),
       quantity,
       days,
+      unit: ['Unit', 'Square Feet', 'Meter', 'Lot'].includes(item.unit) ? item.unit : 'Unit',
       unitRate,
       taxRate,
       amount: Number((quantity * days * unitRate).toFixed(2)),

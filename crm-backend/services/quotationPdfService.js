@@ -1,21 +1,40 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
+
+const REGULAR_FONT = path.join(
+  __dirname,
+  '../node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff',
+);
+const BOLD_FONT = path.join(
+  __dirname,
+  '../node_modules/@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff',
+);
+const RUPEE_FONT = path.join(
+  __dirname,
+  '../node_modules/@fontsource/noto-sans/files/noto-sans-devanagari-400-normal.woff',
+);
+const RUPEE_BOLD_FONT = path.join(
+  __dirname,
+  '../node_modules/@fontsource/noto-sans/files/noto-sans-devanagari-700-normal.woff',
+);
+const BRAND_BLUE = '#1D4ED8';
 
 const BRAND = {
-  marketing: { name: 'BrainADZ Marketing', color: '#1D4ED8', tagline: 'Ideas That Spark Momentum' },
+  marketing: { name: 'BrainADZ Marketing', color: BRAND_BLUE, tagline: 'Ideas That Spark Momentum' },
   exhibition: {
     name: 'BrainADZ Exhibits',
-    color: '#B45309',
+    color: BRAND_BLUE,
     tagline: 'Exhibitions, Experiences & Brand Spaces',
   },
   live: {
     name: 'BrainADZ Live',
-    color: '#047857',
+    color: BRAND_BLUE,
     tagline: 'Live Experiences & Digital Solutions',
   },
 };
 
 const money = (value) =>
-  `INR ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const safe = (value, fallback = '-') => String(value || '').trim() || fallback;
 const logoBuffer = (dataUrl) => {
   const match = String(dataUrl || '').match(/^data:image\/(?:png|jpe?g);base64,(.+)$/i);
@@ -25,12 +44,28 @@ const logoBuffer = (dataUrl) => {
 const generateQuotationPdf = (quotation) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
+    doc.registerFont('Helvetica', REGULAR_FONT);
+    doc.registerFont('Helvetica-Bold', BOLD_FONT);
+    doc.registerFont('Rupee', RUPEE_FONT);
+    doc.registerFont('Rupee-Bold', RUPEE_BOLD_FONT);
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
     const brand = BRAND[quotation.communityKey] || BRAND.marketing;
     const unitName = quotation.businessUnitId?.name || brand.name;
+    const drawMoney = (value, x, top, width, { bold = false, size = 8.5 } = {}) => {
+      const number = money(value);
+      const numberFont = bold ? 'Helvetica-Bold' : 'Helvetica';
+      const rupeeFont = bold ? 'Rupee-Bold' : 'Rupee';
+      doc.font(numberFont).fontSize(size);
+      const numberWidth = doc.widthOfString(number);
+      doc.font(rupeeFont).fontSize(size);
+      const symbolWidth = doc.widthOfString('₹ ');
+      const start = x + Math.max(0, width - numberWidth - symbolWidth);
+      doc.fillColor(bold ? brand.color : '#374151').text('₹ ', start, top, { lineBreak: false });
+      doc.font(numberFont).text(number, start + symbolWidth, top, { lineBreak: false });
+    };
 
     doc.rect(0, 0, 595.28, 112).fill('#FFFFFF');
     doc.rect(0, 0, 595.28, 7).fill(brand.color);
@@ -84,6 +119,16 @@ const generateQuotationPdf = (quotation) =>
     if (quotation.communityKey === 'live') {
       doc.text(`Type: ${quotation.quotationMode === 'rental' ? 'Rental' : 'Sale'}`, 42, y + 49);
     }
+    doc.text(`Prepared by: ${safe(quotation.createdBy?.name)}`, 42, y + 64, { width: 250 });
+    const departmentAndDesignation = [quotation.departmentId?.name, quotation.createdBy?.position]
+      .filter(Boolean)
+      .join(' / ');
+    doc.text(
+      `Department / Designation: ${safe(departmentAndDesignation)}`,
+      42,
+      y + 79,
+      { width: 270 },
+    );
     doc.font('Helvetica-Bold').fillColor('#111827').text('BILL TO', 330, y);
     doc
       .font('Helvetica')
@@ -108,37 +153,13 @@ const generateQuotationPdf = (quotation) =>
       .text(safe(quotation.subject), 54, y + 23, { width: 485 });
     y += 62;
 
-    if (quotation.customFields?.length) {
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('ADDITIONAL DETAILS', 42, y);
-      y += 17;
-      quotation.customFields.forEach((field, index) => {
-        if (y > 700) {
-          doc.addPage();
-          y = 48;
-        }
-        const column = index % 2;
-        const x = column ? 303 : 42;
-        doc.roundedRect(x, y, 250, 38, 4).fill('#F8FAFC').stroke('#E2E8F0');
-        doc
-          .fillColor('#64748B')
-          .font('Helvetica-Bold')
-          .fontSize(7.5)
-          .text(safe(field.label), x + 10, y + 7, { width: 230 });
-        doc
-          .fillColor('#1E293B')
-          .font('Helvetica')
-          .fontSize(8.5)
-          .text(safe(field.value), x + 10, y + 20, { width: 230, height: 13, ellipsis: true });
-        if (column || index === quotation.customFields.length - 1) y += 46;
-      });
-      y += 4;
-    }
-
     const rental = quotation.communityKey === 'live' && quotation.quotationMode === 'rental';
-    const widths = rental ? [24, 190, 42, 40, 65, 45, 105] : [28, 220, 48, 72, 52, 91];
+    const widths = rental
+      ? [22, 132, 60, 36, 62, 64, 42, 93]
+      : [24, 163, 60, 65, 70, 45, 84];
     const headers = rental
-      ? ['#', 'Description', 'Qty', 'Days', 'Rate', 'Tax', 'Amount']
-      : ['#', 'Description', 'Qty', 'Rate', 'Tax', 'Amount'];
+      ? ['#', 'Description', 'Qty / Area', 'Days', 'Unit', 'Rate', 'Tax', 'Amount']
+      : ['#', 'Description', 'Qty / Area', 'Unit', 'Rate', 'Tax', 'Amount'];
     const drawRow = (values, top, header = false) => {
       const height = header ? 27 : 34;
       doc
@@ -153,16 +174,20 @@ const generateQuotationPdf = (quotation) =>
             .lineTo(x, top + height)
             .strokeColor('#D1D5DB')
             .stroke();
-        doc
-          .fillColor(header ? '#FFFFFF' : '#374151')
-          .font(header ? 'Helvetica-Bold' : 'Helvetica')
-          .fontSize(header ? 8 : 8.5)
-          .text(String(value), x + 5, top + (header ? 9 : 8), {
-            width: widths[index] - 10,
-            align: index >= 2 ? 'right' : 'left',
-            height: height - 10,
-            ellipsis: true,
-          });
+        if (!header && value && typeof value === 'object' && 'currency' in value) {
+          drawMoney(value.currency, x + 5, top + 8, widths[index] - 10);
+        } else {
+          doc
+            .fillColor(header ? '#FFFFFF' : '#374151')
+            .font(header ? 'Helvetica-Bold' : 'Helvetica')
+            .fontSize(header ? 8 : 8.5)
+            .text(String(value), x + 5, top + (header ? 9 : 8), {
+              width: widths[index] - 10,
+              align: index >= 2 ? 'right' : 'left',
+              height: height - 10,
+              ellipsis: true,
+            });
+        }
         x += widths[index];
       });
       return top + height;
@@ -180,17 +205,19 @@ const generateQuotationPdf = (quotation) =>
             item.description,
             item.quantity,
             item.days || 1,
-            money(item.unitRate),
+            item.unit || 'Unit',
+            { currency: item.unitRate },
             `${item.taxRate}%`,
-            money(item.amount),
+            { currency: item.amount },
           ]
         : [
             index + 1,
             item.description,
             item.quantity,
-            money(item.unitRate),
+            item.unit || 'Unit',
+            { currency: item.unitRate },
             `${item.taxRate}%`,
-            money(item.amount),
+            { currency: item.amount },
           ];
       y = drawRow(values, y);
     });
@@ -203,7 +230,7 @@ const generateQuotationPdf = (quotation) =>
         .fontSize(bold ? 10.5 : 9)
         .fillColor(bold ? brand.color : '#4B5563')
         .text(label, totalX, y, { width: 105 });
-      doc.text(money(value), 438, y, { width: 115, align: 'right' });
+      drawMoney(value, 438, y, 115, { bold, size: bold ? 10.5 : 9 });
       y += bold ? 22 : 17;
     };
     totalLine('Subtotal', quotation.subtotal);
@@ -221,31 +248,30 @@ const generateQuotationPdf = (quotation) =>
       doc.addPage();
       y = 48;
     }
-    doc
-      .fillColor('#111827')
-      .font('Helvetica-Bold')
-      .fontSize(9)
-      .text('NOTES', 42, y + 5);
-    doc
-      .fillColor('#4B5563')
-      .font('Helvetica')
-      .fontSize(8.5)
-      .text(
-        safe(quotation.notes, 'Thank you for the opportunity to submit this quotation.'),
-        42,
-        y + 20,
-        { width: 500 },
-      );
-    y = doc.y + 14;
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('TERMS & CONDITIONS', 42, y);
-    doc
-      .fillColor('#4B5563')
-      .font('Helvetica')
-      .fontSize(8.5)
-      .text(safe(quotation.terms), 42, y + 15, { width: 500 });
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('PAYMENT TERMS', 42, y + 5);
+    y += 22;
+    const paymentTerms = String(quotation.terms || '')
+      .split(/\r?\n/)
+      .map((term) => term.trim())
+      .filter(Boolean);
+    (paymentTerms.length ? paymentTerms : ['Payment terms will be agreed with the client.']).forEach(
+      (term) => {
+        if (y > 720) {
+          doc.addPage();
+          y = 48;
+        }
+        doc.fillColor(brand.color).font('Helvetica-Bold').fontSize(9).text('•', 42, y);
+        doc
+          .fillColor('#4B5563')
+          .font('Helvetica')
+          .fontSize(8.5)
+          .text(term.replace(/^[•\-–]\s*/, ''), 55, y, { width: 485 });
+        y = doc.y + 7;
+      },
+    );
 
     if (quotation.communityKey === 'live') {
-      y = doc.y + 14;
+      y += 8;
       if (y > 700) {
         doc.addPage();
         y = 48;
