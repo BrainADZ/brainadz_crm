@@ -28,8 +28,15 @@ const dateValue = (offset = 0) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 const idOf = (value) => String(value?._id || value || '');
-const blankItem = () => ({ description: '', quantity: '1', days: '1', unitRate: '', taxRate: '18' });
-const blankCustomField = () => ({ label: '', value: '' });
+const blankItem = () => ({
+  description: '',
+  quantity: '1',
+  days: '1',
+  unit: 'Unit',
+  unitRate: '',
+  taxRate: '18',
+});
+const UNIT_OPTIONS = ['Unit', 'Square Feet', 'Meter', 'Lot'];
 const MARKETING_SERVICES = [
   'Social Media Marketing',
   'Paid Advertising',
@@ -60,7 +67,7 @@ const blankForm = () => ({
   discountValue: '0',
   notes: '',
   terms:
-    'Prices are valid until the document expiry date. Work begins after written approval and agreed advance payment. Media budgets and third-party costs are billed separately unless included in the costing.',
+    'Prices are valid until the document expiry date.\nWork begins after written approval and agreed advance payment.\nMedia budgets and third-party costs are billed separately unless included in the costing.',
 });
 const money = (value) =>
   `\u20B9${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -380,6 +387,7 @@ const Quotations = () => {
         description: item.description || '',
         quantity: String(item.quantity ?? 1),
         days: String(item.days ?? 1),
+        unit: item.unit || 'Unit',
         unitRate: String(item.unitRate ?? ''),
         taxRate: String(item.taxRate ?? 18),
       })),
@@ -392,11 +400,6 @@ const Quotations = () => {
     setMessage('');
     setModalOpen(true);
   };
-  const availableDepartments = options.departments.filter(
-    (department) =>
-      !form.businessUnitId ||
-      (department.businessUnitIds || []).map(idOf).includes(form.businessUnitId),
-  );
   const selectedDepartment = options.departments.find(
     (department) => idOf(department) === form.departmentId,
   );
@@ -425,13 +428,6 @@ const Quotations = () => {
       ...current,
       items: current.items.map((item, itemIndex) =>
         itemIndex === index ? { ...item, ...changes } : item,
-      ),
-    }));
-  const updateCustomField = (index, changes) =>
-    setForm((current) => ({
-      ...current,
-      customFields: current.customFields.map((field, fieldIndex) =>
-        fieldIndex === index ? { ...field, ...changes } : field,
       ),
     }));
   const selectLogo = async (event) => {
@@ -821,7 +817,7 @@ const Quotations = () => {
                     ))}
                   </div>
                 )}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <label>
                     <span className={labelClass}>Business Unit *</span>
                     <select
@@ -853,22 +849,6 @@ const Quotations = () => {
                     </select>
                   </label>
                   <label>
-                    <span className={labelClass}>Department *</span>
-                    <select
-                      required
-                      value={form.departmentId}
-                      onChange={(event) => updateForm({ departmentId: event.target.value })}
-                      className={inputClass}
-                    >
-                      <option value="">Select</option>
-                      {availableDepartments.map((department) => (
-                        <option key={department._id} value={department._id}>
-                          {department.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
                     <span className={labelClass}>Document date *</span>
                     <input
                       required
@@ -889,7 +869,7 @@ const Quotations = () => {
                       className={inputClass}
                     />
                   </label>
-                  <label className="sm:col-span-2 lg:col-span-4">
+                  <label className="sm:col-span-2 lg:col-span-3">
                     <span className={labelClass}>Subject *</span>
                     <input
                       required
@@ -951,93 +931,6 @@ const Quotations = () => {
                 </div>
               </section>
               <section className="rounded-2xl border border-slate-200 p-5">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                      Optional
-                    </p>
-                    <h3 className="mt-1 font-semibold text-slate-950">Additional fields</h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Add PO number, project name, GSTIN, payment schedule or any detail you need.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={form.customFields.length >= 12}
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        customFields: [...current.customFields, blankCustomField()],
-                      }))
-                    }
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-                  >
-                    <Plus size={14} />
-                    Add field
-                  </button>
-                </div>
-                {form.customFields.length ? (
-                  <div className="space-y-2">
-                    {form.customFields.map((field, index) => (
-                      <div
-                        key={index}
-                        className="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-[minmax(10rem,0.55fr)_1fr_2.5rem]"
-                      >
-                        <label>
-                          <span className={labelClass}>Field label *</span>
-                          <input
-                            required
-                            maxLength="60"
-                            value={field.label}
-                            onChange={(event) =>
-                              updateCustomField(index, { label: event.target.value })
-                            }
-                            placeholder="e.g. GSTIN"
-                            className={inputClass}
-                          />
-                        </label>
-                        <label>
-                          <span className={labelClass}>Value *</span>
-                          <input
-                            required
-                            maxLength="240"
-                            value={field.value}
-                            onChange={(event) =>
-                              updateCustomField(index, { value: event.target.value })
-                            }
-                            placeholder="Enter field value"
-                            className={inputClass}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          title="Remove field"
-                          onClick={() =>
-                            setForm((current) => ({
-                              ...current,
-                              customFields: current.customFields.filter(
-                                (_, fieldIndex) => fieldIndex !== index,
-                              ),
-                            }))
-                          }
-                          className="mt-6 inline-flex h-10 items-center justify-center rounded-lg text-red-500 hover:bg-red-50"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => updateForm({ customFields: [blankCustomField()] })}
-                    className="flex w-full items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 py-6 text-sm font-medium text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                  >
-                    + Add your first custom field
-                  </button>
-                )}
-              </section>
-              <section className="rounded-2xl border border-slate-200 p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
@@ -1063,7 +956,7 @@ const Quotations = () => {
                   {form.items.map((item, index) => (
                     <div
                       key={index}
-                      className={`grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 ${liveBusinessUnit && form.quotationMode === 'rental' ? 'lg:grid-cols-[minmax(16rem,1fr)_5rem_5rem_8rem_5rem_8rem_2.5rem]' : 'lg:grid-cols-[minmax(18rem,1fr)_6rem_9rem_6rem_8rem_2.5rem]'}`}
+                      className={`grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 ${liveBusinessUnit && form.quotationMode === 'rental' ? 'lg:grid-cols-[minmax(14rem,1fr)_5rem_5rem_7rem_7rem_5rem_8rem_2.5rem]' : 'lg:grid-cols-[minmax(16rem,1fr)_6rem_8rem_8rem_6rem_8rem_2.5rem]'}`}
                     >
                       <label>
                         <span className={labelClass}>Description *</span>
@@ -1091,7 +984,7 @@ const Quotations = () => {
                         </label>
                       )}
                       <label>
-                        <span className={labelClass}>Qty</span>
+                        <span className={labelClass}>Qty / Area</span>
                         <input
                           required
                           min="0.01"
@@ -1103,7 +996,19 @@ const Quotations = () => {
                         />
                       </label>
                       <label>
-                        <span className={labelClass}>Unit rate</span>
+                        <span className={labelClass}>Unit</span>
+                        <select
+                          value={item.unit}
+                          onChange={(event) => updateItem(index, { unit: event.target.value })}
+                          className={inputClass}
+                        >
+                          {UNIT_OPTIONS.map((unit) => (
+                            <option key={unit}>{unit}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span className={labelClass}>Rate</span>
                         <input
                           required
                           min="0"
@@ -1158,37 +1063,39 @@ const Quotations = () => {
               </section>
               <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
                 <div className="space-y-4">
-                  <label>
-                    <span className={labelClass}>Notes</span>
-                    <textarea
-                      rows="3"
-                      value={form.notes}
-                      onChange={(event) => updateForm({ notes: event.target.value })}
-                      className={`${inputClass} h-auto py-3`}
-                    />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Terms & conditions</span>
-                    <textarea
-                      rows="3"
-                      value={form.terms}
-                      onChange={(event) => updateForm({ terms: event.target.value })}
-                      className={`${inputClass} h-auto py-3`}
-                    />
-                  </label>
-                  {liveBusinessUnit && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
-                        Default bank details
-                      </p>
-                      <div className="mt-2 grid gap-1 text-xs text-emerald-950 sm:grid-cols-2">
-                        <p><strong>A/c Holder:</strong> Brainadz Live Pvt. Ltd.</p>
-                        <p><strong>Bank:</strong> ICICI Bank</p>
-                        <p><strong>A/c No.:</strong> 057105004479</p>
-                        <p><strong>IFSC:</strong> ICIC0000571</p>
-                      </div>
+                  <details open className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <summary className="cursor-pointer bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
+                      Payment terms & account details
+                    </summary>
+                    <div className="space-y-4 border-t border-slate-200 p-4">
+                      <label className="block">
+                        <span className={labelClass}>Payment terms</span>
+                        <textarea
+                          rows="5"
+                          value={form.terms}
+                          onChange={(event) => updateForm({ terms: event.target.value })}
+                          placeholder="Add one payment term per line"
+                          className={`${inputClass} h-auto py-3`}
+                        />
+                        <span className="mt-1 block text-[11px] text-slate-500">
+                          Add one term per line. It will appear as a list in the PDF.
+                        </span>
+                      </label>
+                      {liveBusinessUnit && (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-xs font-bold uppercase tracking-wide text-blue-800">
+                            Account details
+                          </p>
+                          <div className="mt-2 grid gap-1 text-xs text-slate-800 sm:grid-cols-2">
+                            <p><strong>A/c Holder:</strong> Brainadz Live Pvt. Ltd.</p>
+                            <p><strong>Bank:</strong> ICICI Bank</p>
+                            <p><strong>A/c No.:</strong> 057105004479</p>
+                            <p><strong>IFSC:</strong> ICIC0000571</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </details>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <h3 className="text-sm font-semibold text-slate-900">Quotation total</h3>
