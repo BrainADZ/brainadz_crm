@@ -140,16 +140,6 @@ const normalizeCustomFields = (fields) =>
     })
     .slice(0, 12);
 
-const normalizeLogo = (value) => {
-  const logo = String(value || '');
-  if (!logo) return '';
-  if (!/^data:image\/(png|jpe?g);base64,/i.test(logo))
-    throw Object.assign(new Error('Logo must be a PNG or JPG image'), { status: 400 });
-  if (Buffer.byteLength(logo, 'utf8') > 6 * 1024 * 1024)
-    throw Object.assign(new Error('Logo image is too large'), { status: 400 });
-  return logo;
-};
-
 const normalizeProposal = (body, department) => {
   const marketingDepartment = /marketing/i.test(
     `${department?.name || ''} ${department?.slug || ''}`,
@@ -303,7 +293,6 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       quotationMode,
     );
     const customFields = normalizeCustomFields(req.body.customFields);
-    const logoDataUrl = normalizeLogo(req.body.logoDataUrl);
     const quotationNumber = await nextQuotationNumber(unit.legacyCommunityKey);
     const quotation = await Quotation.create({
       quotationNumber,
@@ -318,7 +307,13 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       clientAddress: String(req.body.clientAddress || '').trim(),
       subject: String(req.body.subject).trim(),
       quotationMode,
-      logoDataUrl,
+      logoDataUrl: '',
+      companyGstin: String(req.body.companyGstin || process.env.COMPANY_GSTIN || '').trim(),
+      companyAddress: String(
+        req.body.companyAddress ||
+          process.env.COMPANY_ADDRESS ||
+          'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
+      ).trim(),
       customFields,
       ...normalizeProposal(req.body, department),
       quotationDate: String(req.body.quotationDate || '').trim(),
@@ -397,7 +392,13 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       clientAddress: String(req.body.clientAddress || '').trim(),
       subject: String(req.body.subject).trim(),
       quotationMode,
-      logoDataUrl: normalizeLogo(req.body.logoDataUrl),
+      logoDataUrl: '',
+      companyGstin: String(req.body.companyGstin || process.env.COMPANY_GSTIN || '').trim(),
+      companyAddress: String(
+        req.body.companyAddress ||
+          process.env.COMPANY_ADDRESS ||
+          'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
+      ).trim(),
       customFields: normalizeCustomFields(req.body.customFields),
       ...normalizeProposal(req.body, department),
       quotationDate: String(req.body.quotationDate).trim(),

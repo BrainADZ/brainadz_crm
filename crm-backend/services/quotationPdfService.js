@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
 const path = require('path');
 
 const REGULAR_FONT = path.join(
@@ -32,15 +33,15 @@ const BRAND = {
     tagline: 'Live Experiences & Digital Solutions',
   },
 };
+const UNIT_LOGOS = {
+  marketing: path.resolve(__dirname, '../../crm-dashboard/public/logo/marketing.png'),
+  exhibition: path.resolve(__dirname, '../../crm-dashboard/public/logo/ex.png'),
+  live: path.resolve(__dirname, '../../crm-dashboard/public/logo/liv.png'),
+};
 
 const money = (value) =>
   Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const safe = (value, fallback = '-') => String(value || '').trim() || fallback;
-const logoBuffer = (dataUrl) => {
-  const match = String(dataUrl || '').match(/^data:image\/(?:png|jpe?g);base64,(.+)$/i);
-  return match ? Buffer.from(match[1], 'base64') : null;
-};
-
 const generateQuotationPdf = (quotation) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
@@ -53,7 +54,6 @@ const generateQuotationPdf = (quotation) =>
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
     const brand = BRAND[quotation.communityKey] || BRAND.marketing;
-    const unitName = quotation.businessUnitId?.name || brand.name;
     const drawMoney = (value, x, top, width, { bold = false, size = 8.5 } = {}) => {
       const number = money(value);
       const numberFont = bold ? 'Helvetica-Bold' : 'Helvetica';
@@ -69,11 +69,11 @@ const generateQuotationPdf = (quotation) =>
 
     doc.rect(0, 0, 595.28, 112).fill('#FFFFFF');
     doc.rect(0, 0, 595.28, 7).fill(brand.color);
-    const uploadedLogo = logoBuffer(quotation.logoDataUrl);
+    const unitLogoPath = UNIT_LOGOS[quotation.communityKey];
     let logoDrawn = false;
-    if (uploadedLogo) {
+    if (unitLogoPath && fs.existsSync(unitLogoPath)) {
       try {
-        doc.image(uploadedLogo, 42, 22, { fit: [92, 48], align: 'left', valign: 'center' });
+        doc.image(unitLogoPath, 42, 18, { fit: [105, 58], align: 'left', valign: 'center' });
         logoDrawn = true;
       } catch {
         logoDrawn = false;
@@ -86,18 +86,6 @@ const generateQuotationPdf = (quotation) =>
         .font('Helvetica-Bold')
         .fontSize(25)
         .text('B', 42, 31, { width: 48, align: 'center' });
-    }
-    if (quotation.communityKey !== 'live') {
-      doc
-        .fillColor('#111827')
-        .font('Helvetica-Bold')
-        .fontSize(17)
-        .text(unitName, logoDrawn ? 148 : 104, 28, { width: 255 });
-      doc
-        .fillColor('#64748B')
-        .font('Helvetica')
-        .fontSize(8.5)
-        .text(brand.tagline, logoDrawn ? 148 : 104, 52, { width: 255 });
     }
     doc
       .fillColor(brand.color)
@@ -129,6 +117,9 @@ const generateQuotationPdf = (quotation) =>
       y + 79,
       { width: 270 },
     );
+    doc.text(`Company GSTIN: ${safe(quotation.companyGstin, 'Not provided')}`, 42, y + 94, {
+      width: 270,
+    });
     doc.font('Helvetica-Bold').fillColor('#111827').text('BILL TO', 330, y);
     doc
       .font('Helvetica')
@@ -139,7 +130,7 @@ const generateQuotationPdf = (quotation) =>
     if (quotation.clientPhone) doc.text(quotation.clientPhone, 330, y + 64, { width: 220 });
     if (quotation.clientAddress) doc.text(quotation.clientAddress, 330, y + 79, { width: 220 });
 
-    y = Math.max(y + 108, doc.y + 12);
+    y = Math.max(y + 123, doc.y + 12);
     doc.roundedRect(42, y, 511, 42, 4).fill('#F3F4F6');
     doc
       .fillColor('#374151')
@@ -248,6 +239,28 @@ const generateQuotationPdf = (quotation) =>
       doc.addPage();
       y = 48;
     }
+    const notes = String(quotation.notes || '')
+      .split(/\r?\n/)
+      .map((note) => note.trim())
+      .filter(Boolean);
+    if (notes.length) {
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('NOTES', 42, y + 5);
+      y += 22;
+      notes.forEach((note) => {
+        if (y > 720) {
+          doc.addPage();
+          y = 48;
+        }
+        doc.fillColor(brand.color).font('Helvetica-Bold').fontSize(9).text('•', 42, y);
+        doc
+          .fillColor('#4B5563')
+          .font('Helvetica')
+          .fontSize(8.5)
+          .text(note.replace(/^[•\-]\s*/, ''), 55, y, { width: 485 });
+        y = doc.y + 7;
+      });
+      y += 5;
+    }
     doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('PAYMENT TERMS', 42, y + 5);
     y += 22;
     const paymentTerms = String(quotation.terms || '')
@@ -290,9 +303,22 @@ const generateQuotationPdf = (quotation) =>
       .fillColor('#6B7280')
       .font('Helvetica')
       .fontSize(8)
-      .text(process.env.COMPANY_ADDRESS || 'BrainADZ · India', 42, footerY + 8, { width: 300 });
-    doc.text(process.env.COMPANY_EMAIL || 'accounts@brainadz.com', 350, footerY + 8, {
-      width: 203,
+      .text(
+        quotation.companyAddress ||
+          process.env.COMPANY_ADDRESS ||
+          'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
+        42,
+        footerY + 8,
+        { width: 340, height: 20, ellipsis: true },
+      );
+    const footerCompanyDetails = [
+      quotation.companyGstin ? `GSTIN: ${quotation.companyGstin}` : '',
+      process.env.COMPANY_EMAIL || 'accounts@brainadz.com',
+    ]
+      .filter(Boolean)
+      .join('  |  ');
+    doc.text(footerCompanyDetails, 385, footerY + 8, {
+      width: 168,
       align: 'right',
     });
     doc.end();

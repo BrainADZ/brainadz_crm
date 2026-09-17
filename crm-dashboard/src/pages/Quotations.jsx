@@ -4,7 +4,6 @@ import {
   Download,
   FilePlus2,
   FileText,
-  ImagePlus,
   Mail,
   Pencil,
   Plus,
@@ -58,7 +57,8 @@ const blankForm = () => ({
   documentType: 'quotation',
   proposalServices: [],
   deliverables: [''],
-  logoDataUrl: '',
+  companyGstin: '',
+  companyAddress: 'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
   quotationDate: dateValue(),
   validUntil: dateValue(15),
   customFields: [],
@@ -71,33 +71,6 @@ const blankForm = () => ({
 });
 const money = (value) =>
   `\u20B9${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const prepareLogo = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Unable to read the selected logo.'));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('The selected logo is not a valid image.'));
-      image.onload = () => {
-        const scale = Math.min(1, 900 / image.width, 360 / image.height);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.width * scale));
-        canvas.height = Math.max(1, Math.round(image.height * scale));
-        const context = canvas.getContext('2d');
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        let result = canvas.toDataURL(
-          file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png',
-          0.88,
-        );
-        if (result.length > 900000) result = canvas.toDataURL('image/jpeg', 0.82);
-        resolve(result);
-      };
-      image.src = String(reader.result || '');
-    };
-    reader.readAsDataURL(file);
-  });
-
 const ProposalOptions = ({ active, form, setForm }) => {
   const [customService, setCustomService] = useState('');
   if (!active) return null;
@@ -376,7 +349,10 @@ const Quotations = () => {
       documentType: quotation.documentType || 'quotation',
       proposalServices: quotation.proposalServices || [],
       deliverables: quotation.deliverables?.length ? [...quotation.deliverables] : [''],
-      logoDataUrl: quotation.logoDataUrl || '',
+      companyGstin: quotation.companyGstin || '',
+      companyAddress:
+        quotation.companyAddress ||
+        'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
       quotationDate: quotation.quotationDate || dateValue(),
       validUntil: quotation.validUntil || dateValue(15),
       customFields: (quotation.customFields || []).map((field) => ({
@@ -430,25 +406,6 @@ const Quotations = () => {
         itemIndex === index ? { ...item, ...changes } : item,
       ),
     }));
-  const selectLogo = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      setError('Please choose a PNG or JPG logo smaller than 5 MB.');
-      event.target.value = '';
-      return;
-    }
-    try {
-      const logoDataUrl = await prepareLogo(file);
-      setForm((current) => ({ ...current, logoDataUrl }));
-      setError('');
-    } catch (logoError) {
-      setError(logoError.message);
-    } finally {
-      event.target.value = '';
-    }
-  };
-
   const createQuotation = async (event) => {
     event.preventDefault();
     if (marketingDepartment && !form.proposalServices.length) {
@@ -738,58 +695,6 @@ const Quotations = () => {
               </button>
             </div>
             <div className="space-y-7 p-6">
-              <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white">
-                <div className="grid gap-5 p-5 lg:grid-cols-[18rem_1fr]">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                      Brand logo
-                    </p>
-                    <h3 className="mt-1 font-semibold text-slate-950">
-                      Logo appears at the top of the PDF
-                    </h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Upload a transparent PNG or JPG, up to 2 MB.
-                    </p>
-                    <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-blue-700">
-                      <ImagePlus size={15} />
-                      {form.logoDataUrl ? 'Change logo' : 'Upload logo'}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg"
-                        onChange={selectLogo}
-                        className="hidden"
-                      />
-                    </label>
-                    {form.logoDataUrl && (
-                      <button
-                        type="button"
-                        onClick={() => updateForm({ logoDataUrl: '' })}
-                        className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-blue-200 bg-white p-5">
-                    {form.logoDataUrl ? (
-                      <img
-                        src={form.logoDataUrl}
-                        alt="Quotation logo preview"
-                        className="max-h-20 max-w-56 object-contain"
-                      />
-                    ) : (
-                      <div className="text-center">
-                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-xl font-bold text-white">
-                          B
-                        </div>
-                        <p className="mt-2 text-xs font-medium text-slate-500">
-                          Brand logo preview
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
@@ -876,6 +781,23 @@ const Quotations = () => {
                       value={form.subject}
                       onChange={(event) => updateForm({ subject: event.target.value })}
                       placeholder="e.g. SEO & performance marketing proposal"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label>
+                    <span className={labelClass}>Company GSTIN</span>
+                    <input
+                      value={form.companyGstin}
+                      onChange={(event) => updateForm({ companyGstin: event.target.value })}
+                      placeholder="Enter company GSTIN"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="sm:col-span-2 lg:col-span-2">
+                    <span className={labelClass}>Company address</span>
+                    <input
+                      value={form.companyAddress}
+                      onChange={(event) => updateForm({ companyAddress: event.target.value })}
                       className={inputClass}
                     />
                   </label>
@@ -1063,6 +985,26 @@ const Quotations = () => {
               </section>
               <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
                 <div className="space-y-4">
+                  <details open className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <summary className="cursor-pointer bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
+                      Notes
+                    </summary>
+                    <div className="border-t border-slate-200 p-4">
+                      <label className="block">
+                        <span className={labelClass}>Quotation notes</span>
+                        <textarea
+                          rows="5"
+                          value={form.notes}
+                          onChange={(event) => updateForm({ notes: event.target.value })}
+                          placeholder="Add one note per line"
+                          className={`${inputClass} h-auto py-3`}
+                        />
+                        <span className="mt-1 block text-[11px] text-slate-500">
+                          Add one note per line. Notes will appear as bullet points in the PDF.
+                        </span>
+                      </label>
+                    </div>
+                  </details>
                   <details open className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <summary className="cursor-pointer bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
                       Payment terms & account details

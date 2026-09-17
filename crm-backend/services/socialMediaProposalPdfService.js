@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 const RED = '#BE302B';
 const INK = '#27243F';
@@ -19,10 +21,10 @@ const serviceLabel = (value) =>
     'social-media': 'Social Media Marketing',
     'paid-ads': 'Paid Advertising',
   })[value] || safe(value);
-const logoBuffer = (dataUrl) => {
-  const match = String(dataUrl || '').match(/^data:image\/(?:png|jpe?g);base64,(.+)$/i);
-  return match ? Buffer.from(match[1], 'base64') : null;
-};
+const MARKETING_LOGO = path.resolve(
+  __dirname,
+  '../../crm-dashboard/public/logo/marketing.png',
+);
 
 const generateSocialMediaProposalPdf = (proposal) =>
   new Promise((resolve, reject) => {
@@ -41,7 +43,7 @@ const generateSocialMediaProposalPdf = (proposal) =>
     const deliverables = proposal.deliverables?.length
       ? proposal.deliverables
       : DEFAULT_DELIVERABLES;
-    const uploadedLogo = logoBuffer(proposal.logoDataUrl);
+    const uploadedLogo = fs.existsSync(MARKETING_LOGO) ? fs.readFileSync(MARKETING_LOGO) : null;
 
     const drawHexagon = (centerX, centerY, radius) => {
       const points = Array.from({ length: 6 }, (_, index) => {
@@ -465,7 +467,8 @@ const generateSocialMediaProposalPdf = (proposal) =>
     drawContactCard(
       'Head Office - New Delhi',
       process.env.COMPANY_ADDRESS ||
-        'Apex Square 3, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
+        proposal.companyAddress ||
+        'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
       42,
       570,
       246,

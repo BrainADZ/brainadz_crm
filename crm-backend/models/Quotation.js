@@ -58,6 +58,13 @@ const quotationSchema = new mongoose.Schema(
     proposalServices: { type: [String], default: [] },
     deliverables: { type: [String], default: [] },
     logoDataUrl: { type: String, default: '' },
+    companyGstin: { type: String, default: '', trim: true, maxlength: 30 },
+    companyAddress: {
+      type: String,
+      default: 'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
+      trim: true,
+      maxlength: 300,
+    },
     quotationDate: { type: String, required: true },
     validUntil: { type: String, required: true },
     customFields: { type: [quotationCustomFieldSchema], default: [] },
