@@ -36,6 +36,13 @@ const blankItem = () => ({
   taxRate: '18',
 });
 const UNIT_OPTIONS = ['Unit', 'Square Feet', 'Meter', 'Lot'];
+const STATUS_STYLES = {
+  Draft: 'bg-amber-50 text-amber-700',
+  Sent: 'bg-blue-50 text-blue-700',
+  Accepted: 'bg-emerald-50 text-emerald-700',
+  Rejected: 'bg-red-50 text-red-700',
+  Expired: 'bg-slate-100 text-slate-600',
+};
 const MARKETING_SERVICES = [
   'Social Media Marketing',
   'Paid Advertising',
@@ -241,6 +248,7 @@ const Quotations = () => {
   const [form, setForm] = useState(blankForm);
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState('');
+  const [updatingStatusId, setUpdatingStatusId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -457,6 +465,7 @@ const Quotations = () => {
     if (!window.confirm(`Send ${quotation.quotationNumber} to ${quotation.clientEmail}?`)) return;
     setSendingId(quotation._id);
     setError('');
+    setMessage('');
     try {
       const response = await axios.post(
         `${API_BASE_URL}/api/quotations/${quotation._id}/send`,
@@ -471,6 +480,28 @@ const Quotations = () => {
       setError(requestError.response?.data?.message || 'Unable to send quotation email');
     } finally {
       setSendingId('');
+    }
+  };
+
+  const updateStatus = async (quotation, status) => {
+    if (status === quotation.status || updatingStatusId || sendingId) return;
+    setUpdatingStatusId(quotation._id);
+    setError('');
+    setMessage('');
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/quotations/${quotation._id}/status`,
+        { status },
+        { headers: headers() },
+      );
+      setQuotations((current) =>
+        current.map((item) => (item._id === quotation._id ? response.data.quotation : item)),
+      );
+      setMessage(response.data.message);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to update quotation status');
+    } finally {
+      setUpdatingStatusId('');
     }
   };
 
@@ -547,18 +578,25 @@ const Quotations = () => {
           <div>
             <h2 className="font-semibold text-slate-950">Quotation register</h2>
             <p className="mt-1 text-xs text-slate-500">{filtered.length} records</p>
+            {options.actions.includes('update') && (
+              <p className="mt-1 text-xs text-slate-500">
+                Change status in the table. Use Send to email the client and mark it Sent
+                automatically.
+              </p>
+            )}
           </div>
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className={`${inputClass} w-40`}
+            aria-label="Filter quotations by status"
+            className="h-10 w-40 shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           >
             <option value="all">All Status</option>
-            <option>Draft</option>
-            <option>Sent</option>
-            <option>Accepted</option>
-            <option>Rejected</option>
-            <option>Expired</option>
+            {Object.keys(STATUS_STYLES).map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
           </select>
         </div>
         <div className="overflow-x-auto">
@@ -606,11 +644,34 @@ const Quotations = () => {
                     {money(quotation.grandTotal)}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${quotation.status === 'Sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
-                    >
-                      {quotation.status}
-                    </span>
+                    {options.actions.includes('update') ? (
+                      <div>
+                        <select
+                          aria-label={`Status for ${quotation.quotationNumber}`}
+                          value={quotation.status}
+                          onChange={(event) => updateStatus(quotation, event.target.value)}
+                          disabled={Boolean(updatingStatusId || sendingId)}
+                          className={`h-9 min-w-28 rounded-lg border border-current/20 px-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-wait disabled:opacity-50 ${STATUS_STYLES[quotation.status] || STATUS_STYLES.Draft}`}
+                        >
+                          {Object.keys(STATUS_STYLES).map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                        {updatingStatusId === quotation._id && (
+                          <p role="status" className="mt-1 text-xs text-slate-500">
+                            Saving...
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[quotation.status] || STATUS_STYLES.Draft}`}
+                      >
+                        {quotation.status}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
@@ -618,6 +679,7 @@ const Quotations = () => {
                         <button
                           type="button"
                           title="Edit quotation"
+                          disabled={Boolean(updatingStatusId || sendingId)}
                           onClick={() => openEdit(quotation)}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
                         >
@@ -636,7 +698,10 @@ const Quotations = () => {
                         type="button"
                         title="Send to client"
                         onClick={() => sendQuotation(quotation)}
-                        disabled={sendingId === quotation._id}
+                        disabled={
+                          Boolean(sendingId || updatingStatusId) ||
+                          !options.actions.includes('create')
+                        }
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
                       >
                         <Send size={14} />
@@ -985,7 +1050,10 @@ const Quotations = () => {
               </section>
               <section className="grid gap-5 lg:grid-cols-[1fr_22rem]">
                 <div className="space-y-4">
-                  <details open className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <details
+                    open
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                  >
                     <summary className="cursor-pointer bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
                       Notes
                     </summary>
@@ -1005,7 +1073,10 @@ const Quotations = () => {
                       </label>
                     </div>
                   </details>
-                  <details open className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <details
+                    open
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                  >
                     <summary className="cursor-pointer bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
                       Payment terms & account details
                     </summary>
@@ -1029,10 +1100,18 @@ const Quotations = () => {
                             Account details
                           </p>
                           <div className="mt-2 grid gap-1 text-xs text-slate-800 sm:grid-cols-2">
-                            <p><strong>A/c Holder:</strong> Brainadz Live Pvt. Ltd.</p>
-                            <p><strong>Bank:</strong> ICICI Bank</p>
-                            <p><strong>A/c No.:</strong> 057105004479</p>
-                            <p><strong>IFSC:</strong> ICIC0000571</p>
+                            <p>
+                              <strong>A/c Holder:</strong> Brainadz Live Pvt. Ltd.
+                            </p>
+                            <p>
+                              <strong>Bank:</strong> ICICI Bank
+                            </p>
+                            <p>
+                              <strong>A/c No.:</strong> 057105004479
+                            </p>
+                            <p>
+                              <strong>IFSC:</strong> ICIC0000571
+                            </p>
                           </div>
                         </div>
                       )}

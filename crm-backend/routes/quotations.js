@@ -431,6 +431,37 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
   }
 });
 
+router.patch('/:id/status', requirePermission('quotations', 'update'), async (req, res, next) => {
+  try {
+    const { status } = req.body || {};
+    if (!Quotation.schema.path('status').enumValues.includes(status)) {
+      return res.status(400).json({ message: 'Select a valid quotation status' });
+    }
+    const quotation = await findAccessibleQuotation(req, req.params.id);
+    if (!quotation) return res.status(404).json({ message: 'Quotation not found' });
+    const previousStatus = quotation.status;
+    if (previousStatus !== status) {
+      // Manual status changes do not send email or replace actual delivery metadata.
+      quotation.status = status;
+      await quotation.save();
+      await writeAuditLog({
+        req,
+        action: 'quotation_status_updated',
+        resource: 'quotations',
+        resourceId: quotation._id,
+        previousValue: { status: previousStatus },
+        newValue: { status },
+      });
+    }
+    return res.json({
+      message: `${quotation.quotationNumber} marked as ${status}`,
+      quotation: await populateQuotation(Quotation.findById(quotation._id)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id/pdf', requirePermission('quotations', 'view'), async (req, res, next) => {
   try {
     const quotation = await findAccessibleQuotation(req, req.params.id);
