@@ -249,6 +249,7 @@ const Quotations = () => {
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState('');
   const [updatingStatusId, setUpdatingStatusId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -484,7 +485,7 @@ const Quotations = () => {
   };
 
   const updateStatus = async (quotation, status) => {
-    if (status === quotation.status || updatingStatusId || sendingId) return;
+    if (status === quotation.status || updatingStatusId || sendingId || deletingId) return;
     setUpdatingStatusId(quotation._id);
     setError('');
     setMessage('');
@@ -502,6 +503,30 @@ const Quotations = () => {
       setError(requestError.response?.data?.message || 'Unable to update quotation status');
     } finally {
       setUpdatingStatusId('');
+    }
+  };
+
+  const deleteQuotation = async (quotation) => {
+    if (deletingId || sendingId || updatingStatusId) return;
+    if (
+      !window.confirm(
+        `Delete ${quotation.quotationNumber} for ${quotation.clientCompany || quotation.clientName}? This cannot be undone.`,
+      )
+    )
+      return;
+    setDeletingId(quotation._id);
+    setError('');
+    setMessage('');
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/api/quotations/${quotation._id}`, {
+        headers: headers(),
+      });
+      setQuotations((current) => current.filter((item) => item._id !== quotation._id));
+      setMessage(response.data.message);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to delete quotation');
+    } finally {
+      setDeletingId('');
     }
   };
 
@@ -650,7 +675,7 @@ const Quotations = () => {
                           aria-label={`Status for ${quotation.quotationNumber}`}
                           value={quotation.status}
                           onChange={(event) => updateStatus(quotation, event.target.value)}
-                          disabled={Boolean(updatingStatusId || sendingId)}
+                          disabled={Boolean(updatingStatusId || sendingId || deletingId)}
                           className={`h-9 min-w-28 rounded-lg border border-current/20 px-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-wait disabled:opacity-50 ${STATUS_STYLES[quotation.status] || STATUS_STYLES.Draft}`}
                         >
                           {Object.keys(STATUS_STYLES).map((status) => (
@@ -679,7 +704,7 @@ const Quotations = () => {
                         <button
                           type="button"
                           title="Edit quotation"
-                          disabled={Boolean(updatingStatusId || sendingId)}
+                          disabled={Boolean(updatingStatusId || sendingId || deletingId)}
                           onClick={() => openEdit(quotation)}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
                         >
@@ -699,7 +724,7 @@ const Quotations = () => {
                         title="Send to client"
                         onClick={() => sendQuotation(quotation)}
                         disabled={
-                          Boolean(sendingId || updatingStatusId) ||
+                          Boolean(sendingId || updatingStatusId || deletingId) ||
                           !options.actions.includes('create')
                         }
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
@@ -707,6 +732,19 @@ const Quotations = () => {
                         <Send size={14} />
                         {sendingId === quotation._id ? 'Sending' : 'Send'}
                       </button>
+                      {options.canDelete && (
+                        <button
+                          type="button"
+                          title="Delete quotation"
+                          aria-label={`Delete ${quotation.quotationNumber}`}
+                          onClick={() => deleteQuotation(quotation)}
+                          disabled={Boolean(deletingId || sendingId || updatingStatusId)}
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Trash2 size={15} />
+                          {deletingId === quotation._id && 'Deleting...'}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

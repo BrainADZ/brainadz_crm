@@ -12,9 +12,15 @@ const actorId = '507f1f77bcf86cd799439011';
 const quotationId = '507f1f77bcf86cd799439012';
 
 // Run real route handlers and permission checks with isolated database/email boundaries.
-const setup = ({ missing = false, emailFailure = false, pdfFailure = false } = {}) => {
+const setup = ({
+  missing = false,
+  emailFailure = false,
+  pdfFailure = false,
+  deleteFailure = false,
+  deletedCount = 1,
+} = {}) => {
   const routes = {};
-  const calls = { saved: 0, email: 0, audit: [], queries: [] };
+  const calls = { saved: 0, email: 0, audit: [], queries: [], deleted: [] };
   const quotation = {
     _id: quotationId,
     quotationNumber: 'TEST-001',
@@ -37,7 +43,7 @@ const setup = ({ missing = false, emailFailure = false, pdfFailure = false } = {
     },
   });
   const router = { use() {} };
-  for (const method of ['get', 'post', 'put', 'patch']) {
+  for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
     router[method] = (url, ...handlers) => {
       routes[`${method} ${url}`] = handlers;
     };
@@ -55,7 +61,14 @@ const setup = ({ missing = false, emailFailure = false, pdfFailure = false } = {
         calls.queries.push(filter);
         return query(missing ? null : quotation);
       },
+      deleteOne: async (filter) => {
+        calls.deleted.push(filter);
+        if (deleteFailure) throw new Error('Database unavailable');
+        return { deletedCount };
+      },
     },
+    '../models/BusinessUnit': { find: () => ({ sort: () => ({ lean: async () => [] }) }) },
+    '../models/Department': { find: () => ({ sort: () => ({ lean: async () => [] }) }) },
     '../models/UserAccessAssignment': {
       find: () => ({ select: () => ({ lean: async () => [] }) }),
     },
@@ -86,7 +99,7 @@ const setup = ({ missing = false, emailFailure = false, pdfFailure = false } = {
       params: { id: quotationId },
       user: { _id: actorId, roleKey: 'super_admin' },
       effectivePermissions: [
-        { resource: 'quotations', actions: ['update', 'create'], scope: 'ALL' },
+        { resource: 'quotations', actions: ['view', 'update', 'create', 'delete'], scope: 'ALL' },
       ],
       ...overrides,
     };
@@ -113,6 +126,83 @@ const setup = ({ missing = false, emailFailure = false, pdfFailure = false } = {
   };
   return { request, quotation, calls };
 };
+
+for (const status of ['Draft', 'Sent']) {
+  test(`admin can delete a ${status} quotation with an audit record`, async () => {
+    const { request, quotation, calls } = setup();
+    quotation.status = status;
+    const result = await request('delete /:id');
+    assert.equal(result.statusCode, 200);
+    assert.match(result.body.message, /TEST-001 deleted successfully/);
+    assert.equal(calls.deleted.length, 1);
+    assert.equal(calls.deleted[0]._id, quotationId);
+    assert.equal(calls.audit[0].action, 'quotation_deleted');
+    assert.equal(calls.audit[0].previousValue.status, status);
+    assert.equal(calls.email, 0);
+  });
+}
+
+test('employee cannot delete even with a delegated delete permission', async () => {
+  const { request, calls } = setup();
+  const result = await request('delete /:id', {}, { user: { _id: actorId, roleKey: 'employee' } });
+  assert.equal(result.statusCode, 403);
+  assert.equal(calls.deleted.length, 0);
+});
+
+test('delete permission denies and missing permissions are respected', async () => {
+  for (const permissions of [
+    [],
+    [{ resource: 'quotations', actions: ['delete'], deniedActions: ['delete'], scope: 'all' }],
+  ]) {
+    const { request, calls } = setup();
+    const result = await request('delete /:id', {}, { effectivePermissions: permissions });
+    assert.equal(result.statusCode, 403);
+    assert.equal(calls.deleted.length, 0);
+  }
+});
+
+test('unknown or invalid quotation ID does not delete anything', async () => {
+  for (const options of [{ missing: true }, {}]) {
+    const { request, calls } = setup(options);
+    const result = await request(
+      'delete /:id',
+      {},
+      { params: { id: options.missing ? quotationId : 'invalid-id' } },
+    );
+    assert.equal(result.statusCode, 404);
+    assert.equal(calls.deleted.length, 0);
+  }
+});
+
+test('failed deletion and already deleted records do not report success or audit a deletion', async () => {
+  for (const options of [{ deleteFailure: true }, { deletedCount: 0 }]) {
+    const { request, calls } = setup(options);
+    const result = await request('delete /:id');
+    if (options.deleteFailure) assert.match(result.error.message, /Database unavailable/);
+    else assert.equal(result.statusCode, 404);
+    assert.equal(calls.audit.length, 0);
+  }
+});
+
+test('options enable deletion only for an admin with delete permission', async () => {
+  for (const [roleKey, actions, expected] of [
+    ['super_admin', ['view', 'delete'], true],
+    ['super_admin', ['view'], false],
+    ['employee', ['view', 'delete'], false],
+  ]) {
+    const { request } = setup();
+    const result = await request(
+      'get /options',
+      {},
+      {
+        user: { _id: actorId, roleKey },
+        effectivePermissions: [{ resource: 'quotations', actions, scope: 'all' }],
+      },
+    );
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.body.canDelete, expected);
+  }
+});
 
 for (const status of Quotation.schema.path('status').enumValues) {
   test(`manual status ${status} saves without sending email or replacing delivery history`, async () => {

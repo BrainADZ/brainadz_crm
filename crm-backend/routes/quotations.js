@@ -11,6 +11,7 @@ const { generateQuotationPdf } = require('../services/quotationPdfService');
 const { generateSocialMediaProposalPdf } = require('../services/socialMediaProposalPdfService');
 const { sendQuotationEmail } = require('../services/emailService');
 const { writeAuditLog } = require('../services/auditService');
+const { getPermission } = require('../services/accessControlService');
 
 const router = express.Router();
 router.use(authMiddleware, loadAuthorization);
@@ -229,6 +230,9 @@ router.get('/options', requirePermission('quotations', 'view'), async (req, res,
     const organization = await accessOrganization(req.user);
     return res.json({
       ...organization,
+      canDelete:
+        req.user.roleKey === 'super_admin' &&
+        Boolean(getPermission(req.effectivePermissions, 'quotations', 'delete')),
       actions:
         req.effectivePermissions.find((permission) => permission.resource === 'quotations')
           ?.actions || [],
@@ -426,6 +430,34 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       message: `${quotation.quotationNumber} updated successfully`,
       quotation: await populateQuotation(Quotation.findById(quotation._id)),
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/:id', requirePermission('quotations', 'delete'), async (req, res, next) => {
+  try {
+    if (req.user.roleKey !== 'super_admin') {
+      return res.status(403).json({ message: 'Only admins can delete quotations' });
+    }
+    const quotation = await findAccessibleQuotation(req, req.params.id);
+    if (!quotation) return res.status(404).json({ message: 'Quotation not found' });
+    const result = await Quotation.deleteOne({ _id: quotation._id });
+    if (!result.deletedCount) return res.status(404).json({ message: 'Quotation not found' });
+    await writeAuditLog({
+      req,
+      action: 'quotation_deleted',
+      resource: 'quotations',
+      resourceId: quotation._id,
+      previousValue: {
+        quotationNumber: quotation.quotationNumber,
+        clientEmail: quotation.clientEmail,
+        grandTotal: quotation.grandTotal,
+        status: quotation.status,
+        createdBy: quotation.createdBy?._id || quotation.createdBy,
+      },
+    });
+    return res.json({ message: `${quotation.quotationNumber} deleted successfully` });
   } catch (error) {
     return next(error);
   }
