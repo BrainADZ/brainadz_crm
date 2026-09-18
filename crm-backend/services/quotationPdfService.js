@@ -2,20 +2,10 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-// Resolve through Node so hoisted installations also work. PDFKit's built-in
-// fonts keep downloads available when optional font assets are missing.
-const resolveFont = (subset, weight) => {
-  try {
-    return require.resolve(
-      `@fontsource/noto-sans/files/noto-sans-${subset}-${weight}-normal.woff`,
-    );
-  } catch (error) {
-    if (error.code !== 'MODULE_NOT_FOUND' && error.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
-      throw error;
-    }
-    return null;
-  }
-};
+// Ship the font assets with the backend so deployments do not depend on
+// node_modules font files. The Devanagari subset contains the rupee glyph.
+const resolveFont = (subset, weight) =>
+  path.resolve(__dirname, `../assets/fonts/noto-sans-${subset}-${weight}-normal.woff`);
 const REGULAR_FONT = resolveFont('latin', 400);
 const BOLD_FONT = resolveFont('latin', 700);
 const RUPEE_FONT = resolveFont('devanagari', 400);
@@ -23,7 +13,11 @@ const RUPEE_BOLD_FONT = resolveFont('devanagari', 700);
 const BRAND_BLUE = '#1D4ED8';
 
 const BRAND = {
-  marketing: { name: 'BrainADZ Marketing', color: BRAND_BLUE, tagline: 'Ideas That Spark Momentum' },
+  marketing: {
+    name: 'BrainADZ Marketing',
+    color: BRAND_BLUE,
+    tagline: 'Ideas That Spark Momentum',
+  },
   exhibition: {
     name: 'BrainADZ Exhibits',
     color: BRAND_BLUE,
@@ -42,15 +36,18 @@ const UNIT_LOGOS = {
 };
 
 const money = (value) =>
-  Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number(value || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 const safe = (value, fallback = '-') => String(value || '').trim() || fallback;
 const generateQuotationPdf = (quotation) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
-    if (REGULAR_FONT) doc.registerFont('Helvetica', REGULAR_FONT);
-    if (BOLD_FONT) doc.registerFont('Helvetica-Bold', BOLD_FONT);
-    if (RUPEE_FONT) doc.registerFont('Rupee', RUPEE_FONT);
-    if (RUPEE_BOLD_FONT) doc.registerFont('Rupee-Bold', RUPEE_BOLD_FONT);
+    doc.registerFont('Helvetica', REGULAR_FONT);
+    doc.registerFont('Helvetica-Bold', BOLD_FONT);
+    doc.registerFont('Rupee', RUPEE_FONT);
+    doc.registerFont('Rupee-Bold', RUPEE_BOLD_FONT);
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -59,15 +56,16 @@ const generateQuotationPdf = (quotation) =>
     const drawMoney = (value, x, top, width, { bold = false, size = 8.5 } = {}) => {
       const number = money(value);
       const numberFont = bold ? 'Helvetica-Bold' : 'Helvetica';
-      const hasRupeeFont = bold ? RUPEE_BOLD_FONT : RUPEE_FONT;
-      const rupeeFont = hasRupeeFont ? (bold ? 'Rupee-Bold' : 'Rupee') : numberFont;
-      const currencyLabel = hasRupeeFont ? '₹ ' : 'INR ';
+      const rupeeFont = bold ? 'Rupee-Bold' : 'Rupee';
+      const currencyLabel = '₹ ';
       doc.font(numberFont).fontSize(size);
       const numberWidth = doc.widthOfString(number);
       doc.font(rupeeFont).fontSize(size);
       const symbolWidth = doc.widthOfString(currencyLabel);
       const start = x + Math.max(0, width - numberWidth - symbolWidth);
-      doc.fillColor(bold ? brand.color : '#374151').text(currencyLabel, start, top, { lineBreak: false });
+      doc
+        .fillColor(bold ? brand.color : '#374151')
+        .text(currencyLabel, start, top, { lineBreak: false });
       doc.font(numberFont).text(number, start + symbolWidth, top, { lineBreak: false });
     };
 
@@ -111,17 +109,7 @@ const generateQuotationPdf = (quotation) =>
     if (quotation.communityKey === 'live') {
       doc.text(`Type: ${quotation.quotationMode === 'rental' ? 'Rental' : 'Sale'}`, 42, y + 49);
     }
-    doc.text(`Prepared by: ${safe(quotation.createdBy?.name)}`, 42, y + 64, { width: 250 });
-    const departmentAndDesignation = [quotation.departmentId?.name, quotation.createdBy?.position]
-      .filter(Boolean)
-      .join(' / ');
-    doc.text(
-      `Department / Designation: ${safe(departmentAndDesignation)}`,
-      42,
-      y + 79,
-      { width: 270 },
-    );
-    doc.text(`Company GSTIN: ${safe(quotation.companyGstin, 'Not provided')}`, 42, y + 94, {
+    doc.text(`Company GSTIN: ${safe(quotation.companyGstin, 'Not provided')}`, 42, y + 64, {
       width: 270,
     });
     doc.font('Helvetica-Bold').fillColor('#111827').text('BILL TO', 330, y);
@@ -149,9 +137,7 @@ const generateQuotationPdf = (quotation) =>
     y += 62;
 
     const rental = quotation.communityKey === 'live' && quotation.quotationMode === 'rental';
-    const widths = rental
-      ? [22, 132, 60, 36, 62, 64, 42, 93]
-      : [24, 163, 60, 65, 70, 45, 84];
+    const widths = rental ? [22, 132, 60, 36, 62, 64, 42, 93] : [24, 163, 60, 65, 70, 45, 84];
     const headers = rental
       ? ['#', 'Description', 'Qty / Area', 'Days', 'Unit', 'Rate', 'Tax', 'Amount']
       : ['#', 'Description', 'Qty / Area', 'Unit', 'Rate', 'Tax', 'Amount'];
@@ -248,7 +234,11 @@ const generateQuotationPdf = (quotation) =>
       .map((note) => note.trim())
       .filter(Boolean);
     if (notes.length) {
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('NOTES', 42, y + 5);
+      doc
+        .fillColor('#111827')
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text('NOTES', 42, y + 5);
       y += 22;
       notes.forEach((note) => {
         if (y > 720) {
@@ -265,31 +255,36 @@ const generateQuotationPdf = (quotation) =>
       });
       y += 5;
     }
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(9).text('PAYMENT TERMS', 42, y + 5);
+    doc
+      .fillColor('#111827')
+      .font('Helvetica-Bold')
+      .fontSize(9)
+      .text('PAYMENT TERMS', 42, y + 5);
     y += 22;
     const paymentTerms = String(quotation.terms || '')
       .split(/\r?\n/)
       .map((term) => term.trim())
       .filter(Boolean);
-    (paymentTerms.length ? paymentTerms : ['Payment terms will be agreed with the client.']).forEach(
-      (term) => {
-        if (y > 720) {
-          doc.addPage();
-          y = 48;
-        }
-        doc.fillColor(brand.color).font('Helvetica-Bold').fontSize(9).text('•', 42, y);
-        doc
-          .fillColor('#4B5563')
-          .font('Helvetica')
-          .fontSize(8.5)
-          .text(term.replace(/^[•\-–]\s*/, ''), 55, y, { width: 485 });
-        y = doc.y + 7;
-      },
-    );
+    (paymentTerms.length
+      ? paymentTerms
+      : ['Payment terms will be agreed with the client.']
+    ).forEach((term) => {
+      if (y > 720) {
+        doc.addPage();
+        y = 48;
+      }
+      doc.fillColor(brand.color).font('Helvetica-Bold').fontSize(9).text('•', 42, y);
+      doc
+        .fillColor('#4B5563')
+        .font('Helvetica')
+        .fontSize(8.5)
+        .text(term.replace(/^[•\-–]\s*/, ''), 55, y, { width: 485 });
+      y = doc.y + 7;
+    });
 
     if (quotation.communityKey === 'live') {
       y += 8;
-      if (y > 700) {
+      if (y > 660) {
         doc.addPage();
         y = 48;
       }
@@ -302,6 +297,17 @@ const generateQuotationPdf = (quotation) =>
     }
 
     const footerY = 770;
+    const preparedByY = footerY - 24;
+    if (doc.y > preparedByY - 12) doc.addPage();
+    doc
+      .fillColor('#374151')
+      .font('Helvetica-Bold')
+      .fontSize(9)
+      .text(`Prepared by: ${safe(quotation.createdBy?.name)}`, 42, preparedByY, {
+        width: 511,
+        height: 18,
+        ellipsis: true,
+      });
     doc.moveTo(42, footerY).lineTo(553, footerY).strokeColor('#D1D5DB').stroke();
     doc
       .fillColor('#6B7280')
@@ -313,16 +319,18 @@ const generateQuotationPdf = (quotation) =>
           'Apex Square III, UGF, Plot 6, Pocket B-3, Sector 17, Dwarka, New Delhi 110075',
         42,
         footerY + 8,
-        { width: 340, height: 20, ellipsis: true },
+        { width: 300, height: 24, ellipsis: true },
       );
     const footerCompanyDetails = [
       quotation.companyGstin ? `GSTIN: ${quotation.companyGstin}` : '',
-      process.env.COMPANY_EMAIL || 'accounts@brainadz.com',
+      String(quotation.createdBy?.email || '').trim(),
     ]
       .filter(Boolean)
-      .join('  |  ');
-    doc.text(footerCompanyDetails, 385, footerY + 8, {
-      width: 168,
+      .join('\n');
+    doc.text(footerCompanyDetails, 353, footerY + 8, {
+      width: 200,
+      height: 24,
+      ellipsis: true,
       align: 'right',
     });
     doc.end();
