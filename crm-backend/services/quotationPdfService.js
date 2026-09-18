@@ -2,22 +2,24 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-const REGULAR_FONT = path.join(
-  __dirname,
-  '../node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff',
-);
-const BOLD_FONT = path.join(
-  __dirname,
-  '../node_modules/@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff',
-);
-const RUPEE_FONT = path.join(
-  __dirname,
-  '../node_modules/@fontsource/noto-sans/files/noto-sans-devanagari-400-normal.woff',
-);
-const RUPEE_BOLD_FONT = path.join(
-  __dirname,
-  '../node_modules/@fontsource/noto-sans/files/noto-sans-devanagari-700-normal.woff',
-);
+// Resolve through Node so hoisted installations also work. PDFKit's built-in
+// fonts keep downloads available when optional font assets are missing.
+const resolveFont = (subset, weight) => {
+  try {
+    return require.resolve(
+      `@fontsource/noto-sans/files/noto-sans-${subset}-${weight}-normal.woff`,
+    );
+  } catch (error) {
+    if (error.code !== 'MODULE_NOT_FOUND' && error.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+      throw error;
+    }
+    return null;
+  }
+};
+const REGULAR_FONT = resolveFont('latin', 400);
+const BOLD_FONT = resolveFont('latin', 700);
+const RUPEE_FONT = resolveFont('devanagari', 400);
+const RUPEE_BOLD_FONT = resolveFont('devanagari', 700);
 const BRAND_BLUE = '#1D4ED8';
 
 const BRAND = {
@@ -45,10 +47,10 @@ const safe = (value, fallback = '-') => String(value || '').trim() || fallback;
 const generateQuotationPdf = (quotation) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
-    doc.registerFont('Helvetica', REGULAR_FONT);
-    doc.registerFont('Helvetica-Bold', BOLD_FONT);
-    doc.registerFont('Rupee', RUPEE_FONT);
-    doc.registerFont('Rupee-Bold', RUPEE_BOLD_FONT);
+    if (REGULAR_FONT) doc.registerFont('Helvetica', REGULAR_FONT);
+    if (BOLD_FONT) doc.registerFont('Helvetica-Bold', BOLD_FONT);
+    if (RUPEE_FONT) doc.registerFont('Rupee', RUPEE_FONT);
+    if (RUPEE_BOLD_FONT) doc.registerFont('Rupee-Bold', RUPEE_BOLD_FONT);
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -57,13 +59,15 @@ const generateQuotationPdf = (quotation) =>
     const drawMoney = (value, x, top, width, { bold = false, size = 8.5 } = {}) => {
       const number = money(value);
       const numberFont = bold ? 'Helvetica-Bold' : 'Helvetica';
-      const rupeeFont = bold ? 'Rupee-Bold' : 'Rupee';
+      const hasRupeeFont = bold ? RUPEE_BOLD_FONT : RUPEE_FONT;
+      const rupeeFont = hasRupeeFont ? (bold ? 'Rupee-Bold' : 'Rupee') : numberFont;
+      const currencyLabel = hasRupeeFont ? '₹ ' : 'INR ';
       doc.font(numberFont).fontSize(size);
       const numberWidth = doc.widthOfString(number);
       doc.font(rupeeFont).fontSize(size);
-      const symbolWidth = doc.widthOfString('₹ ');
+      const symbolWidth = doc.widthOfString(currencyLabel);
       const start = x + Math.max(0, width - numberWidth - symbolWidth);
-      doc.fillColor(bold ? brand.color : '#374151').text('₹ ', start, top, { lineBreak: false });
+      doc.fillColor(bold ? brand.color : '#374151').text(currencyLabel, start, top, { lineBreak: false });
       doc.font(numberFont).text(number, start + symbolWidth, top, { lineBreak: false });
     };
 

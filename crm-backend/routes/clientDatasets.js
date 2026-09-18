@@ -374,18 +374,21 @@ const applyBusinessUnitTableFormat = (communityKey, columns, rows) => {
     };
   }
 
+  const importColumns = [...template, ...CLIENT_WORK_COLUMNS];
   const formattedRows = rows.map((row, rowIndex) =>
-    template.map((column) => {
+    importColumns.map((column) => {
       const index = sourceIndex.get(normalizeHeaderKey(column));
 
       return index === undefined && normalizeHeaderKey(column) === 'srno'
         ? String(rowIndex + 1)
-        : normalizeCell(row[index]);
+        : index === undefined
+          ? ''
+          : normalizeCell(row[index]);
     }),
   );
 
   return {
-    ...addWorkColumnsAfterWebsite(template, formattedRows),
+    ...addWorkColumnsAfterWebsite(importColumns, formattedRows),
 
     format: communityKey,
   };
