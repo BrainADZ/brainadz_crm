@@ -6,6 +6,7 @@ const rowLogEntrySchema = new mongoose.Schema(
     changedByName: { type: String, default: '' },
     changedByRole: String,
 
+    callLogged: { type: Boolean, default: false },
     statusChanged: { type: Boolean, default: false },
     remarkChanged: { type: Boolean, default: false },
     followUpDateChanged: { type: Boolean, default: false },
@@ -231,6 +232,8 @@ const clientDatasetSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+clientDatasetSchema.index({ 'rowFollowUps.followUpDate': 1 });
 
 clientDatasetSchema.index({
   communityKey: 1,

@@ -21,6 +21,7 @@ const meetingRoutes = require('./routes/meetings');
 const quotationRoutes = require('./routes/quotations');
 const websiteEnquiryRoutes = require('./routes/websiteEnquiries');
 const { startMeetingReminderScheduler } = require('./services/meetingReminderService');
+const { startFollowUpReminderScheduler } = require('./services/followUpReminderService');
 const path = require('path');
 
 dotenv.config();
@@ -80,6 +81,7 @@ mongoose
   .then(() => {
     console.log('MongoDB connected');
     startMeetingReminderScheduler();
+    startFollowUpReminderScheduler();
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 

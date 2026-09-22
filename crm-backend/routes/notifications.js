@@ -3,6 +3,8 @@ const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/authMiddleware');
 const { queueMeetingReminderProcessing } = require('../services/meetingReminderService');
 
+const { queueFollowUpReminderProcessing } = require('../services/followUpReminderService');
+
 const router = express.Router();
 
 const getRecipientFilter = (user) => {
@@ -24,6 +26,7 @@ router.get('/', authMiddleware, async (req, res) => {
     if (req.user.role !== 'admin') {
       queueMeetingReminderProcessing({ employeeId: req.user._id });
     }
+    queueFollowUpReminderProcessing();
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
     const recipientFilter = getRecipientFilter(req.user);
 

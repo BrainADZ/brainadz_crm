@@ -6,6 +6,8 @@ const XLSX = require('xlsx');
 const ClientDataset = require('../models/ClientDataset');
 
 const Meeting = require('../models/Meeting');
+const { getRowActivity, prepareWorkQueue } = require('../utils/clientWorkQueue');
+const { queueFollowUpReminderProcessing } = require('../services/followUpReminderService');
 
 const User = require('../models/User');
 
@@ -754,7 +756,7 @@ const prepareDatasetResponse = (dataset, includeLogs = false, meetings = []) => 
 
   const rowLogs = includeLogs ? datasetObject.rowLogs || [] : undefined;
 
-  const rowAssignments = includeLogs ? getEffectiveAssignments(datasetObject) : undefined;
+  const rowAssignments = getEffectiveAssignments(datasetObject);
 
   return {
     ...datasetObject,
@@ -770,80 +772,13 @@ const prepareDatasetResponse = (dataset, includeLogs = false, meetings = []) => 
     rows: normalizedData.rows,
 
     rowLogs,
+    rowActivity: getRowActivity(datasetObject.rowLogs || []),
 
     rowAssignments,
 
     followUpDates: getFollowUpDatesMap(datasetObject.rowFollowUps || []),
 
     rowMeetings: getRowMeetingsMap(meetings),
-  };
-};
-
-const preparePagedLiveResponse = (
-  dataset,
-  query = {},
-  currentUserId,
-  includeLogs = false,
-  meetings = [],
-) => {
-  const response = prepareDatasetResponse(dataset, includeLogs, meetings);
-  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
-  const pageSize = Math.min(100, Math.max(10, Number.parseInt(query.pageSize, 10) || 50));
-  const search = normalizeCell(query.search).toLowerCase();
-  const statusFilter = normalizeCell(query.status);
-  const employeeFilter = normalizeCell(query.employeeId);
-  const assignmentFilter = normalizeCell(query.assignment);
-  const statusIndex = getColumnIndex(response.columns, 'Status');
-  const assignmentMap = getAssignmentsByRow(response.rowAssignments || []);
-
-  const filtered = response.rows
-    .map((row, rowIndex) => ({ row, rowIndex }))
-    .filter(({ row, rowIndex }) => {
-      const assignments = assignmentMap.get(rowIndex) || [];
-      const matchesSearch =
-        !search || row.some((cell) => normalizeCell(cell).toLowerCase().includes(search));
-      const matchesStatus =
-        !statusFilter || statusFilter === 'all' || normalizeCell(row[statusIndex]) === statusFilter;
-      const matchesEmployee =
-        !employeeFilter ||
-        employeeFilter === 'all' ||
-        assignments.some(
-          (assignment) => String(assignment.employee) === String(employeeFilter),
-        );
-      const matchesAssignment =
-        !assignmentFilter ||
-        assignmentFilter === 'all' ||
-        (assignmentFilter === 'assigned' && assignments.length > 0) ||
-        (assignmentFilter === 'unassigned' && assignments.length === 0) ||
-        (assignmentFilter === 'mine' &&
-          assignments.some(
-            (assignment) => String(assignment.employee) === String(currentUserId),
-          ));
-
-      return matchesSearch && matchesStatus && matchesEmployee && matchesAssignment;
-    });
-
-  const totalRows = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const originalRowIndexes = pageItems.map((item) => item.rowIndex);
-  const allowedIndexes = new Set(originalRowIndexes);
-
-  return {
-    ...response,
-    rows: pageItems.map((item) => item.row),
-    originalRowIndexes,
-    rowAssignments: (response.rowAssignments || []).filter((assignment) =>
-      allowedIndexes.has(Number(assignment.rowIndex)),
-    ),
-    rowLogs: includeLogs
-      ? (response.rowLogs || []).filter((rowLog) => allowedIndexes.has(Number(rowLog.rowIndex)))
-      : undefined,
-    rowAssignmentHistory: (response.rowAssignmentHistory || []).filter((entry) =>
-      allowedIndexes.has(Number(entry.rowIndex)),
-    ),
-    pagination: { page: safePage, pageSize, totalRows, totalPages },
   };
 };
 
@@ -1276,7 +1211,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
       }
 
       return res.json({
-        ...assignedDataset,
+        ...(req.query.serverPaging === '1'
+          ? prepareWorkQueue(assignedDataset, req.query, req.user.id)
+          : assignedDataset),
         isOwner: false,
       });
     }
@@ -1287,8 +1224,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
     );
 
     const response =
-      dataset.communityKey === 'live' && req.query.serverPaging === '1'
-        ? preparePagedLiveResponse(dataset, req.query, req.user.id, includeLogs, meetings)
+      req.query.serverPaging === '1'
+        ? prepareWorkQueue(
+            prepareDatasetResponse(dataset, includeLogs, meetings),
+            req.query,
+            req.user.id,
+          )
         : prepareDatasetResponse(dataset, includeLogs, meetings);
 
     return res.json({
@@ -1308,7 +1249,9 @@ router.patch('/:id/rows/:rowIndex/assignees', authMiddleware, requireAdmin, asyn
   try {
     const rowIndex = Number(req.params.rowIndex);
     const employeeIds = [
-      ...new Set((Array.isArray(req.body.employeeIds) ? req.body.employeeIds : []).map(normalizeCell)),
+      ...new Set(
+        (Array.isArray(req.body.employeeIds) ? req.body.employeeIds : []).map(normalizeCell),
+      ),
     ].filter(Boolean);
 
     if (!Number.isInteger(rowIndex) || rowIndex < 0) {
@@ -1451,6 +1394,7 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
     const rowIndex = Number(req.params.rowIndex);
 
     const { status = '', remark = '', followUpDate = '' } = req.body;
+    const callLogged = req.body.logCall === true;
 
     if (!Number.isInteger(rowIndex) || rowIndex < 0) {
       return res.status(400).json({
@@ -1470,8 +1414,9 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
 
     if (
       currentStatus === 'Follow Up' &&
-      requestedFollowUpDate &&
-      !/^\d{4}-\d{2}-\d{2}$/.test(requestedFollowUpDate)
+      (!/^\d{4}-\d{2}-\d{2}$/.test(requestedFollowUpDate) ||
+        Number.isNaN(Date.parse(requestedFollowUpDate)) ||
+        new Date(requestedFollowUpDate).toISOString().slice(0, 10) !== requestedFollowUpDate)
     ) {
       return res.status(400).json({
         message: 'Select a valid follow-up date',
@@ -1562,7 +1507,7 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
 
     let actorName = '';
 
-    if (statusChanged || remarkChanged || followUpDateChanged) {
+    if (statusChanged || remarkChanged || followUpDateChanged || callLogged) {
       actorName = await getUserLabel(req.user.id);
 
       if (employeeIndex !== -1) {
@@ -1596,8 +1541,9 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
 
     let updatedRowLog;
 
-    if (statusChanged || remarkChanged || followUpDateChanged) {
+    if (statusChanged || remarkChanged || followUpDateChanged || callLogged) {
       const nextLogEntry = {
+        callLogged,
         changedBy: req.user.id,
 
         changedByName: actorName,
@@ -1717,8 +1663,11 @@ router.patch('/:id/rows/:rowIndex/status', authMiddleware, requireAdmin, async (
       });
     }
 
+    queueFollowUpReminderProcessing();
+
     const responsePayload = {
       message: 'Client status updated successfully',
+      rowActivity: getRowActivity(dataset.rowLogs || [])[rowIndex] || {},
 
       columns,
 
@@ -2592,7 +2541,10 @@ router.post('/', authMiddleware, requireAdmin, async (req, res) => {
     });
 
     if (manualList) {
-      const existingData = addWorkColumnsAfterWebsite(manualList.columns || [], manualList.rows || []);
+      const existingData = addWorkColumnsAfterWebsite(
+        manualList.columns || [],
+        manualList.rows || [],
+      );
       const nextRowIndex = existingData.rows.length;
       const nextRow = [...normalizedAccountData.rows[0]];
 

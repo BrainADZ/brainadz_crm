@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getAuthenticatedUser, getValidToken } from '../utils/auth';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '../config/api';
 
 const CLIENT_WORK_COLUMNS = ['Status', 'Remark', 'Employee'];
@@ -145,7 +145,12 @@ const ContactCell = ({ values, type }) => {
 
   if (values.length === 1) {
     return (
-      <span className="two-line-cell min-w-24 max-w-36 text-xs font-medium text-slate-700" title={values[0]}>{values[0]}</span>
+      <span
+        className="two-line-cell min-w-24 max-w-36 text-xs font-medium text-slate-700"
+        title={values[0]}
+      >
+        {values[0]}
+      </span>
     );
   }
 
@@ -218,7 +223,7 @@ const formatMeetingDateTime = (meeting) => {
 const ClientDatasetDetail = () => {
   const { datasetId } = useParams();
   const navigate = useNavigate();
-  const currentUser = getAuthenticatedUser();
+  const [urlParams] = useSearchParams();
 
   const [dataset, setDataset] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,14 +246,20 @@ const ClientDatasetDetail = () => {
   const [isAssigning, setIsAssigning] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(urlParams.get('status') || 'all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
 
   const [assignmentFilter, setAssignmentFilter] = useState('all');
 
   const [sourceFilter, setSourceFilter] = useState('all');
 
-  const [followUpDateFilter, setFollowUpDateFilter] = useState('');
+  const [followUpDateFilter, setFollowUpDateFilter] = useState(urlParams.get('followUpDate') || '');
+  const [workView, setWorkView] = useState('all');
+  const [dateField, setDateField] = useState('activity');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortOrder, setSortOrder] = useState('auto');
+  const [isFetching, setIsFetching] = useState(false);
 
   const [followUpDates, setFollowUpDates] = useState({});
 
@@ -270,6 +281,24 @@ const ClientDatasetDetail = () => {
   const [pagination, setPagination] = useState(null);
 
   useEffect(() => {
+    setStatusFilter(urlParams.get('status') || 'all');
+    setFollowUpDateFilter(urlParams.get('followUpDate') || '');
+    setWorkView('all');
+    setSearchTerm('');
+    setEmployeeFilter('all');
+    setAssignmentFilter('all');
+    setSourceFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setSortOrder('auto');
+    setSelectedRows([]);
+    setActionModal(null);
+    setPage(1);
+  }, [datasetId, urlParams]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsFetching(true);
     const fetchDataset = async () => {
       try {
         const token = getAuthToken();
@@ -286,6 +315,7 @@ const ClientDatasetDetail = () => {
         const [datasetResponse, optionsResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/client-datasets/${datasetId}`, {
             headers,
+            signal: controller.signal,
             params: {
               serverPaging: '1',
               page,
@@ -294,6 +324,13 @@ const ClientDatasetDetail = () => {
               status: statusFilter,
               employeeId: employeeFilter,
               assignment: assignmentFilter,
+              source: sourceFilter,
+              followUpDate: followUpDateFilter,
+              workView,
+              dateField,
+              dateFrom,
+              dateTo,
+              sort: sortOrder,
             },
           }),
 
@@ -306,6 +343,10 @@ const ClientDatasetDetail = () => {
             })),
         ]);
 
+        if (controller.signal.aborted) return;
+        setError('');
+        setSelectedRows([]);
+        setScheduleRowErrors({});
         setDataset(datasetResponse.data);
         setPagination(datasetResponse.data.pagination || null);
 
@@ -317,16 +358,37 @@ const ClientDatasetDetail = () => {
 
         setMeetingActions(optionsResponse.data.meetingActions || []);
       } catch (requestError) {
+        if (controller.signal.aborted) return;
         setError(requestError.response?.data?.message || 'Unable to load client data');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setIsFetching(false);
+        }
       }
     };
 
     const timer = window.setTimeout(fetchDataset, searchTerm ? 300 : 0);
 
-    return () => window.clearTimeout(timer);
-  }, [datasetId, page, searchTerm, statusFilter, employeeFilter, assignmentFilter]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    datasetId,
+    page,
+    searchTerm,
+    statusFilter,
+    employeeFilter,
+    assignmentFilter,
+    sourceFilter,
+    followUpDateFilter,
+    workView,
+    dateField,
+    dateFrom,
+    dateTo,
+    sortOrder,
+  ]);
 
   const tableData = useMemo(() => {
     if (!dataset) {
@@ -342,8 +404,6 @@ const ClientDatasetDetail = () => {
   const statusIndex = getColumnIndex(tableData.columns, 'Status');
 
   const remarkIndex = getColumnIndex(tableData.columns, 'Remark');
-
-  const employeeIndex = getColumnIndex(tableData.columns, 'Employee');
 
   const sourceIndex = getColumnIndex(tableData.columns, 'Source');
 
@@ -391,7 +451,14 @@ const ClientDatasetDetail = () => {
       ...emailColumnIndexes.slice(1),
 
       ...tableData.columns
-        .map((column, index) => (isOtherColumn(column) ? index : -1))
+        .map((column, index) =>
+          isOtherColumn(column) ||
+          /^(sno|srno|serialno|serialnumber)$/.test(
+            normalizeColumnName(column).replace(/[^a-z0-9]/g, ''),
+          )
+            ? index
+            : -1,
+        )
         .filter((index) => index !== -1),
     ]);
 
@@ -486,15 +553,6 @@ const ClientDatasetDetail = () => {
 
     assignmentMap.set(originalIndex, [...(assignmentMap.get(originalIndex) || []), assignment]);
   });
-
-  const currentUserId = String(currentUser?._id || currentUser?.id || '');
-
-  const rowIsAssignedToCurrentUser = (rowIndex) =>
-    (assignmentMap.get(getOriginalRowIndex(rowIndex)) || []).some(
-      (assignment) =>
-        String(assignment.employee?._id || assignment.employee || assignment.employeeId || '') ===
-        currentUserId,
-    );
 
   const eligibleEmployees = employees.filter(
     (employee) =>
@@ -594,144 +652,10 @@ const ClientDatasetDetail = () => {
 
   const getFollowUpDate = (rowIndex) => followUpDates[String(getOriginalRowIndex(rowIndex))] || '';
 
-  const todayDateKey = getTodayDateKey();
-
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-
-  const sourceOptions =
-    sourceIndex === -1
-      ? []
-      : [
-          ...new Set(
-            tableData.rows.map((row) => String(row[sourceIndex] || '').trim()).filter(Boolean),
-          ),
-        ].sort((first, second) => first.localeCompare(second));
-
-  const statusCounts = tableData.rows.reduce(
-    (counts, row) => {
-      const status = row[statusIndex] || '';
-
-      counts.all += 1;
-
-      if (status) {
-        counts[status] = (counts[status] || 0) + 1;
-      }
-
-      return counts;
-    },
-    {
-      all: 0,
-    },
-  );
-
-  const selectedFilterEmployee =
-    employeeFilter === 'all'
-      ? null
-      : eligibleEmployees.find((employee) => String(employee._id) === String(employeeFilter));
-
-  const rowMatchesEmployee = (row, rowIndex) => {
-    if (!selectedFilterEmployee) {
-      return true;
-    }
-
-    const originalIndex = getOriginalRowIndex(rowIndex);
-
-    const assignments = assignmentMap.get(originalIndex) || [];
-
-    const assignedCell = employeeIndex === -1 ? '' : String(row[employeeIndex] || '').trim();
-
-    const selectedName = String(
-      selectedFilterEmployee.name || selectedFilterEmployee.email || '',
-    ).trim();
-
-    return (
-      assignments.some((assignment) => {
-        const assignmentId =
-          assignment.employee?._id ||
-          assignment.employee ||
-          assignment.employeeId ||
-          assignment.assignedTo?._id;
-
-        const assignmentName = String(
-          assignment.employeeName || assignment.employee?.name || assignment.assignedTo?.name || '',
-        ).trim();
-
-        return (
-          (assignmentId && String(assignmentId) === String(selectedFilterEmployee._id)) ||
-          (selectedName && assignmentName === selectedName)
-        );
-      }) ||
-      (selectedName && assignedCell.includes(selectedName))
-    );
-  };
-
-  const visibleRows = tableData.rows
-    .map((row, rowIndex) => ({
-      row,
-      rowIndex,
-    }))
-    .filter(({ row, rowIndex }) => {
-      const status = row[statusIndex] || '';
-
-      const followUpDate = getFollowUpDate(rowIndex);
-
-      const originalIndex = getOriginalRowIndex(rowIndex);
-
-      const assignments = assignmentMap.get(originalIndex) || [];
-
-      const assignedCell = employeeIndex === -1 ? '' : String(row[employeeIndex] || '').trim();
-
-      const isAssigned = assignments.length > 0 || Boolean(assignedCell);
-
-      const matchesSearch =
-        !normalizedSearch ||
-        row.some((cell) =>
-          String(cell || '')
-            .toLowerCase()
-            .includes(normalizedSearch),
-        );
-
-      const matchesStatus = statusFilter === 'all' || status === statusFilter;
-
-      const matchesEmployee = rowMatchesEmployee(row, rowIndex);
-
-      const matchesAssignment =
-        assignmentFilter === 'all' ||
-        (assignmentFilter === 'assigned' && isAssigned) ||
-        (assignmentFilter === 'unassigned' && !isAssigned) ||
-        (assignmentFilter === 'mine' && rowIsAssignedToCurrentUser(rowIndex));
-
-      const matchesSource =
-        sourceFilter === 'all' ||
-        (sourceIndex !== -1 && String(row[sourceIndex] || '').trim() === sourceFilter);
-
-      const matchesFollowUpDate =
-        statusFilter !== 'Follow Up'
-          ? true
-          : followUpDateFilter
-            ? followUpDate === followUpDateFilter
-            : !followUpDate || followUpDate >= todayDateKey;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesEmployee &&
-        matchesAssignment &&
-        matchesSource &&
-        matchesFollowUpDate
-      );
-    })
-    .sort((first, second) => {
-      if (statusFilter !== 'Follow Up') {
-        return first.rowIndex - second.rowIndex;
-      }
-
-      const firstDate = getFollowUpDate(first.rowIndex) || '9999-12-31';
-
-      const secondDate = getFollowUpDate(second.rowIndex) || '9999-12-31';
-
-      return firstDate.localeCompare(secondDate) || first.rowIndex - second.rowIndex;
-    });
+  const todayDateKey = dataset.today || getTodayDateKey();
+  const sourceOptions = dataset.sourceOptions || [];
+  const statusCounts = dataset.statusCounts || { all: dataset.rowCount };
+  const visibleRows = tableData.rows.map((row, rowIndex) => ({ row, rowIndex }));
 
   const hasActiveFilters =
     Boolean(searchTerm.trim()) ||
@@ -739,7 +663,10 @@ const ClientDatasetDetail = () => {
     employeeFilter !== 'all' ||
     assignmentFilter !== 'all' ||
     sourceFilter !== 'all' ||
-    Boolean(followUpDateFilter);
+    Boolean(followUpDateFilter) ||
+    workView !== 'all' ||
+    Boolean(dateFrom || dateTo) ||
+    sortOrder !== 'auto';
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -748,6 +675,12 @@ const ClientDatasetDetail = () => {
     setAssignmentFilter('all');
     setSourceFilter('all');
     setFollowUpDateFilter('');
+    setWorkView('all');
+    setDateField('activity');
+    setDateFrom('');
+    setDateTo('');
+    setSortOrder('auto');
+    setPage(1);
   };
 
   const toggleRowSelection = (rowIndex) => {
@@ -770,18 +703,6 @@ const ClientDatasetDetail = () => {
     setSelectedRows(nextSelectedRows);
   };
 
-  const updateAssignmentState = (responseData) => {
-    setDataset((previous) => ({
-      ...previous,
-      columns: responseData.columns,
-      rows: responseData.rows,
-      rowAssignments: responseData.rowAssignments,
-    }));
-
-    setSelectedRows([]);
-    setScheduleRowErrors({});
-  };
-
   const refreshDataset = async () => {
     const token = getAuthToken();
 
@@ -801,9 +722,17 @@ const ClientDatasetDetail = () => {
         status: statusFilter,
         employeeId: employeeFilter,
         assignment: assignmentFilter,
+        source: sourceFilter,
+        followUpDate: followUpDateFilter,
+        workView,
+        dateField,
+        dateFrom,
+        dateTo,
+        sort: sortOrder,
       },
     });
 
+    setSelectedRows([]);
     setDataset(response.data);
     setPagination(response.data.pagination || null);
 
@@ -894,9 +823,7 @@ const ClientDatasetDetail = () => {
         },
       );
 
-      updateAssignmentState(response.data);
-
-      if (isLive) await refreshDataset();
+      await refreshDataset();
 
       setAssignmentMessage(response.data.message || 'Data assigned successfully');
     } catch (requestError) {
@@ -937,8 +864,6 @@ const ClientDatasetDetail = () => {
         },
       );
 
-      updateAssignmentState(response.data);
-
       // Refresh from backend after unassign.
       await refreshDataset();
 
@@ -977,7 +902,7 @@ const ClientDatasetDetail = () => {
     setActionSaved(false);
   };
 
-  const saveActionChanges = async ({ scheduleAfterSave = false } = {}) => {
+  const saveActionChanges = async ({ scheduleAfterSave = false, logCall = false } = {}) => {
     if (!actionModal || !canUpdate) {
       return;
     }
@@ -1005,6 +930,7 @@ const ClientDatasetDetail = () => {
       const response = await axios.patch(
         `${API_BASE_URL}/api/client-datasets/${datasetId}/rows/${originalRowIndex}/status`,
         {
+          logCall,
           status: actionModal.status || '',
 
           remark: actionModal.remark || '',
@@ -1045,6 +971,10 @@ const ClientDatasetDetail = () => {
           rows: nextRows,
 
           rowLogs: nextRowLogs,
+          rowActivity: {
+            ...previous.rowActivity,
+            [response.data.rowIndex]: response.data.rowActivity || {},
+          },
         };
       });
 
@@ -1080,16 +1010,16 @@ const ClientDatasetDetail = () => {
         return;
       }
 
-      setActionMessage('Your action saved successfully.');
-
       setActionSaved(true);
-
-      window.setTimeout(() => {
-        setActionModal(null);
-        setActionSaved(false);
-        setActionMessage('');
-        setSaveError('');
-      }, 900);
+      try {
+        await refreshDataset();
+      } catch {
+        setError(
+          'Your action was saved, but the table could not reload. Refresh the page to continue.',
+        );
+      }
+      setActionModal(null);
+      setActionSaved(false);
     } catch (requestError) {
       setSaveError(
         requestError.response?.data?.message || 'Unable to save client action. Please try again.',
@@ -1143,7 +1073,10 @@ const ClientDatasetDetail = () => {
           <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
             <h2 className="shrink-0 text-sm font-semibold text-slate-800">Client data table</h2>
 
-            <div className="flex flex-wrap items-center gap-1.5 xl:justify-end" aria-label="Row color guide">
+            <div
+              className="flex flex-wrap items-center gap-1.5 xl:justify-end"
+              aria-label="Row color guide"
+            >
               <span className="mr-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 Row color guide
               </span>
@@ -1239,7 +1172,10 @@ const ClientDatasetDetail = () => {
                 {sourceIndex !== -1 ? (
                   <select
                     value={sourceFilter}
-                    onChange={(event) => setSourceFilter(event.target.value)}
+                    onChange={(event) => {
+                      setSourceFilter(event.target.value);
+                      setPage(1);
+                    }}
                     className="h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none"
                   >
                     <option value="all">All sources</option>
@@ -1256,6 +1192,100 @@ const ClientDatasetDetail = () => {
               </div>
             </div>
 
+            <div className="flex flex-wrap gap-2" aria-label="Daily work views">
+              {[
+                ['all', 'All leads'],
+                ['untouched', 'Untouched'],
+                ['today', 'Worked today'],
+                ['yesterday', 'Worked yesterday'],
+                ['dueToday', 'Due today'],
+                ['overdue', 'Overdue'],
+                ['upcoming', 'Upcoming'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={workView === value}
+                  onClick={() => {
+                    setWorkView(value);
+                    setStatusFilter('all');
+                    setFollowUpDateFilter('');
+                    setDateFrom('');
+                    setDateTo('');
+                    setPage(1);
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold ${workView === value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-blue-50'}`}
+                >
+                  {label}{' '}
+                  <span className="ml-1 opacity-70">{dataset.workCounts?.[value] || 0}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+              <label className="text-xs font-semibold text-slate-600">
+                Date filter
+                <select
+                  aria-label="Date filter field"
+                  value={dateField}
+                  onChange={(event) => {
+                    setDateField(event.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
+                >
+                  <option value="activity">Last activity</option>
+                  <option value="followUp">Follow-up date</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                From
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                To
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(event) => {
+                    setDateTo(event.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Sort by
+                <select
+                  value={sortOrder}
+                  onChange={(event) => {
+                    setSortOrder(event.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
+                >
+                  <option value="auto">Smart default</option>
+                  <option value="activityDesc">Latest activity first</option>
+                  <option value="activityAsc">Oldest activity first</option>
+                  <option value="followUpDesc">Latest follow-up date first</option>
+                  <option value="followUpAsc">Earliest follow-up date first</option>
+                  <option value="original">Original sheet order</option>
+                </select>
+              </label>
+              <span className="pb-2 text-xs text-slate-500">
+                Daily views and date filters use CRM time. Counts cover all accessible leads.
+              </span>
+            </div>
+
             {statusFilter === 'Follow Up' && (
               <div className="flex flex-wrap items-end gap-2 rounded-lg border border-violet-200 bg-violet-50/70 p-3">
                 <label>
@@ -1265,15 +1295,18 @@ const ClientDatasetDetail = () => {
 
                   <input
                     type="date"
-                    min={todayDateKey}
                     value={followUpDateFilter}
-                    onChange={(event) => setFollowUpDateFilter(event.target.value)}
+                    onChange={(event) => {
+                      setFollowUpDateFilter(event.target.value);
+                      setPage(1);
+                    }}
                     className="h-9 rounded-lg border border-violet-300 bg-white px-3 text-xs font-semibold text-violet-800 outline-none"
                   />
                 </label>
 
                 <p className="pb-2 text-xs font-medium text-violet-700">
-                  Today first, then upcoming follow-ups.
+                  All follow-up dates are included, including overdue. Latest dates appear first by
+                  default.
                 </p>
               </div>
             )}
@@ -1281,8 +1314,9 @@ const ClientDatasetDetail = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <span>
-                  {visibleRows.length} visible client
-                  {visibleRows.length === 1 ? '' : 's'}
+                  {isFetching ? 'Loading... ' : ''}
+                  {pagination?.totalRows ?? visibleRows.length} matching client
+                  {(pagination?.totalRows ?? visibleRows.length) === 1 ? '' : 's'}
                 </span>
 
                 {hasActiveFilters && (
@@ -1315,6 +1349,7 @@ const ClientDatasetDetail = () => {
                     type="button"
                     onClick={() => {
                       setStatusFilter(value);
+                      setPage(1);
 
                       if (value !== 'Follow Up') {
                         setFollowUpDateFilter('');
@@ -1347,7 +1382,7 @@ const ClientDatasetDetail = () => {
                       onClick={selectUnassignedRows}
                       className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-blue-50"
                     >
-                      Select free rows
+                      Select free rows on page
                     </button>
 
                     <button
@@ -1371,9 +1406,9 @@ const ClientDatasetDetail = () => {
                     onChange={(event) => setAssignmentMode(event.target.value)}
                     className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                   >
-                    <option value="full">Full data ({tableData.rows.length})</option>
+                    <option value="full">Full data ({dataset.rowCount})</option>
 
-                    <option value="half">Half data ({Math.ceil(tableData.rows.length / 2)})</option>
+                    <option value="half">Half data ({Math.ceil(dataset.rowCount / 2)})</option>
 
                     <option value="limited">Limited records</option>
 
@@ -1435,7 +1470,7 @@ const ClientDatasetDetail = () => {
                     <input
                       type="number"
                       min="1"
-                      max={tableData.rows.length}
+                      max={dataset.rowCount}
                       value={recordLimit}
                       onChange={(event) => setRecordLimit(event.target.value)}
                       placeholder="Qty"
@@ -1474,7 +1509,10 @@ const ClientDatasetDetail = () => {
           )}
         </div>
 
-        <div className="overflow-auto">
+        <div
+          className={`overflow-auto ${isFetching ? 'pointer-events-none opacity-60' : ''}`}
+          aria-busy={isFetching}
+        >
           <table className="compact-crm-table min-w-full border-collapse text-left">
             <thead>
               <tr className="bg-slate-100">
@@ -1491,6 +1529,15 @@ const ClientDatasetDetail = () => {
                 <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
                   S.No.
                 </th>
+
+                {['Last activity / call', 'Latest remark'].map((label) => (
+                  <th
+                    key={label}
+                    className="min-w-40 border border-slate-300 px-3 py-2 font-semibold text-slate-800"
+                  >
+                    {label}
+                  </th>
+                ))}
 
                 {displayColumnIndexes.map((columnIndex) => {
                   const column = tableData.columns[columnIndex];
@@ -1517,9 +1564,8 @@ const ClientDatasetDetail = () => {
                 })}
 
                 <th className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center font-semibold text-slate-800">
-                  Meeting
+                  Meeting / Follow-up
                 </th>
-
               </tr>
             </thead>
 
@@ -1572,7 +1618,7 @@ const ClientDatasetDetail = () => {
                       </span>
 
                       <span className="mt-0.5 block max-w-44 truncate text-[11px] font-medium text-slate-500">
-                        {primaryMeeting.meetingTitle || primaryMeetingStatus}
+                        Meeting: {primaryMeeting.meetingTitle || primaryMeetingStatus}
                       </span>
                     </span>
                   </>
@@ -1604,6 +1650,30 @@ const ClientDatasetDetail = () => {
 
                     <td className="whitespace-nowrap border border-slate-300 px-3 py-2 text-center text-xs font-semibold text-slate-500">
                       {getOriginalRowIndex(rowIndex) + 1}
+                    </td>
+
+                    <td className="min-w-44 border border-slate-300 px-3 py-2 text-xs">
+                      <span className="block font-semibold text-slate-800">
+                        {formatDate(
+                          dataset.rowActivity?.[getOriginalRowIndex(rowIndex)]?.lastActivityAt,
+                        ) || 'No activity recorded'}
+                      </span>
+                      <span className="mt-1 block text-slate-500">
+                        {dataset.rowActivity?.[getOriginalRowIndex(rowIndex)]?.lastActivityBy}
+                      </span>
+                      {dataset.rowActivity?.[getOriginalRowIndex(rowIndex)]?.lastCallAt && (
+                        <span className="mt-1 block text-blue-700">
+                          Call:{' '}
+                          {formatDate(
+                            dataset.rowActivity[getOriginalRowIndex(rowIndex)].lastCallAt,
+                          )}
+                        </span>
+                      )}
+                    </td>
+                    <td className="max-w-56 border border-slate-300 px-3 py-2 text-xs text-slate-600">
+                      <span className="two-line-cell" title={row[remarkIndex] || ''}>
+                        {row[remarkIndex] || '—'}
+                      </span>
                     </td>
 
                     {displayColumnIndexes.map((columnIndex) => {
@@ -1654,7 +1724,10 @@ const ClientDatasetDetail = () => {
                             key={`${rowIndex}-address`}
                             className="w-36 min-w-36 max-w-36 border border-slate-300 px-2 py-2 text-[10px] leading-4 text-slate-700"
                           >
-                            <span className="block whitespace-normal break-words" title={fullAddress}>
+                            <span
+                              className="block whitespace-normal break-words"
+                              title={fullAddress}
+                            >
                               {fullAddress || '—'}
                             </span>
                           </td>
@@ -1750,7 +1823,31 @@ const ClientDatasetDetail = () => {
                     })}
 
                     <td className="min-w-44 max-w-56 border border-slate-300 px-3 py-2">
-                      {primaryMeeting ? (
+                      {rowStatus === 'Follow Up' ? (
+                        <div className="text-xs">
+                          <span className="mb-1 block font-semibold text-violet-700">
+                            Follow-up
+                          </span>
+                          {getFollowUpDate(rowIndex) ? (
+                            <>
+                              <span className="block font-semibold">
+                                {getFollowUpDate(rowIndex)}
+                              </span>
+                              <span
+                                className={`mt-1 inline-block rounded-full px-2 py-1 font-semibold ${getFollowUpDate(rowIndex) < todayDateKey ? 'bg-rose-100 text-rose-700' : getFollowUpDate(rowIndex) === todayDateKey ? 'bg-amber-100 text-amber-800' : 'bg-violet-100 text-violet-700'}`}
+                              >
+                                {getFollowUpDate(rowIndex) < todayDateKey
+                                  ? 'Overdue'
+                                  : getFollowUpDate(rowIndex) === todayDateKey
+                                    ? 'Due today'
+                                    : 'Upcoming'}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-slate-400">Date not set</span>
+                          )}
+                        </div>
+                      ) : primaryMeeting ? (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
                             {primaryMeetingId && canViewMeetings ? (
@@ -1835,7 +1932,6 @@ const ClientDatasetDetail = () => {
                         </span>
                       )}
                     </td>
-
                   </tr>
                 );
               })}
@@ -1843,7 +1939,7 @@ const ClientDatasetDetail = () => {
               {!visibleRows.length && (
                 <tr>
                   <td
-                    colSpan={displayColumnIndexes.length + 3 + (isAdmin ? 1 : 0)}
+                    colSpan={displayColumnIndexes.length + 5 + (isAdmin ? 1 : 0)}
                     className="border border-slate-300 px-3 py-10 text-center text-slate-500"
                   >
                     {tableData.rows.length
@@ -1856,7 +1952,7 @@ const ClientDatasetDetail = () => {
           </table>
         </div>
 
-        {isLive && pagination && (
+        {pagination && (
           <div className="flex flex-col gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-medium text-slate-500">
               Page {pagination.page} of {pagination.totalPages} · {pagination.totalRows} matching
@@ -1865,16 +1961,16 @@ const ClientDatasetDetail = () => {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={pagination.page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={isFetching || pagination.page <= 1}
+                onClick={() => setPage(Math.max(1, pagination.page - 1))}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
               >
                 Previous
               </button>
               <button
                 type="button"
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => setPage((current) => current + 1)}
+                disabled={isFetching || pagination.page >= pagination.totalPages}
+                onClick={() => setPage(pagination.page + 1)}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
               >
                 Next
@@ -1957,8 +2053,7 @@ const ClientDatasetDetail = () => {
 
               {(dataset.rowAssignmentHistory || []).some(
                 (entry) =>
-                  Number(entry.rowIndex) ===
-                  Number(getOriginalRowIndex(assigneeModal.rowIndex)),
+                  Number(entry.rowIndex) === Number(getOriginalRowIndex(assigneeModal.rowIndex)),
               ) && (
                 <div>
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -2018,7 +2113,9 @@ const ClientDatasetDetail = () => {
           <div className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h3 className="text-2xl font-bold tracking-tight text-slate-950">Client activity</h3>
+                <h3 className="text-2xl font-bold tracking-tight text-slate-950">
+                  Client activity
+                </h3>
                 <p className="mt-0.5 text-sm text-slate-500">
                   Manage status, notes and next steps.
                 </p>
@@ -2196,6 +2293,15 @@ const ClientDatasetDetail = () => {
 
                         <button
                           type="button"
+                          onClick={() => saveActionChanges({ logCall: true })}
+                          disabled={savingRows[actionModal.rowIndex]}
+                          className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 disabled:opacity-40"
+                        >
+                          Log call &amp; save
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => saveActionChanges()}
                           disabled={savingRows[actionModal.rowIndex]}
                           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300"
@@ -2257,20 +2363,30 @@ const ClientDatasetDetail = () => {
                           </div>
 
                           <div className="mt-3 space-y-2">
+                            {entry.callLogged && (
+                              <p className="text-xs font-semibold text-blue-700">Call logged</p>
+                            )}
+                            {entry.followUpDateChanged && (
+                              <p className="text-xs text-violet-700">
+                                Follow-up: {entry.currentFollowUpDate || 'Cleared'}
+                              </p>
+                            )}
                             {entry.statusChanged && (
                               <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-                                  <span>Status set to</span>
-                                  <span
-                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATUS_SELECT_STYLES[entry.currentStatus] || STATUS_SELECT_STYLES['']}`}
-                                  >
-                                    {entry.currentStatus || 'Not set'}
-                                  </span>
+                                <span>Status set to</span>
+                                <span
+                                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${STATUS_SELECT_STYLES[entry.currentStatus] || STATUS_SELECT_STYLES['']}`}
+                                >
+                                  {entry.currentStatus || 'Not set'}
+                                </span>
                               </div>
                             )}
 
                             {entry.remarkChanged && entry.currentRemark && (
                               <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-                                <p className="break-words text-sm text-slate-700">{entry.currentRemark}</p>
+                                <p className="break-words text-sm text-slate-700">
+                                  {entry.currentRemark}
+                                </p>
                               </div>
                             )}
                           </div>
