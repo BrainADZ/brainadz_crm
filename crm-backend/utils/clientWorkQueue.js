@@ -14,12 +14,14 @@ const getRowActivity = (rowLogs = []) =>
       entries.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
       const latest = entries[0];
       const call = entries.find((entry) => entry.callLogged);
+      const remark = entries.find((entry) => entry.remarkChanged);
       return [
         log.rowIndex,
         {
           lastActivityAt: latest?.changedAt || null,
           lastActivityBy: latest?.changedByName || '',
           lastCallAt: call?.changedAt || null,
+          lastRemarkAt: remark?.changedAt || null,
           activityDates: [
             ...new Set(entries.map((entry) => getDateInTimeZone(new Date(entry.changedAt)))),
           ],
@@ -106,22 +108,7 @@ const prepareWorkQueue = (response, query = {}, currentUserId, now = new Date())
       workMatches(item, query.workView)
     );
   });
-  const sort =
-    query.sort && query.sort !== 'auto'
-      ? query.sort
-      : query.status === 'Follow Up' ||
-          ['due', 'dueToday', 'overdue', 'upcoming'].includes(query.workView)
-        ? 'followUpDesc'
-        : 'activityDesc';
-  filtered.sort((a, b) => {
-    if (sort === 'original') return a.rowIndex - b.rowIndex;
-    const followUp = sort.startsWith('followUp');
-    const first = followUp ? a.followUpDate : a.last ? new Date(a.last).toISOString() : '';
-    const second = followUp ? b.followUpDate : b.last ? new Date(b.last).toISOString() : '';
-    if (!first || !second) return (first ? -1 : second ? 1 : 0) || a.rowIndex - b.rowIndex;
-    const order = sort.endsWith('Asc') ? first.localeCompare(second) : second.localeCompare(first);
-    return order || a.rowIndex - b.rowIndex;
-  });
+  filtered.sort((a, b) => a.rowIndex - b.rowIndex);
   const pageSize = Math.min(100, Math.max(10, Number.parseInt(query.pageSize, 10) || 50));
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const page = Math.min(totalPages, Math.max(1, Number.parseInt(query.page, 10) || 1));

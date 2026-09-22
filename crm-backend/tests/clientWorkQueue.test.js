@@ -23,20 +23,20 @@ const makeSheet = () => ({
   rowAssignments: Array.from({ length: 400 }, (_, rowIndex) => ({ rowIndex, employee: 'sales' })),
   followUpDates: {},
 });
-test('400 leads: resume with 345 untouched, yesterday has all 55 calls, latest first', () => {
+test('400 leads: resume with 345 untouched and keep every view in S.No. order', () => {
   const sheet = makeSheet();
   const result = prepareWorkQueue(sheet, {}, 'sales', now);
   assert.equal(result.workCounts.untouched, 345);
   assert.equal(result.workCounts.yesterday, 55);
   assert.equal(result.rows.length, 50);
-  assert.equal(result.originalRowIndexes[0], 54);
+  assert.equal(result.originalRowIndexes[0], 0);
   assert.equal(
     prepareWorkQueue(sheet, { workView: 'untouched' }, 'sales', now).originalRowIndexes[0],
     55,
   );
   const yesterday = prepareWorkQueue(sheet, { workView: 'yesterday', page: 2 }, 'sales', now);
   assert.equal(yesterday.rows.length, 5);
-  assert.deepEqual(yesterday.originalRowIndexes, [4, 3, 2, 1, 0]);
+  assert.deepEqual(yesterday.originalRowIndexes, [50, 51, 52, 53, 54]);
 });
 test('source and date filters run before paging and empty results clamp the page', () => {
   const sheet = makeSheet();
@@ -55,7 +55,7 @@ test('source and date filters run before paging and empty results clamp the page
   assert.equal(empty.pagination.page, 1);
   assert.equal(empty.pagination.totalRows, 0);
 });
-test('follow-ups include overdue, sort latest first, support oldest first and exact past date', () => {
+test('follow-ups include overdue and stay in S.No. order', () => {
   const sheet = makeSheet();
   for (const [index, date] of [
     [3, '2026-09-20'],
@@ -67,11 +67,6 @@ test('follow-ups include overdue, sort latest first, support oldest first and ex
   }
   assert.deepEqual(
     prepareWorkQueue(sheet, { status: 'Follow Up' }, 'sales', now).originalRowIndexes,
-    [399, 250, 3],
-  );
-  assert.deepEqual(
-    prepareWorkQueue(sheet, { status: 'Follow Up', sort: 'followUpAsc' }, 'sales', now)
-      .originalRowIndexes,
     [3, 250, 399],
   );
   assert.deepEqual(
@@ -122,6 +117,7 @@ test('daily work history survives a subsequent call and respects India midnight'
   assert.equal(result.workCounts.yesterday, 1);
   assert.equal(result.rowActivity[0].lastCallAt, '2026-09-21T18:31:00Z');
   assert.equal(result.rowActivity[0].lastActivityAt, '2026-09-22T05:00:00Z');
+  assert.equal(result.rowActivity[0].lastRemarkAt, '2026-09-22T05:00:00Z');
   assert.equal(
     getRowActivity([{ rowIndex: 0, entries: [{ changedAt: 'invalid' }] }])[0].lastActivityAt,
     null,

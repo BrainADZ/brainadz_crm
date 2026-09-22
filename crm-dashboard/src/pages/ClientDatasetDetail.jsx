@@ -258,7 +258,6 @@ const ClientDatasetDetail = () => {
   const [dateField, setDateField] = useState('activity');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [sortOrder, setSortOrder] = useState('auto');
   const [isFetching, setIsFetching] = useState(false);
 
   const [followUpDates, setFollowUpDates] = useState({});
@@ -290,7 +289,6 @@ const ClientDatasetDetail = () => {
     setSourceFilter('all');
     setDateFrom('');
     setDateTo('');
-    setSortOrder('auto');
     setSelectedRows([]);
     setActionModal(null);
     setPage(1);
@@ -330,7 +328,6 @@ const ClientDatasetDetail = () => {
               dateField,
               dateFrom,
               dateTo,
-              sort: sortOrder,
             },
           }),
 
@@ -387,7 +384,6 @@ const ClientDatasetDetail = () => {
     dateField,
     dateFrom,
     dateTo,
-    sortOrder,
   ]);
 
   const tableData = useMemo(() => {
@@ -665,8 +661,7 @@ const ClientDatasetDetail = () => {
     sourceFilter !== 'all' ||
     Boolean(followUpDateFilter) ||
     workView !== 'all' ||
-    Boolean(dateFrom || dateTo) ||
-    sortOrder !== 'auto';
+    Boolean(dateFrom || dateTo);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -679,7 +674,6 @@ const ClientDatasetDetail = () => {
     setDateField('activity');
     setDateFrom('');
     setDateTo('');
-    setSortOrder('auto');
     setPage(1);
   };
 
@@ -728,7 +722,6 @@ const ClientDatasetDetail = () => {
         dateField,
         dateFrom,
         dateTo,
-        sort: sortOrder,
       },
     });
 
@@ -1263,26 +1256,8 @@ const ClientDatasetDetail = () => {
                   className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
                 />
               </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Sort by
-                <select
-                  value={sortOrder}
-                  onChange={(event) => {
-                    setSortOrder(event.target.value);
-                    setPage(1);
-                  }}
-                  className="mt-1 block h-9 rounded-lg border border-slate-300 px-3"
-                >
-                  <option value="auto">Smart default</option>
-                  <option value="activityDesc">Latest activity first</option>
-                  <option value="activityAsc">Oldest activity first</option>
-                  <option value="followUpDesc">Latest follow-up date first</option>
-                  <option value="followUpAsc">Earliest follow-up date first</option>
-                  <option value="original">Original sheet order</option>
-                </select>
-              </label>
               <span className="pb-2 text-xs text-slate-500">
-                Daily views and date filters use CRM time. Counts cover all accessible leads.
+                Daily views and date filters use CRM time. Rows always remain in S.No. order.
               </span>
             </div>
 
@@ -1305,8 +1280,7 @@ const ClientDatasetDetail = () => {
                 </label>
 
                 <p className="pb-2 text-xs font-medium text-violet-700">
-                  All follow-up dates are included, including overdue. Latest dates appear first by
-                  default.
+                  All follow-up dates are included, including overdue. Rows remain in S.No. order.
                 </p>
               </div>
             )}
@@ -1530,7 +1504,7 @@ const ClientDatasetDetail = () => {
                   S.No.
                 </th>
 
-                {['Last activity / call', 'Latest remark'].map((label) => (
+                {['Last activity / call', 'Last remark date'].map((label) => (
                   <th
                     key={label}
                     className="min-w-40 border border-slate-300 px-3 py-2 font-semibold text-slate-800"
@@ -1670,10 +1644,13 @@ const ClientDatasetDetail = () => {
                         </span>
                       )}
                     </td>
-                    <td className="max-w-56 border border-slate-300 px-3 py-2 text-xs text-slate-600">
-                      <span className="two-line-cell" title={row[remarkIndex] || ''}>
-                        {row[remarkIndex] || '—'}
-                      </span>
+                    <td className="whitespace-nowrap border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
+                      {formatDate(
+                        dataset.rowActivity?.[getOriginalRowIndex(rowIndex)]?.lastRemarkAt ||
+                          (row[remarkIndex]
+                            ? dataset.rowActivity?.[getOriginalRowIndex(rowIndex)]?.lastActivityAt
+                            : ''),
+                      ) || '—'}
                     </td>
 
                     {displayColumnIndexes.map((columnIndex) => {
