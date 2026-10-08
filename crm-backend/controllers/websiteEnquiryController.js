@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const WebsiteEnquiry = require('../models/WebsiteEnquiry');
+const { notifyWebsiteEnquiry } = require('../services/websiteEnquiryNotificationService');
 const {
   isEmailDeliveryConfigured,
   sendWebsiteEnquiryNotification,
@@ -156,6 +157,7 @@ const createPublicEnquiry = async (req, res, next) => {
       ],
     });
 
+    await notifyWebsiteEnquiry({ enquiry });
     if (isEmailDeliveryConfigured()) {
       try {
         await sendWebsiteEnquiryNotification({ enquiry });
@@ -282,6 +284,7 @@ const createEnquiry = async (req, res, next) => {
       ],
     };
     const enquiry = await createWithUniqueNumber(communityKey, payload);
+    await notifyWebsiteEnquiry({ enquiry, actor: req.user });
     res.status(201).json(await populate(WebsiteEnquiry.findById(enquiry._id)));
   } catch (error) {
     next(error);
@@ -312,8 +315,13 @@ const assignEnquiries = async (req, res, next) => {
     const message = employee
       ? `Assigned to ${employee.name || employee.email}`
       : 'Enquiry unassigned';
+    const assignmentFilter = scopedQuery(req, communityKey, {
+      _id: { $in: ids },
+      assignedTo: { $ne: employee?._id || null },
+    });
+    const changedEnquiries = await WebsiteEnquiry.find(assignmentFilter).select('_id').lean();
     const result = await WebsiteEnquiry.updateMany(
-      scopedQuery(req, communityKey, { _id: { $in: ids } }),
+      { $and: [assignmentFilter, { _id: { $in: changedEnquiries.map((item) => item._id) } }] },
       {
         $set: {
           assignedTo: employee?._id || null,
@@ -330,6 +338,12 @@ const assignEnquiries = async (req, res, next) => {
         },
       },
     );
+    if (result.modifiedCount) {
+      const enquiries = await WebsiteEnquiry.find({
+        _id: { $in: changedEnquiries.map((item) => item._id) },
+      });
+      for (const enquiry of enquiries) await notifyWebsiteEnquiry({ enquiry, actor: req.user });
+    }
     res.json({ message, updated: result.modifiedCount });
   } catch (error) {
     next(error);
@@ -355,12 +369,16 @@ const updateAction = async (req, res, next) => {
       throw httpError(400, 'Follow-up date is required');
     const previousStatus = enquiry.status;
     const previousRemark = enquiry.remark;
+    const previousFollowUp = enquiry.followUpDate?.toISOString() || '';
     enquiry.status = nextStatus;
     enquiry.remark = nextRemark;
     enquiry.followUpDate = nextStatus === 'Follow Up' ? followUpDate : null;
-    if (previousStatus !== nextStatus || previousRemark !== nextRemark) {
+    const followUpChanged = previousFollowUp !== (enquiry.followUpDate?.toISOString() || '');
+    const changed =
+      previousStatus !== nextStatus || previousRemark !== nextRemark || followUpChanged;
+    if (changed) {
       enquiry.activity.push({
-        type: previousStatus !== nextStatus ? 'status' : 'remark',
+        type: previousStatus !== nextStatus ? 'status' : followUpChanged ? 'follow_up' : 'remark',
         previousStatus,
         currentStatus: nextStatus,
         previousRemark,
@@ -370,12 +388,15 @@ const updateAction = async (req, res, next) => {
             ? 'Status and remark updated'
             : previousStatus !== nextStatus
               ? 'Status updated'
-              : 'Remark updated',
+              : followUpChanged
+                ? 'Follow-up date updated'
+                : 'Remark updated',
         changedBy: req.user._id,
         changedByName: req.user.name || req.user.email,
       });
     }
     await enquiry.save();
+    if (changed) await notifyWebsiteEnquiry({ enquiry, actor: req.user });
     res.json(await populate(WebsiteEnquiry.findById(enquiry._id)));
   } catch (error) {
     next(error);

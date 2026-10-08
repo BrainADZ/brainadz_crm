@@ -332,7 +332,7 @@ export default function MarketingEnquiries() {
                   <TD>{r.company}</TD>
                   <TD>+91 {r.phone}</TD>
                   <TD>{r.email}</TD>
-                  <TD>{r.category}</TD>
+                  <TD>{r.serviceCategory}</TD>
                   <TD>{r.service}</TD>
                   <TD>{r.received}</TD>
                   <TD>{r.priority}</TD>

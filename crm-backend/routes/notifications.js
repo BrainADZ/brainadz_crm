@@ -8,16 +8,15 @@ const { queueFollowUpReminderProcessing } = require('../services/followUpReminde
 const router = express.Router();
 
 const getRecipientFilter = (user) => {
-  if (user.role === 'admin') {
+  const recipientUser = user._id || user.id;
+  if (user.role === 'admin' || user.roleKey === 'super_admin' || user.crmRole === 'super_admin') {
     return {
-      recipientRole: 'admin',
-      $or: [{ recipientUser: null }, { recipientUser: user.id }],
+      $or: [{ recipientRole: 'admin', recipientUser: null }, { recipientUser }],
     };
   }
 
   return {
-    recipientRole: 'employee',
-    recipientUser: user.id,
+    recipientUser,
   };
 };
 

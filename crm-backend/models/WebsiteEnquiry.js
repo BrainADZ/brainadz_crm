@@ -5,7 +5,7 @@ const activitySchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ['created', 'status', 'remark', 'assignment', 'meeting'],
+      enum: ['created', 'status', 'remark', 'follow_up', 'assignment', 'meeting'],
       required: true,
     },
     previousStatus: { type: String, default: '' },
