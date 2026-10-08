@@ -274,12 +274,12 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       .toLowerCase();
     if (
       !String(req.body.clientName || '').trim() ||
-      !/^\S+@\S+\.\S+$/.test(clientEmail) ||
+      (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
       !String(req.body.subject || '').trim()
     )
       return res
         .status(400)
-        .json({ message: 'Client name, valid email and quotation subject are required' });
+        .json({ message: 'Client name and quotation subject are required; email must be valid if provided' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
@@ -358,12 +358,12 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       .toLowerCase();
     if (
       !String(req.body.clientName || '').trim() ||
-      !/^\S+@\S+\.\S+$/.test(clientEmail) ||
+      (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
       !String(req.body.subject || '').trim()
     )
       return res
         .status(400)
-        .json({ message: 'Client name, valid email and quotation subject are required' });
+        .json({ message: 'Client name and quotation subject are required; email must be valid if provided' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
@@ -516,6 +516,8 @@ router.post('/:id/send', requirePermission('quotations', 'create'), async (req, 
       String(quotation.createdBy?._id || quotation.createdBy) !== String(req.user._id)
     )
       return res.status(403).json({ message: 'You can send only quotations created by you' });
+    if (!quotation.clientEmail)
+      return res.status(400).json({ message: 'Add a client email before sending the quotation' });
     const pdf = await generateDocumentPdf(quotation);
     const mail = await sendQuotationEmail({ quotation, pdfBuffer: pdf });
     quotation.status = 'Sent';

@@ -44,7 +44,7 @@ const quotationSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     clientName: { type: String, required: true, trim: true },
     clientCompany: { type: String, default: '', trim: true },
-    clientEmail: { type: String, required: true, trim: true, lowercase: true },
+    clientEmail: { type: String, default: '', trim: true, lowercase: true },
     clientPhone: { type: String, default: '', trim: true },
     clientAddress: { type: String, default: '', trim: true },
     subject: { type: String, required: true, trim: true },

@@ -928,9 +928,8 @@ const Quotations = () => {
                     />
                   </label>
                   <label>
-                    <span className={labelClass}>Email *</span>
+                    <span className={labelClass}>Email</span>
                     <input
-                      required
                       type="email"
                       value={form.clientEmail}
                       onChange={(event) => updateForm({ clientEmail: event.target.value })}
