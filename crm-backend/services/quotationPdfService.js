@@ -120,22 +120,10 @@ const generateQuotationPdf = (quotation) =>
     doc.text(safe(quotation.clientName), 330, y + 34, { width: 220 });
     doc.text(safe(quotation.clientEmail), 330, y + 49, { width: 220 });
     if (quotation.clientPhone) doc.text(quotation.clientPhone, 330, y + 64, { width: 220 });
-    if (quotation.clientAddress) doc.text(quotation.clientAddress, 330, y + 79, { width: 220 });
+    if (quotation.clientGstin) doc.text(`GSTIN: ${quotation.clientGstin}`, 330, y + 79, { width: 220 });
+    if (quotation.clientAddress) doc.text(quotation.clientAddress, 330, y + 94, { width: 220 });
 
     y = Math.max(y + 123, doc.y + 12);
-    doc.roundedRect(42, y, 511, 42, 4).fill('#F3F4F6');
-    doc
-      .fillColor('#374151')
-      .font('Helvetica-Bold')
-      .fontSize(9)
-      .text('SUBJECT', 54, y + 9);
-    doc
-      .fillColor('#111827')
-      .font('Helvetica')
-      .fontSize(10)
-      .text(safe(quotation.subject), 54, y + 23, { width: 485 });
-    y += 62;
-
     const rental = quotation.communityKey === 'live' && quotation.quotationMode === 'rental';
     const widths = rental ? [22, 132, 60, 36, 62, 64, 42, 93] : [24, 163, 60, 65, 70, 45, 84];
     const headers = rental

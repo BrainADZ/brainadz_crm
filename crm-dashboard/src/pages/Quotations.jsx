@@ -56,6 +56,7 @@ const blankForm = () => ({
   departmentId: '',
   clientName: '',
   clientCompany: '',
+  clientGstin: '',
   clientEmail: '',
   clientPhone: '',
   clientAddress: '',
@@ -350,6 +351,7 @@ const Quotations = () => {
       departmentId: idOf(quotation.departmentId),
       clientName: quotation.clientName || '',
       clientCompany: quotation.clientCompany || '',
+      clientGstin: quotation.clientGstin || '',
       clientEmail: quotation.clientEmail || '',
       clientPhone: quotation.clientPhone || '',
       clientAddress: quotation.clientAddress || '',
@@ -538,7 +540,7 @@ const Quotations = () => {
   ];
 
   return (
-    <div className="mx-auto max-w-[96rem] space-y-5">
+    <div className="mx-auto max-w-384 space-y-5">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
@@ -625,7 +627,7 @@ const Quotations = () => {
           </select>
         </div>
         <div className="overflow-x-auto">
-          <table className="compact-crm-table min-w-[62rem] w-full text-left">
+          <table className="compact-crm-table min-w-248 w-full text-left">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Quotation</th>
@@ -770,7 +772,7 @@ const Quotations = () => {
       </section>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
           <form
             onSubmit={createQuotation}
             className="max-h-[94vh] w-full max-w-7xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
@@ -877,16 +879,18 @@ const Quotations = () => {
                       className={inputClass}
                     />
                   </label>
-                  <label className="sm:col-span-2 lg:col-span-3">
-                    <span className={labelClass}>Subject *</span>
-                    <input
-                      required
-                      value={form.subject}
-                      onChange={(event) => updateForm({ subject: event.target.value })}
-                      placeholder="e.g. SEO & performance marketing proposal"
-                      className={inputClass}
-                    />
-                  </label>
+                  {marketingDepartment && (
+                    <label className="sm:col-span-2 lg:col-span-3">
+                      <span className={labelClass}>Subject *</span>
+                      <input
+                        required
+                        value={form.subject}
+                        onChange={(event) => updateForm({ subject: event.target.value })}
+                        placeholder="e.g. SEO & performance marketing proposal"
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
                   <label>
                     <span className={labelClass}>Company GSTIN</span>
                     <input
@@ -944,7 +948,18 @@ const Quotations = () => {
                       className={inputClass}
                     />
                   </label>
-                  <label className="sm:col-span-2 lg:col-span-4">
+                  <label>
+                    <span className={labelClass}>Client GSTIN *</span>
+                    <input
+                      required
+                      maxLength={15}
+                      value={form.clientGstin}
+                      onChange={(event) => updateForm({ clientGstin: event.target.value.toUpperCase() })}
+                      placeholder="Enter client GSTIN"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="sm:col-span-2 lg:col-span-3">
                     <span className={labelClass}>Billing address</span>
                     <input
                       value={form.clientAddress}

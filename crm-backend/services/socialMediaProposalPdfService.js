@@ -267,6 +267,7 @@ const generateSocialMediaProposalPdf = (proposal) =>
       .fontSize(9.5)
       .text(safe(proposal.subject), 62, y + 103, { width: 450 });
     doc.text(`Valid until: ${proposal.validUntil}`, 62, y + 126);
+    if (proposal.clientGstin) doc.text(`Client GSTIN: ${proposal.clientGstin}`, 62, y + 146);
     doc
       .fillColor(INK)
       .font('Helvetica-Bold')

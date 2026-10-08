@@ -145,6 +145,9 @@ const normalizeProposal = (body, department) => {
   const marketingDepartment = /marketing/i.test(
     `${department?.name || ''} ${department?.slug || ''}`,
   );
+  const subject = marketingDepartment ? String(body.subject || '').trim() : '';
+  if (marketingDepartment && !subject)
+    throw Object.assign(new Error('Marketing proposal subject is required'), { status: 400 });
   const proposalServices = [
     ...new Set(
       (Array.isArray(body.proposalServices) ? body.proposalServices : [])
@@ -164,6 +167,7 @@ const normalizeProposal = (body, department) => {
     throw Object.assign(new Error('Add at least one proposal deliverable'), { status: 400 });
   return {
     documentType: marketingDepartment ? 'marketing-proposal' : 'quotation',
+    subject,
     proposalServices,
     deliverables,
   };
@@ -275,11 +279,12 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
     if (
       !String(req.body.clientName || '').trim() ||
       (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
-      !String(req.body.subject || '').trim()
+      !String(req.body.clientGstin || '').trim() ||
+      String(req.body.clientGstin || '').trim().length > 15
     )
       return res
         .status(400)
-        .json({ message: 'Client name and quotation subject are required; email must be valid if provided' });
+        .json({ message: 'Client name and client GSTIN (up to 15 characters) are required; email must be valid if provided' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
@@ -306,10 +311,10 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       createdBy: req.user._id,
       clientName: String(req.body.clientName).trim(),
       clientCompany: String(req.body.clientCompany || '').trim(),
+      clientGstin: String(req.body.clientGstin || '').trim().toUpperCase(),
       clientEmail,
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
-      subject: String(req.body.subject).trim(),
       quotationMode,
       logoDataUrl: '',
       companyGstin: String(req.body.companyGstin || process.env.COMPANY_GSTIN || '').trim(),
@@ -359,11 +364,12 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
     if (
       !String(req.body.clientName || '').trim() ||
       (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
-      !String(req.body.subject || '').trim()
+      !String(req.body.clientGstin || '').trim() ||
+      String(req.body.clientGstin || '').trim().length > 15
     )
       return res
         .status(400)
-        .json({ message: 'Client name and quotation subject are required; email must be valid if provided' });
+        .json({ message: 'Client name and client GSTIN (up to 15 characters) are required; email must be valid if provided' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
@@ -391,10 +397,10 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       communityKey: unit.legacyCommunityKey,
       clientName: String(req.body.clientName).trim(),
       clientCompany: String(req.body.clientCompany || '').trim(),
+      clientGstin: String(req.body.clientGstin || '').trim().toUpperCase(),
       clientEmail,
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
-      subject: String(req.body.subject).trim(),
       quotationMode,
       logoDataUrl: '',
       companyGstin: String(req.body.companyGstin || process.env.COMPANY_GSTIN || '').trim(),

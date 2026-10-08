@@ -44,10 +44,18 @@ const quotationSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     clientName: { type: String, required: true, trim: true },
     clientCompany: { type: String, default: '', trim: true },
+    clientGstin: { type: String, required: true, trim: true, uppercase: true, maxlength: 15 },
     clientEmail: { type: String, default: '', trim: true, lowercase: true },
     clientPhone: { type: String, default: '', trim: true },
     clientAddress: { type: String, default: '', trim: true },
-    subject: { type: String, required: true, trim: true },
+    subject: {
+      type: String,
+      default: '',
+      required: function () {
+        return ['marketing-proposal', 'social-media-proposal'].includes(this.documentType);
+      },
+      trim: true,
+    },
     quotationMode: { type: String, enum: ['sale', 'rental'], default: 'sale' },
     documentType: {
       type: String,

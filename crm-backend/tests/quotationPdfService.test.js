@@ -15,6 +15,7 @@ const quotation = {
   quotationDate: '2026-09-17',
   validUntil: '2026-09-30',
   clientName: 'Sample Client',
+  clientGstin: '07ABCDE1234F1Z5',
   clientEmail: 'client@example.test',
   createdBy: { name: 'Sample Creator', email: 'creator@example.test', position: 'Executive' },
   departmentId: { name: 'Accounts' },
@@ -74,6 +75,9 @@ for (const scenario of cases) {
     assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
     assert.match(pdf.subarray(-20).toString(), /%%EOF/);
     assert.ok(text.includes('QUOTATION'));
+    assert.ok(text.includes('GSTIN: 07ABCDE1234F1Z5'));
+    assert.ok(!text.includes('SUBJECT'));
+    assert.ok(!text.includes('Equipment rental'));
     assert.ok(text.includes('2,360.00'));
     assert.equal(text.filter((value) => value.startsWith('Prepared by:')).length, 1);
     assert.ok(!text.some((value) => /Department|Designation|Executive|Accounts/.test(value)));
