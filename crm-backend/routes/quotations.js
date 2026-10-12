@@ -278,8 +278,6 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       .toLowerCase();
     if (!String(req.body.clientName || '').trim())
       return res.status(400).json({ message: 'Client name is required' });
-    if (!String(req.body.clientGstin || '').trim())
-      return res.status(400).json({ message: 'Client GSTIN is required in Client details' });
     if (String(req.body.clientGstin || '').trim().length > 15)
       return res.status(400).json({ message: 'Client GSTIN cannot exceed 15 characters' });
     if (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail))
@@ -362,8 +360,6 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       .toLowerCase();
     if (!String(req.body.clientName || '').trim())
       return res.status(400).json({ message: 'Client name is required' });
-    if (!String(req.body.clientGstin || '').trim())
-      return res.status(400).json({ message: 'Client GSTIN is required in Client details' });
     if (String(req.body.clientGstin || '').trim().length > 15)
       return res.status(400).json({ message: 'Client GSTIN cannot exceed 15 characters' });
     if (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail))
