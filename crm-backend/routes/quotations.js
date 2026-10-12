@@ -276,15 +276,14 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
     const clientEmail = String(req.body.clientEmail || '')
       .trim()
       .toLowerCase();
-    if (
-      !String(req.body.clientName || '').trim() ||
-      (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
-      !String(req.body.clientGstin || '').trim() ||
-      String(req.body.clientGstin || '').trim().length > 15
-    )
-      return res
-        .status(400)
-        .json({ message: 'Client name and client GSTIN (up to 15 characters) are required; email must be valid if provided' });
+    if (!String(req.body.clientName || '').trim())
+      return res.status(400).json({ message: 'Client name is required' });
+    if (!String(req.body.clientGstin || '').trim())
+      return res.status(400).json({ message: 'Client GSTIN is required in Client details' });
+    if (String(req.body.clientGstin || '').trim().length > 15)
+      return res.status(400).json({ message: 'Client GSTIN cannot exceed 15 characters' });
+    if (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail))
+      return res.status(400).json({ message: 'Enter a valid client email or leave it blank' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
@@ -361,15 +360,14 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
     const clientEmail = String(req.body.clientEmail || '')
       .trim()
       .toLowerCase();
-    if (
-      !String(req.body.clientName || '').trim() ||
-      (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail)) ||
-      !String(req.body.clientGstin || '').trim() ||
-      String(req.body.clientGstin || '').trim().length > 15
-    )
-      return res
-        .status(400)
-        .json({ message: 'Client name and client GSTIN (up to 15 characters) are required; email must be valid if provided' });
+    if (!String(req.body.clientName || '').trim())
+      return res.status(400).json({ message: 'Client name is required' });
+    if (!String(req.body.clientGstin || '').trim())
+      return res.status(400).json({ message: 'Client GSTIN is required in Client details' });
+    if (String(req.body.clientGstin || '').trim().length > 15)
+      return res.status(400).json({ message: 'Client GSTIN cannot exceed 15 characters' });
+    if (clientEmail && !/^\S+@\S+\.\S+$/.test(clientEmail))
+      return res.status(400).json({ message: 'Enter a valid client email or leave it blank' });
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.quotationDate) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(req.body.validUntil) ||
