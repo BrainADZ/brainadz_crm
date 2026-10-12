@@ -949,9 +949,8 @@ const Quotations = () => {
                     />
                   </label>
                   <label>
-                    <span className={labelClass}>Client GSTIN *</span>
+                    <span className={labelClass}>Client GSTIN</span>
                     <input
-                      required
                       maxLength={15}
                       value={form.clientGstin}
                       onChange={(event) => updateForm({ clientGstin: event.target.value.toUpperCase() })}
