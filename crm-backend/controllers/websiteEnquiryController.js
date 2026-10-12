@@ -3,6 +3,7 @@ const Counter = require('../models/Counter');
 const User = require('../models/User');
 const WebsiteEnquiry = require('../models/WebsiteEnquiry');
 const { notifyWebsiteEnquiry } = require('../services/websiteEnquiryNotificationService');
+const { resolveEffectivePermissions, getPermission } = require('../services/accessControlService');
 const {
   isEmailDeliveryConfigured,
   sendWebsiteEnquiryNotification,
@@ -309,8 +310,13 @@ const assignEnquiries = async (req, res, next) => {
         accountStatus: 'active',
         isDeleted: { $ne: true },
         communities: communityKey,
-      }).select('name email');
+      }).select('name email role roleKey crmRole communities permissionOverrides');
       if (!employee) throw httpError(400, 'Employee is not active in this business unit');
+      if (!getPermission(await resolveEffectivePermissions(employee), 'website_enquiries', 'view'))
+        throw httpError(
+          400,
+          `${employee.name || employee.email} does not have Website Enquiry view access. Enable it in Permissions before assigning enquiries.`,
+        );
     }
     const message = employee
       ? `Assigned to ${employee.name || employee.email}`

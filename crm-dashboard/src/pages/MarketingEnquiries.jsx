@@ -86,6 +86,17 @@ export default function MarketingEnquiries() {
         setError(requestError.response?.data?.message || 'Unable to load employee options');
       });
   }, [loadEnquiries]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') loadEnquiries();
+    };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadEnquiries]);
   const rows = useMemo(() => {
     const q = search.toLowerCase();
     return data.filter(

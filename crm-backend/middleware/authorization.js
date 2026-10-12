@@ -35,7 +35,7 @@ const applyAccessScope = (resource) => (req, res, next) => {
     req.permission || getPermission(req.effectivePermissions || [], resource, 'view');
   if (!permission)
     return res.status(403).json({ message: `Access denied: ${resource}.view is required` });
-  req.accessQuery = buildScopeQuery(req.user, permission.scope, req.selectedCommunity);
+  req.accessQuery = buildScopeQuery(req.user, permission.scope, req.selectedCommunity, resource);
   return next();
 };
 

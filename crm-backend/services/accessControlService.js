@@ -143,7 +143,18 @@ const getAuthorizedCommunities = (user, selectedCommunity = null) => {
   return selectedCommunity ? communities.filter((key) => key === selectedCommunity) : communities;
 };
 
-const buildScopeQuery = (user, scope, selectedCommunity = null) => {
+const buildScopeQuery = (user, scope, selectedCommunity = null, resource = null) => {
+  // Direct assignment grants record visibility within an already-authorized module
+  // and business unit, even when the user's role uses an own/team/department scope.
+  if (
+    resource === 'website_enquiries' &&
+    ['self', 'OWN', 'team', 'TEAM', 'MULTIPLE_TEAMS', 'department', 'DEPARTMENT'].includes(scope)
+  ) {
+    return {
+      communityKey: { $in: getAuthorizedCommunities(user, selectedCommunity) },
+      $or: [{ assignedTo: user._id }, buildScopeQuery(user, scope, selectedCommunity)],
+    };
+  }
   if (['all', 'COMPANY'].includes(scope) && !selectedCommunity) return {};
   const communityKeys = getAuthorizedCommunities(user, selectedCommunity);
   const communityQuery = { communityKey: { $in: communityKeys } };

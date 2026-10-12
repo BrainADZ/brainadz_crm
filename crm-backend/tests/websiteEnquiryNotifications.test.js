@@ -99,7 +99,7 @@ test('enquiry recipients require view permission, community and record scope; re
   assert.ok([...stored.values()].every((n) => n.link === '/dashboard/website-enquiries/marketing'));
 });
 
-const controllerSetup = () => {
+const controllerSetup = ({ canView = true } = {}) => {
   let enquiry = fixture();
   let saves = 0;
   let modified = 1;
@@ -110,6 +110,11 @@ const controllerSetup = () => {
   const controller = load('../controllers/websiteEnquiryController.js', {
     '../models/Counter': { findOneAndUpdate: async () => ({ value: 1 }) },
     '../models/User': { findOne: () => chain({ _id: actorId, name: 'Ayushi' }) },
+    '../services/accessControlService': {
+      ...access,
+      resolveEffectivePermissions: async () =>
+        canView ? [{ resource: 'website_enquiries', actions: ['view'], scope: 'ASSIGNED' }] : [],
+    },
     '../models/WebsiteEnquiry': {
       create: async (payload) => {
         enquiry = new Enquiry(payload);
@@ -167,6 +172,18 @@ const controllerSetup = () => {
     },
   };
 };
+
+test('assignment rejects employees without enquiry view access before writing', async () => {
+  const ctx = controllerSetup({ canView: false });
+  ctx.req.body = { ids: [enquiryId], employeeId: actorId };
+  await assert.rejects(
+    ctx.controller.assignEnquiries(ctx.req, ctx.res, ctx.next),
+    (error) => error.status === 400 && /Website Enquiry view access/.test(error.message),
+  );
+  assert.equal(ctx.enquiry.assignedTo, null);
+  assert.equal(ctx.enquiry.activity.length, 1);
+  assert.equal(ctx.notices.length, 0);
+});
 
 for (const method of ['createPublicEnquiry', 'createEnquiry']) {
   test(`${method} creates an in-app notification even when SMTP is unavailable`, async () => {

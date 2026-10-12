@@ -36,7 +36,7 @@ const notifyWebsiteEnquiry = async ({ enquiry, actor = null }) => {
         const accessible = await WebsiteEnquiry.exists({
           $and: [
             { _id: enquiry._id, communityKey: enquiry.communityKey },
-            buildScopeQuery(user, permission.scope),
+            buildScopeQuery(user, permission.scope, null, 'website_enquiries'),
           ],
         });
         if (!accessible) continue;
