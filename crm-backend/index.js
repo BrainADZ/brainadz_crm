@@ -20,6 +20,7 @@ const employeeDirectoryRoutes = require('./routes/employeeDirectory');
 const meetingRoutes = require('./routes/meetings');
 const quotationRoutes = require('./routes/quotations');
 const websiteEnquiryRoutes = require('./routes/websiteEnquiries');
+const demoRequestRoutes = require('./routes/demoRequests');
 const { startMeetingReminderScheduler } = require('./services/meetingReminderService');
 const { startFollowUpReminderScheduler } = require('./services/followUpReminderService');
 const path = require('path');
@@ -102,6 +103,7 @@ app.use('/api/employee-directory', employeeDirectoryRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/website-enquiries', websiteEnquiryRoutes);
+app.use('/api/demo-requests', demoRequestRoutes);
 
 // Socket.IO Setup
 const io = socketIo(server, {

@@ -1,3 +1,8 @@
 backend-dev*.log
 frontend-dev*.log
 node_modules/
+
+# Local credentials and machine-specific API URLs
+.env
+.env.local
+.env.*.local

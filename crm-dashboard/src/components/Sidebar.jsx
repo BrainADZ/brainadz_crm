@@ -21,6 +21,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
+import { getDemoRequestAccess } from '../services/demoRequestApi';
 import { getMyAccess } from '../services/accessApi';
 import { isSalesSession, isSuperAdminSession } from '../utils/auth';
 
@@ -81,6 +82,12 @@ const WhatsAppIcon = ({ size = 19, ...props }) => (
 );
 
 const navItems = [
+  {
+    to: '/dashboard/demo-requests',
+    label: 'Demo Requests',
+    icon: Inbox,
+    liveOnly: true,
+  },
   {
     to: '/dashboard',
     label: 'Dashboard',
@@ -170,6 +177,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   const [openGroups, setOpenGroups] = useState({});
   const [visibleModules, setVisibleModules] = useState(null);
+  const [canViewDemoRequests, setCanViewDemoRequests] = useState(false);
   const [collapsedFlyout, setCollapsedFlyout] = useState(null);
   const [collapsedLogoError, setCollapsedLogoError] = useState(false);
 
@@ -179,6 +187,20 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     color: 'currentColor',
     stroke: 'currentColor',
   };
+
+  useEffect(() => {
+    let active = true;
+    getDemoRequestAccess()
+      .then((allowed) => {
+        if (active) setCanViewDemoRequests(allowed);
+      })
+      .catch(() => {
+        if (active) setCanViewDemoRequests(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (isSuperAdminSession()) {
@@ -230,9 +252,13 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const visibleNavItems = useMemo(
     () =>
       navItems
-        .filter((item) => visibleModules === null || visibleModules.has(item.moduleKey))
+        .filter((item) =>
+          item.liveOnly
+            ? canViewDemoRequests
+            : visibleModules === null || visibleModules.has(item.moduleKey),
+        )
         .map((item) => (salesSession && item.exact ? { ...item, label: 'Sales Dashboard' } : item)),
-    [salesSession, visibleModules],
+    [salesSession, visibleModules, canViewDemoRequests],
   );
 
   const isActive = (item) => {
@@ -698,7 +724,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
           }`}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-            <ShieldCheck size={18} strokeWidth={1.7} />
+            <ShieldCheck
+              size={18}
+              strokeWidth={1.7}
+            />
           </span>
 
           {!collapsed && (
