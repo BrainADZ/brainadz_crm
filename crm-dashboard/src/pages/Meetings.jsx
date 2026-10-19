@@ -5,6 +5,8 @@ import {
   Building2,
   CalendarDays,
   Clock3,
+  Eye,
+  ExternalLink,
   MapPin,
   Plus,
   RefreshCw,
@@ -15,6 +17,8 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { getValidToken } from '../utils/auth';
+import { getMeetingJoinUrl } from '../utils/meetingLinks';
+import MeetingDetailsModal from '../components/MeetingDetailsModal';
 
 const filters = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -112,6 +116,17 @@ const Meetings = () => {
   }, [load]);
 
   const requestedMeetingId = searchParams.get('meetingId') || '';
+  const openMeeting = (id) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('meetingId', id);
+    setSearchParams(nextParams);
+  };
+  const closeMeeting = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('meetingId');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const requestedDatasetId = searchParams.get('datasetId') || '';
   const requestedRowIndex = searchParams.get('rowIndex') || '';
   const shouldCreateLinkedMeeting =
@@ -349,7 +364,10 @@ const Meetings = () => {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <label className="relative sm:w-72">
-            <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+            <Search
+              size={16}
+              className="absolute left-3 top-3 text-slate-400"
+            />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -363,7 +381,10 @@ const Meetings = () => {
             title="Refresh"
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
           >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              size={16}
+              className={refreshing ? 'animate-spin' : ''}
+            />
           </button>
           {options.actions.includes('create') && (
             <button
@@ -406,9 +427,15 @@ const Meetings = () => {
                 {label}
               </p>
               {index === 3 ? (
-                <Building2 size={17} className="text-violet-600" />
+                <Building2
+                  size={17}
+                  className="text-violet-600"
+                />
               ) : (
-                <CalendarDays size={17} className="text-blue-600" />
+                <CalendarDays
+                  size={17}
+                  className="text-blue-600"
+                />
               )}
             </div>
             <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
@@ -431,7 +458,10 @@ const Meetings = () => {
             >
               <option value="all">All Departments</option>
               {options.departments.map((department) => (
-                <option key={department._id} value={department._id}>
+                <option
+                  key={department._id}
+                  value={department._id}
+                >
                   {department.name}
                 </option>
               ))}
@@ -461,6 +491,7 @@ const Meetings = () => {
                 <th className="px-4 py-3">Participants</th>
                 <th className="px-4 py-3">Mode & place</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -468,7 +499,10 @@ const Meetings = () => {
                 <tr
                   id={`meeting-${meeting._id}`}
                   key={meeting._id}
-                  className={`align-top transition hover:bg-blue-50/30 ${
+                  onClick={(event) => {
+                    if (!event.target.closest('a, button')) openMeeting(meeting._id);
+                  }}
+                  className={`cursor-pointer align-top transition hover:bg-blue-50/30 ${
                     requestedMeetingId === meeting._id
                       ? 'bg-blue-50 ring-2 ring-inset ring-blue-400'
                       : ''
@@ -484,7 +518,13 @@ const Meetings = () => {
                     </p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-slate-900">{meeting.meetingTitle}</p>
+                    <button
+                      type="button"
+                      onClick={() => openMeeting(meeting._id)}
+                      className="text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline"
+                    >
+                      {meeting.meetingTitle}
+                    </button>
                     {(meeting.clientName || meeting.companyName) && (
                       <p className="mt-1 text-xs font-semibold text-blue-700">
                         Client: {meeting.clientName || meeting.companyName}
@@ -556,12 +596,41 @@ const Meetings = () => {
                       {meeting.status || 'scheduled'}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openMeeting(meeting._id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-50"
+                      >
+                        <Eye size={13} />
+                        Details
+                      </button>
+                      {getMeetingJoinUrl(meeting) && (
+                        <a
+                          href={getMeetingJoinUrl(meeting)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                        >
+                          <ExternalLink size={13} />
+                          Join
+                        </a>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan="7" className="px-4 py-16 text-center">
-                    <CalendarDays size={30} className="mx-auto text-slate-300" />
+                  <td
+                    colSpan="8"
+                    className="px-4 py-16 text-center"
+                  >
+                    <CalendarDays
+                      size={30}
+                      className="mx-auto text-slate-300"
+                    />
                     <p className="mt-3 font-semibold text-slate-600">No meetings scheduled</p>
                     <p className="mt-1 text-xs text-slate-400">
                       Schedule the first department meeting from the button above.
@@ -571,7 +640,10 @@ const Meetings = () => {
               )}
               {loading && (
                 <tr>
-                  <td colSpan="7" className="px-4 py-16 text-center text-slate-500">
+                  <td
+                    colSpan="8"
+                    className="px-4 py-16 text-center text-slate-500"
+                  >
                     Loading meeting schedule...
                   </td>
                 </tr>
@@ -580,6 +652,22 @@ const Meetings = () => {
           </table>
         </div>
       </section>
+
+      {requestedMeetingId && (
+        <MeetingDetailsModal
+          meetingId={requestedMeetingId}
+          onClose={closeMeeting}
+          onUpdated={(updated) =>
+            setMeetings((current) =>
+              current.map((meeting) => (meeting._id === updated._id ? updated : meeting)),
+            )
+          }
+          onDeleted={(id) => {
+            setMeetings((current) => current.filter((meeting) => meeting._id !== id));
+            setMessage('Meeting deleted successfully');
+          }}
+        />
+      )}
 
       {modalOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 p-4">
@@ -663,7 +751,10 @@ const Meetings = () => {
                   >
                     <option value="">Select Business Unit</option>
                     {options.businessUnits.map((unit) => (
-                      <option key={unit._id} value={unit._id}>
+                      <option
+                        key={unit._id}
+                        value={unit._id}
+                      >
                         {unit.name}
                       </option>
                     ))}
@@ -695,7 +786,10 @@ const Meetings = () => {
                     >
                       <option value="">Select assigned employee</option>
                       {linkedEmployees.map((employee) => (
-                        <option key={employee._id} value={employee._id}>
+                        <option
+                          key={employee._id}
+                          value={employee._id}
+                        >
                           {employee.name || employee.email}
                         </option>
                       ))}
@@ -719,7 +813,10 @@ const Meetings = () => {
                   >
                     <option value="">Select Department</option>
                     {availableDepartments.map((department) => (
-                      <option key={department._id} value={department._id}>
+                      <option
+                        key={department._id}
+                        value={department._id}
+                      >
                         {department.name}
                       </option>
                     ))}
@@ -774,8 +871,13 @@ const Meetings = () => {
                   </select>
                 </label>
                 <label className="sm:col-span-2">
-                  <span className={labelClass}>Meeting link / location</span>
+                  <span className={labelClass}>
+                    {form.meetingMode === 'Online' ? 'Meeting link *' : 'Location / phone details'}
+                  </span>
                   <input
+                    type={form.meetingMode === 'Online' ? 'url' : 'text'}
+                    required={form.meetingMode === 'Online'}
+                    maxLength={2048}
                     value={form.platformOrLocation}
                     onChange={(event) =>
                       setForm({ ...form, platformOrLocation: event.target.value })
@@ -783,7 +885,9 @@ const Meetings = () => {
                     placeholder={
                       form.meetingMode === 'Physical'
                         ? 'Office / venue address'
-                        : 'Google Meet / Zoom link'
+                        : form.meetingMode === 'Phone'
+                          ? 'Phone number / dial-in details'
+                          : 'https://meet.google.com/...'
                     }
                     className={inputClass}
                   />

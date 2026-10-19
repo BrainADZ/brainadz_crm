@@ -83,12 +83,6 @@ const WhatsAppIcon = ({ size = 19, ...props }) => (
 
 const navItems = [
   {
-    to: '/dashboard/demo-requests',
-    label: 'Demo Requests',
-    icon: Inbox,
-    liveOnly: true,
-  },
-  {
     to: '/dashboard',
     label: 'Dashboard',
     exact: true,
@@ -119,6 +113,12 @@ const navItems = [
     icon: Inbox,
     children: websiteEnquiryItems,
     moduleKey: 'website_enquiries',
+  },
+  {
+    to: '/dashboard/demo-requests',
+    label: 'Demo Requests',
+    icon: Inbox,
+    liveOnly: true,
   },
   {
     to: '/dashboard/marketing',

@@ -1,11 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Inbox, RefreshCw, Search, X } from 'lucide-react';
+import { MessageSquareText, RefreshCw, Search, X } from 'lucide-react';
 import { getDemoRequests, updateDemoRequest } from '../services/demoRequestApi';
 
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Closed'];
 const field =
-  'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#193175]';
+  'h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
 const date = (value) => (value ? new Date(value).toLocaleString('en-IN') : '—');
+const rowStyle = {
+  New: 'bg-amber-50/60',
+  Contacted: 'bg-sky-50/60',
+  Qualified: 'bg-cyan-50/70',
+  Closed: 'bg-green-50/70',
+};
+const statusStyle = {
+  New: 'bg-amber-100 text-amber-800',
+  Contacted: 'bg-sky-100 text-sky-800',
+  Qualified: 'bg-cyan-100 text-cyan-800',
+  Closed: 'bg-green-100 text-green-800',
+};
 const deliveryStyle = {
   sent: 'bg-emerald-100 text-emerald-800',
   pending: 'bg-amber-100 text-amber-800',
@@ -86,202 +98,298 @@ export default function DemoRequests() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-900">
-            <Inbox />
-            Demo Requests
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Website demo requests for the Live team · {data.total} matching requests
-          </p>
-        </div>
-        <button
-          type="button"
-          className={`${field} flex items-center gap-2`}
-          onClick={() => setRefresh((value) => value + 1)}
-          disabled={loading}
-        >
-          <RefreshCw size={16} />
-          Refresh
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="flex items-center gap-2">
-          <Search size={18} />
-          <input
-            aria-label="Search demo requests"
-            placeholder="Name, company, email or phone"
-            className={`${field} w-64`}
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-          />
-        </label>
-        <select
-          aria-label="Filter status"
-          className={field}
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((value) => (
-            <option key={value}>{value}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter demo type"
-          className={field}
-          value={demoType}
-          onChange={(event) => {
-            setDemoType(event.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All products</option>
-          {['erp', 'crm', 'pos', 'hospitality', 'software'].map((value) => (
-            <option
-              key={value}
-              value={value}
-            >
-              {value.toUpperCase()}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter email delivery"
-          className={field}
-          value={deliveryStatus}
-          onChange={(event) => {
-            setDeliveryStatus(event.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All email delivery</option>
-          {['pending', 'sent', 'failed'].map((value) => (
-            <option
-              key={value}
-              value={value}
-            >
-              {value}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="w-full space-y-5">
       {error && (
         <p
           role="alert"
-          className="rounded-lg bg-rose-50 p-4 text-rose-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
         >
           {error}
         </p>
       )}
-      <div
-        className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
+      <section
+        className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
         aria-busy={loading}
       >
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              {[
-                'Contact',
-                'Company',
-                'Product',
-                'Received',
-                'Email delivery',
-                'Status',
-                'Details',
-              ].map((label) => (
-                <th
-                  key={label}
-                  className="whitespace-nowrap px-4 py-3"
+        <div className="border-b border-slate-300 bg-slate-100 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-sm font-semibold text-slate-800">Demo request table</h1>
+              <p className="mt-1 text-xs text-slate-500">
+                Website demo enquiries for the Live team
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`${field} inline-flex items-center gap-2`}
+              disabled={loading}
+              onClick={() => setRefresh((value) => value + 1)}
+            >
+              <RefreshCw
+                size={14}
+                className={loading ? 'animate-spin' : ''}
+              />
+              Refresh
+            </button>
+          </div>
+          <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+              <label className="relative w-full xl:max-w-sm">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  aria-label="Search demo requests"
+                  placeholder="Search name, phone, email, company..."
+                  className={`${field} w-full pl-9 font-normal`}
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+              <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                <select
+                  aria-label="Filter status"
+                  className={field}
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
                 >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.items.map((request) => (
-              <tr
-                key={request._id}
-                className="hover:bg-slate-50"
-              >
-                <td className="px-4 py-4">
-                  <p className="font-semibold text-slate-900">{request.name}</p>
-                  <a
-                    className="block text-[#193175]"
-                    href={`mailto:${request.email}`}
-                  >
-                    {request.email}
-                  </a>
-                  <span className="text-slate-500">{request.phone}</span>
-                </td>
-                <td className="px-4 py-4">
-                  <p>{request.companyName}</p>
-                  <p className="text-xs text-slate-500">{request.companySize}</p>
-                </td>
-                <td className="px-4 py-4 uppercase">{request.demoType}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-xs">{date(request.createdAt)}</td>
-                <td className="px-4 py-4">
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${deliveryStyle[request.deliveryStatus]}`}
-                  >
-                    {request.deliveryStatus}
-                  </span>
-                </td>
-                <td className="px-4 py-4">{request.status}</td>
-                <td className="px-4 py-4">
+                  <option value="">All statuses</option>
+                  {STATUSES.map((value) => (
+                    <option key={value}>{value}</option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Filter product"
+                  className={field}
+                  value={demoType}
+                  onChange={(event) => {
+                    setDemoType(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All products</option>
+                  {['erp', 'crm', 'pos', 'hospitality', 'software'].map((value) => (
+                    <option
+                      key={value}
+                      value={value}
+                    >
+                      {value.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Filter email delivery"
+                  className={field}
+                  value={deliveryStatus}
+                  onChange={(event) => {
+                    setDeliveryStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All email delivery</option>
+                  {['pending', 'sent', 'failed'].map((value) => (
+                    <option
+                      key={value}
+                      value={value}
+                    >
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-slate-500">
+                {loading
+                  ? 'Loading requests...'
+                  : `${data.items.length} visible requests / ${data.total} matching requests`}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {['', ...STATUSES].map((value) => (
                   <button
+                    key={value}
                     type="button"
-                    className="font-semibold text-[#193175] underline underline-offset-4"
-                    onClick={() => openRequest(request)}
+                    onClick={() => {
+                      setStatus(value);
+                      setPage(1);
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-bold ${status === value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-blue-50'}`}
                   >
-                    View / update
+                    {value || 'All'}
                   </button>
-                </td>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-auto">
+          <table className="compact-crm-table min-w-[100rem] w-full table-fixed border-collapse text-left">
+            <colgroup>
+              {[55, 120, 140, 155, 120, 190, 90, 120, 220, 140, 105, 105, 70].map(
+                (width, index) => (
+                  <col
+                    key={index}
+                    style={{ width }}
+                  />
+                ),
+              )}
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-100">
+                {[
+                  'S.No.',
+                  'Request ID',
+                  'Full Name',
+                  'Company / Brand',
+                  'Phone',
+                  'Work Email',
+                  'Product',
+                  'Company Size',
+                  'Requirements',
+                  'Received',
+                  'Email Delivery',
+                  'Status',
+                  'Actions',
+                ].map((label) => (
+                  <th
+                    key={label}
+                    className={`border border-slate-300 px-3 py-2 font-semibold leading-4 text-slate-800 ${label === 'S.No.' || label === 'Actions' ? 'text-center' : ''}`}
+                  >
+                    {label}
+                  </th>
+                ))}
               </tr>
-            ))}
-            {!data.items.length && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="p-10 text-center text-slate-500"
+            </thead>
+            <tbody>
+              {data.items.map((request, index) => (
+                <tr
+                  key={request._id}
+                  className={rowStyle[request.status] || 'bg-white'}
                 >
-                  {loading ? 'Loading requests…' : 'No demo requests match these filters.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center justify-end gap-4 text-sm">
-        <button
-          type="button"
-          className={field}
-          disabled={page <= 1 || loading}
-          onClick={() => setPage((value) => value - 1)}
-        >
-          Previous
-        </button>
-        <span>
-          Page {page} of {data.pages}
-        </span>
-        <button
-          type="button"
-          className={field}
-          disabled={page >= data.pages || loading}
-          onClick={() => setPage((value) => value + 1)}
-        >
-          Next
-        </button>
-      </div>
+                  <td className="border border-slate-300 px-3 py-2 text-center text-slate-700">
+                    {(page - 1) * 25 + index + 1}
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2">
+                    <button
+                      type="button"
+                      title={request.requestId}
+                      onClick={() => openRequest(request)}
+                      className="font-semibold text-blue-700 hover:underline"
+                    >
+                      DEMO-{request.requestId.slice(0, 8).toUpperCase()}
+                    </button>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    <div className="two-line-cell">{request.name}</div>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    <div className="two-line-cell">{request.companyName}</div>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2">
+                    <a
+                      href={`tel:${request.phone}`}
+                      className="text-slate-700 hover:text-blue-700"
+                    >
+                      {request.phone}
+                    </a>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2">
+                    <a
+                      href={`mailto:${request.email}`}
+                      className="two-line-cell text-blue-700 hover:underline"
+                    >
+                      {request.email}
+                    </a>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 uppercase text-slate-700">
+                    {request.demoType}
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    {request.companySize}
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    <p
+                      className="line-clamp-2"
+                      title={request.requirements}
+                    >
+                      {request.requirements}
+                    </p>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    {date(request.createdAt)}
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 font-semibold capitalize ${deliveryStyle[request.deliveryStatus]}`}
+                    >
+                      {request.deliveryStatus}
+                    </span>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 font-semibold ${statusStyle[request.status]}`}
+                    >
+                      {request.status}
+                    </span>
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 text-center">
+                    <button
+                      type="button"
+                      title="View details and update status"
+                      aria-label={`View request from ${request.name}`}
+                      onClick={() => openRequest(request)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <MessageSquareText size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!data.items.length && (
+                <tr>
+                  <td
+                    colSpan={13}
+                    className="border border-slate-300 p-10 text-center text-slate-500"
+                  >
+                    {loading ? 'Loading requests...' : 'No demo requests match these filters.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+          <span>{data.total} matching requests</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className={`${field} disabled:opacity-40`}
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((value) => value - 1)}
+            >
+              Previous
+            </button>
+            <span>
+              Page {page} of {data.pages}
+            </span>
+            <button
+              type="button"
+              className={`${field} disabled:opacity-40`}
+              disabled={page >= data.pages || loading}
+              onClick={() => setPage((value) => value + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </footer>
+      </section>
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <section
@@ -314,6 +422,7 @@ export default function DemoRequests() {
             </div>
             <dl className="my-5 grid gap-3 text-sm sm:grid-cols-2">
               {Object.entries({
+                'Request ID': selected.requestId,
                 Email: selected.email,
                 Phone: selected.phone,
                 'Company size': selected.companySize,
@@ -361,7 +470,7 @@ export default function DemoRequests() {
               <label className="block text-sm font-semibold">
                 Team notes
                 <textarea
-                  className={`${field} mt-2 block w-full font-normal`}
+                  className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-blue-500"
                   rows={4}
                   maxLength={4000}
                   value={notes}

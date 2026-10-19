@@ -10,6 +10,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { loadAuthorization, requirePermission } = require('../middleware/authorization');
 const { createNotification } = require('../utils/notifications');
 const { getDateInTimeZone } = require('../services/meetingReminderService');
+const { normalizeMeetingLink } = require('../services/meetingLinkService');
 
 const router = express.Router();
 router.use(authMiddleware, loadAuthorization);
@@ -447,6 +448,67 @@ const linkedContextPayload = (context, rowIndex) => {
   };
 };
 
+const buildMeetingQuery = async (req) => {
+  let query = {};
+  if (req.user.roleKey !== 'super_admin') {
+    const assignments = await UserAccessAssignment.find(activeAccessQuery(req.user._id))
+      .select('businessUnitIds departmentId teamIds')
+      .lean();
+    const businessUnitIds = [
+      ...new Set(assignments.flatMap((assignment) => assignment.businessUnitIds || []).map(String)),
+    ];
+    const scope = req.permission?.scope;
+    const ownMeetingClauses = [{ employee: req.user._id }, { participantUserIds: req.user._id }];
+    const ownMeetings = {
+      $or: ownMeetingClauses,
+    };
+    const departmentClauses = assignments
+      .filter((assignment) => assignment.departmentId && assignment.businessUnitIds?.length)
+      .map((assignment) => ({
+        departmentId: assignment.departmentId,
+        businessUnitId: { $in: assignment.businessUnitIds },
+      }));
+
+    if (COMPANY_SCOPES.has(scope)) {
+      query = {};
+    } else if (BUSINESS_UNIT_SCOPES.has(scope)) {
+      query = businessUnitIds.length ? { businessUnitId: { $in: businessUnitIds } } : { _id: null };
+    } else if (DEPARTMENT_SCOPES.has(scope)) {
+      query = departmentClauses.length ? { $or: departmentClauses } : { _id: null };
+    } else if (TEAM_SCOPES.has(scope)) {
+      const teamNames = [req.user.team, req.user.secondaryTeam].map(normalizeCell).filter(Boolean);
+      const teamClauses = assignments
+        .filter(
+          (assignment) =>
+            assignment.departmentId &&
+            assignment.businessUnitIds?.length &&
+            (assignment.teamIds?.length || teamNames.length),
+        )
+        .map((assignment) => {
+          const teamFilters = [
+            ...(assignment.teamIds?.length ? [{ teamIds: { $in: assignment.teamIds } }] : []),
+            ...(teamNames.length ? [{ team: { $in: teamNames } }] : []),
+          ];
+          return {
+            departmentId: assignment.departmentId,
+            businessUnitId: { $in: assignment.businessUnitIds },
+            ...(teamFilters.length === 1 ? teamFilters[0] : { $or: teamFilters }),
+          };
+        });
+      query = { $or: [...ownMeetingClauses, ...teamClauses] };
+    } else {
+      query = ownMeetings;
+    }
+  }
+  if (req.selectedCommunity) {
+    const selectedCommunityQuery = { communityKey: req.selectedCommunity };
+    query = Object.keys(query).length
+      ? { $and: [query, selectedCommunityQuery] }
+      : selectedCommunityQuery;
+  }
+  return query;
+};
+
 router.get('/context', requirePermission('meetings', 'create'), async (req, res, next) => {
   try {
     const datasetId = normalizeCell(req.query.datasetId);
@@ -504,6 +566,7 @@ router.get('/options', requirePermission('meetings', 'view'), async (req, res, n
         ...user,
         ...(membershipMap.get(String(user._id)) || { departmentIds: [], businessUnitIds: [] }),
       })),
+      canDelete: req.user.roleKey === 'super_admin',
       actions:
         req.effectivePermissions.find((permission) => permission.resource === 'meetings')
           ?.actions || [],
@@ -515,73 +578,89 @@ router.get('/options', requirePermission('meetings', 'view'), async (req, res, n
 
 router.get('/', requirePermission('meetings', 'view'), async (req, res, next) => {
   try {
-    let query = {};
-    if (req.user.roleKey !== 'super_admin') {
-      const assignments = await UserAccessAssignment.find(activeAccessQuery(req.user._id))
-        .select('businessUnitIds departmentId teamIds')
-        .lean();
-      const businessUnitIds = [
-        ...new Set(
-          assignments.flatMap((assignment) => assignment.businessUnitIds || []).map(String),
-        ),
-      ];
-      const scope = req.permission?.scope;
-      const ownMeetingClauses = [{ employee: req.user._id }, { participantUserIds: req.user._id }];
-      const ownMeetings = {
-        $or: ownMeetingClauses,
-      };
-      const departmentClauses = assignments
-        .filter((assignment) => assignment.departmentId && assignment.businessUnitIds?.length)
-        .map((assignment) => ({
-          departmentId: assignment.departmentId,
-          businessUnitId: { $in: assignment.businessUnitIds },
-        }));
-
-      if (COMPANY_SCOPES.has(scope)) {
-        query = {};
-      } else if (BUSINESS_UNIT_SCOPES.has(scope)) {
-        query = businessUnitIds.length
-          ? { businessUnitId: { $in: businessUnitIds } }
-          : { _id: null };
-      } else if (DEPARTMENT_SCOPES.has(scope)) {
-        query = departmentClauses.length ? { $or: departmentClauses } : { _id: null };
-      } else if (TEAM_SCOPES.has(scope)) {
-        const teamNames = [req.user.team, req.user.secondaryTeam]
-          .map(normalizeCell)
-          .filter(Boolean);
-        const teamClauses = assignments
-          .filter(
-            (assignment) =>
-              assignment.departmentId &&
-              assignment.businessUnitIds?.length &&
-              (assignment.teamIds?.length || teamNames.length),
-          )
-          .map((assignment) => {
-            const teamFilters = [
-              ...(assignment.teamIds?.length ? [{ teamIds: { $in: assignment.teamIds } }] : []),
-              ...(teamNames.length ? [{ team: { $in: teamNames } }] : []),
-            ];
-            return {
-              departmentId: assignment.departmentId,
-              businessUnitId: { $in: assignment.businessUnitIds },
-              ...(teamFilters.length === 1 ? teamFilters[0] : { $or: teamFilters }),
-            };
-          });
-        query = { $or: [...ownMeetingClauses, ...teamClauses] };
-      } else {
-        query = ownMeetings;
-      }
-    }
-    if (req.selectedCommunity) {
-      const selectedCommunityQuery = { communityKey: req.selectedCommunity };
-      query = Object.keys(query).length
-        ? { $and: [query, selectedCommunityQuery] }
-        : selectedCommunityQuery;
-    }
+    const query = await buildMeetingQuery(req);
     const meetings = await meetingPopulate(
       Meeting.find(query).sort({ meetingDate: 1, meetingTime: 1 }),
     );
     return res.json(meetings);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const meetingDetailsPayload = (req, meeting) => {
+  const superAdmin = req.user.roleKey === 'super_admin';
+  const organizer = String(meeting.employee?._id || meeting.employee) === String(req.user._id);
+  const canEdit = req.effectivePermissions.some(
+    (permission) => permission.resource === 'meetings' && permission.actions?.includes('edit'),
+  );
+  return {
+    meeting,
+    canDelete: superAdmin,
+    canEditLink: superAdmin || (organizer && canEdit),
+  };
+};
+
+router.get('/:id', requirePermission('meetings', 'view'), async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid meeting ID' });
+    }
+    const scope = await buildMeetingQuery(req);
+    const meeting = await meetingPopulate(
+      Meeting.findOne({ $and: [scope, { _id: req.params.id }] }),
+    );
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found or access denied' });
+    res.set('Cache-Control', 'no-store');
+    return res.json(meetingDetailsPayload(req, meeting));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/:id/link', requirePermission('meetings', 'edit'), async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid meeting ID' });
+    }
+    const link = normalizeMeetingLink(req.body.platformOrLocation);
+    if (!link)
+      return res.status(400).json({ message: 'Enter a valid HTTP or HTTPS meeting link.' });
+    const scope = await buildMeetingQuery(req);
+    const meeting = await Meeting.findOne({ $and: [scope, { _id: req.params.id }] });
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found or access denied' });
+    if (req.user.roleKey !== 'super_admin' && String(meeting.employee) !== String(req.user._id)) {
+      return res
+        .status(403)
+        .json({ message: 'Only the organizer or super admin can change the meeting link.' });
+    }
+    if (meeting.meetingMode !== 'Online') {
+      return res
+        .status(400)
+        .json({ message: 'Join links are available for online meetings only.' });
+    }
+    meeting.platformOrLocation = link;
+    await meeting.save();
+    const populatedMeeting = await meetingPopulate(Meeting.findById(meeting._id));
+    return res.json(meetingDetailsPayload(req, populatedMeeting));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    // Delete remains owner-only even if a delegated role has meetings.delete.
+    if (req.user.roleKey !== 'super_admin') {
+      return res.status(403).json({ message: 'Only the super admin can delete meetings.' });
+    }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid meeting ID' });
+    }
+    const scope = await buildMeetingQuery(req);
+    const meeting = await Meeting.findOneAndDelete({ $and: [scope, { _id: req.params.id }] });
+    if (!meeting) return res.status(404).json({ message: 'Meeting not found' });
+    return res.json({ message: 'Meeting deleted successfully', id: String(meeting._id) });
   } catch (error) {
     return next(error);
   }
@@ -612,6 +691,17 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
         linkedRowIndex < 0)
     )
       return res.status(400).json({ message: 'Select a valid client dataset row' });
+
+    const meetingMode = ['Physical', 'Online', 'Phone'].includes(req.body.meetingMode)
+      ? req.body.meetingMode
+      : 'Online';
+    const platformOrLocation =
+      meetingMode === 'Online'
+        ? normalizeMeetingLink(req.body.platformOrLocation)
+        : normalizeCell(req.body.platformOrLocation);
+    if (meetingMode === 'Online' && !platformOrLocation) {
+      return res.status(400).json({ message: 'Enter a valid HTTP or HTTPS meeting link.' });
+    }
 
     const linkedContext = hasLinkedRow
       ? await loadLinkedMeetingContext(req, datasetId, linkedRowIndex)
@@ -792,10 +882,8 @@ router.post('/', requirePermission('meetings', 'create'), async (req, res, next)
       meetingDate,
       meetingTime,
       durationMinutes: Math.min(480, Math.max(15, Number(req.body.durationMinutes) || 30)),
-      meetingMode: ['Physical', 'Online', 'Phone'].includes(req.body.meetingMode)
-        ? req.body.meetingMode
-        : 'Online',
-      platformOrLocation: normalizeCell(req.body.platformOrLocation),
+      meetingMode,
+      platformOrLocation,
       notes: normalizeCell(req.body.notes),
       ...(linkedContext
         ? {
