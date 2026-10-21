@@ -9,6 +9,21 @@ export const getDemoRequestAccess = async () => {
   return response.data.allowed === true;
 };
 
+export const getDemoRequestCapabilities = async () => {
+  const response = await axios.get(`${endpoint}/access`, { headers: getAdminHeaders() });
+  return response.data;
+};
+
+export const getDemoRequestOptions = async () => {
+  const response = await axios.get(`${endpoint}/options`, { headers: getAdminHeaders() });
+  return response.data.employees || [];
+};
+
+export const assignDemoRequest = async (id, employeeId) => {
+  const response = await axios.patch(`${endpoint}/${id}/assign`, { employeeId }, { headers: getAdminHeaders() });
+  return response.data.request;
+};
+
 export const getDemoRequests = async (params, signal) => {
   const response = await axios.get(endpoint, { params, signal, headers: getAdminHeaders() });
   return response.data;

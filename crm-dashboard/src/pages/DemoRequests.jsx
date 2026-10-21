@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MessageSquareText, RefreshCw, Search, X } from 'lucide-react';
-import { getDemoRequests, updateDemoRequest } from '../services/demoRequestApi';
+import { assignDemoRequest, getDemoRequestCapabilities, getDemoRequestOptions, getDemoRequests, updateDemoRequest } from '../services/demoRequestApi';
 
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Closed'];
 const field =
@@ -39,6 +39,18 @@ export default function DemoRequests() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [canAssign, setCanAssign] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [assigneeId, setAssigneeId] = useState('');
+  const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    getDemoRequestCapabilities().then(async (access) => {
+      if (!access.canAssign) return;
+      setCanAssign(true);
+      setEmployees(await getDemoRequestOptions());
+    }).catch(() => setCanAssign(false));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,7 +91,22 @@ export default function DemoRequests() {
     setSelected(request);
     setEditStatus(request.status);
     setNotes(request.notes || '');
+    setAssigneeId(request.assignedTo?._id || '');
     setSaveError('');
+  };
+
+  const saveAssignment = async () => {
+    setAssigning(true);
+    setSaveError('');
+    try {
+      await assignDemoRequest(selected._id, assigneeId);
+      setSelected(null);
+      setRefresh((value) => value + 1);
+    } catch (requestError) {
+      setSaveError(requestError.response?.data?.message || 'Unable to change assignment.');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const save = async (event) => {
@@ -116,7 +143,7 @@ export default function DemoRequests() {
             <div>
               <h1 className="text-sm font-semibold text-slate-800">Demo request table</h1>
               <p className="mt-1 text-xs text-slate-500">
-                Website demo enquiries for the Live team
+                New enquiries are shared with the Live team. The first status update claims the request.
               </p>
             </div>
             <button
@@ -232,7 +259,7 @@ export default function DemoRequests() {
         <div className="overflow-auto">
           <table className="compact-crm-table min-w-[100rem] w-full table-fixed border-collapse text-left">
             <colgroup>
-              {[55, 120, 140, 155, 120, 190, 90, 120, 220, 140, 105, 105, 70].map(
+              {[55, 120, 140, 155, 120, 190, 90, 120, 220, 140, 105, 105, 140, 70].map(
                 (width, index) => (
                   <col
                     key={index}
@@ -256,6 +283,7 @@ export default function DemoRequests() {
                   'Received',
                   'Email Delivery',
                   'Status',
+                  'Assigned To',
                   'Actions',
                 ].map((label) => (
                   <th
@@ -339,6 +367,9 @@ export default function DemoRequests() {
                       {request.status}
                     </span>
                   </td>
+                  <td className="border border-slate-300 px-3 py-2 text-slate-700">
+                    {request.assignedTo?.name || request.assignedTo?.email || 'Unassigned'}
+                  </td>
                   <td className="border border-slate-300 px-3 py-2 text-center">
                     <button
                       type="button"
@@ -355,7 +386,7 @@ export default function DemoRequests() {
               {!data.items.length && (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="border border-slate-300 p-10 text-center text-slate-500"
                   >
                     {loading ? 'Loading requests...' : 'No demo requests match these filters.'}
@@ -431,6 +462,7 @@ export default function DemoRequests() {
                 'Emailed at': date(selected.emailedAt),
                 'Access type': selected.accessType,
                 'Delivery note': selected.deliveryError || '—',
+                'Assigned to': selected.assignedTo?.name || selected.assignedTo?.email || 'Unassigned',
               }).map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt>
@@ -450,6 +482,20 @@ export default function DemoRequests() {
                 Campaign: {selected.campaign.utm_campaign} · {selected.campaign.utm_source} /{' '}
                 {selected.campaign.utm_medium}
               </p>
+            )}
+            {canAssign && (
+              <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <label className="block text-sm font-semibold" htmlFor="demo-assignee">Assign / reassign</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <select id="demo-assignee" className={field} value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
+                    <option value="">Unassigned (shared Live queue)</option>
+                    {employees.map((employee) => <option key={employee._id} value={employee._id}>{employee.name || employee.email}</option>)}
+                  </select>
+                  <button type="button" disabled={assigning} onClick={saveAssignment} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                    {assigning ? 'Saving...' : assigneeId ? 'Assign' : 'Unassign'}
+                  </button>
+                </div>
+              </div>
             )}
             <form
               onSubmit={save}

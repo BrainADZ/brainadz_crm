@@ -156,7 +156,7 @@ const DEPARTMENT_SEEDS = [
     slug: 'marketing',
     icon: 'Megaphone',
     businessUnitKeys: ['marketing', 'live', 'exhibition'],
-    defaultModuleKeys: ['dashboard', 'marketing', 'communication', 'projects', 'documents'],
+    defaultModuleKeys: ['dashboard', 'marketing', 'website_enquiries', 'communication', 'projects', 'documents'],
   },
   {
     name: 'Creative',
@@ -391,6 +391,7 @@ const ROLE_TEMPLATES = [
       'pipelines',
       'quotations',
       'communication',
+      'website_enquiries',
       'meetings',
       'documents',
       'whatsapp',

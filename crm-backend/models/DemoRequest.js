@@ -32,6 +32,9 @@ const demoRequestSchema = new mongoose.Schema(
     status: { type: String, enum: ['New', 'Contacted', 'Qualified', 'Closed'], default: 'New' },
     notes: { type: String, default: '', maxlength: 4000 },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assignedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

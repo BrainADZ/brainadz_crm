@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { test } = require('node:test');
+const sift = require('sift').default;
 
 const load = (relative, stubs, extra = '') => {
   const filename = path.resolve(__dirname, relative);
@@ -54,7 +55,13 @@ test('enquiry recipients require view permission, community and record scope; re
     { _id: 'unassigned', scope: 'assigned' },
     { _id: 'denied', scope: 'community', denied: true },
     { _id: 'other-unit', scope: 'all', communities: ['live'] },
-  ].map((user) => ({ role: 'employee', roleKey: 'employee', communities: ['marketing'], ...user }));
+  ].map((user) => ({
+    role: 'employee',
+    roleKey: 'employee',
+    officeModule: 'Sales',
+    communities: ['marketing'],
+    ...user,
+  }));
   const stored = new Map();
   const queries = [];
   const service = load('../services/websiteEnquiryNotificationService.js', {
@@ -70,7 +77,7 @@ test('enquiry recipients require view permission, community and record scope; re
         queries.push(filter);
         assert.equal(String(filter.$and[0]._id), enquiryId);
         const scope = filter.$and[1];
-        return !scope.$or || scope.$or.some((item) => item.assignedTo === 'assigned');
+        return sift(scope)(enquiry);
       },
     },
     './accessControlService': {
@@ -93,7 +100,7 @@ test('enquiry recipients require view permission, community and record scope; re
   await service.notifyWebsiteEnquiry({ enquiry });
   assert.deepEqual(
     [...stored.values()].map((n) => n.recipientUser),
-    ['admin', 'manager', 'assigned'],
+    ['admin', 'manager', 'assigned', 'unassigned'],
   );
   assert.equal(queries.length, 8);
   assert.ok([...stored.values()].every((n) => n.link === '/dashboard/website-enquiries/marketing'));
@@ -102,6 +109,8 @@ test('enquiry recipients require view permission, community and record scope; re
 const controllerSetup = ({ canView = true } = {}) => {
   let enquiry = fixture();
   let saves = 0;
+  let atomicSaves = 0;
+  let saveError = null;
   let modified = 1;
   const notices = [];
   enquiry.save = async () => {
@@ -121,6 +130,19 @@ const controllerSetup = ({ canView = true } = {}) => {
         return enquiry;
       },
       findOne: async () => enquiry,
+      findOneAndUpdate: async (filter, update) => {
+        if (saveError) throw saveError;
+        const expected = filter.$and[2];
+        if (
+          String(enquiry.assignedTo || '') !== String(expected.assignedTo || '') ||
+          enquiry.status !== expected.status
+        )
+          return null;
+        atomicSaves += 1;
+        Object.assign(enquiry, update.$set);
+        enquiry.activity.push(update.$push.activity);
+        return enquiry;
+      },
       findById: () => chain(enquiry),
       find: (filter) => chain(filter.$and && modified === 0 ? [] : [enquiry]),
       updateMany: async (filter, update) => {
@@ -167,6 +189,10 @@ const controllerSetup = ({ canView = true } = {}) => {
     notices,
     enquiry,
     saves: () => saves,
+    atomicSaves: () => atomicSaves,
+    failSave: (message) => {
+      saveError = new Error(message);
+    },
     setModified: (value) => {
       modified = value;
     },
@@ -197,9 +223,10 @@ for (const method of ['createPublicEnquiry', 'createEnquiry']) {
 
 test('status/remark and follow-up changes notify after save; unchanged saves do not notify', async () => {
   const ctx = controllerSetup();
-  ctx.req.body = { status: 'Contacted', remark: 'Meeting details shared' };
+  ctx.enquiry.communityKey = 'live';
+  ctx.req.body = { communityKey: 'live', status: 'Contacted', remark: 'Meeting details shared' };
   await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
-  assert.equal(ctx.saves(), 1);
+  assert.equal(ctx.atomicSaves(), 1);
   assert.equal(ctx.notices[0].type, 'status');
   assert.equal(ctx.notices[0].actor.name, 'Ayushi');
   await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
@@ -207,7 +234,12 @@ test('status/remark and follow-up changes notify after save; unchanged saves do 
   ctx.req.body.remark = 'Confirmed';
   await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
   assert.equal(ctx.notices.at(-1).type, 'remark');
-  ctx.req.body = { status: 'Follow Up', followUpDate: '2026-10-09', remark: 'Confirmed' };
+  ctx.req.body = {
+    communityKey: 'live',
+    status: 'Follow Up',
+    followUpDate: '2026-10-09',
+    remark: 'Confirmed',
+  };
   await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
   ctx.req.body.followUpDate = '2026-10-10';
   await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
@@ -217,15 +249,37 @@ test('status/remark and follow-up changes notify after save; unchanged saves do 
 
 test('failed saves do not emit notifications', async () => {
   const ctx = controllerSetup();
-  ctx.enquiry.save = async () => {
-    throw new Error('Database unavailable');
-  };
-  ctx.req.body = { status: 'Contacted' };
+  ctx.enquiry.communityKey = 'live';
+  ctx.failSave('Database unavailable');
+  ctx.req.body = { communityKey: 'live', status: 'Contacted' };
   await assert.rejects(
     ctx.controller.updateAction(ctx.req, ctx.res, ctx.next),
     /Database unavailable/,
   );
   assert.equal(ctx.notices.length, 0);
+});
+
+test('first Marketing status update atomically claims the enquiry', async () => {
+  const ctx = controllerSetup();
+  ctx.req.body = { communityKey: 'marketing', status: 'Contacted', remark: 'Called client' };
+  await ctx.controller.updateAction(ctx.req, ctx.res, ctx.next);
+  assert.equal(String(ctx.enquiry.assignedTo), actorId);
+  assert.equal(ctx.enquiry.status, 'Contacted');
+  assert.equal(ctx.notices.at(-1).type, 'status');
+  assert.equal(ctx.saves(), 0);
+  assert.equal(ctx.enquiry.validateSync(), undefined);
+  ctx.req.user = {
+    _id: '507f1f77bcf86cd799439099',
+    roleKey: 'sales_executive',
+    communities: ['marketing'],
+    name: 'Other seller',
+  };
+  ctx.req.body.status = 'Interested';
+  await assert.rejects(
+    ctx.controller.updateAction(ctx.req, ctx.res, ctx.next),
+    (error) => error.status === 409,
+  );
+  assert.equal(ctx.enquiry.status, 'Contacted');
 });
 
 test('assignment and unassignment notify; assigning the same employee again does not', async () => {

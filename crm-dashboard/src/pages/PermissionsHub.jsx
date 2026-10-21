@@ -964,6 +964,11 @@ const PermissionsHub = () => {
             </button>
           </div>
           <div className="p-5">
+            <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">Enquiry ownership rules</p>
+              <p className="mt-1">Demo requests appear automatically for employees whose profile includes BrainADZ Live. Marketing website enquiries appear to Marketing or Sales employees with Website Enquiry access. The first status update claims an unassigned enquiry.</p>
+              <p className="mt-1">Only Company Admin and Super Admin can assign, unassign or reassign. Website Enquiry view and update access remains configurable below.</p>
+            </div>
             <ModulePermissionMatrix
               modules={workspace.modules}
               permissions={roleDraft.permissions}

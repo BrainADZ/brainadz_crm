@@ -6,6 +6,8 @@ import {
   getWebsiteEnquiryOptions,
   updateWebsiteEnquiryAction,
 } from '../services/websiteEnquiryApi';
+import { getAuthenticatedUser } from '../utils/auth';
+import { getMyAccess } from '../services/accessApi';
 
 const STATUSES = [
   'Pending',
@@ -37,7 +39,13 @@ const selectStyle = {
 const field =
   'h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none';
 
-export default function MarketingEnquiries() {
+export default function MarketingEnquiries({ communityKey = 'marketing' }) {
+  const sourceLabel = communityKey === 'live' ? 'Live' : 'Marketing';
+  const user = getAuthenticatedUser();
+  const adminRole =
+    user?.role === 'admin' ||
+    ['company_admin', 'super_admin'].includes(user?.roleKey || user?.crmRole);
+  const [canAssign, setCanAssign] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [employee, setEmployee] = useState('all');
@@ -56,12 +64,30 @@ export default function MarketingEnquiries() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!adminRole) return;
+    getMyAccess()
+      .then((access) =>
+        setCanAssign(
+          Boolean(
+            access.bypass ||
+            access.permissions?.some(
+              (permission) =>
+                permission.resource === 'website_enquiries' &&
+                permission.actions?.includes('assign'),
+            ),
+          ),
+        ),
+      )
+      .catch(() => setCanAssign(false));
+  }, [adminRole]);
+
   const loadEnquiries = useCallback(async () => {
     setLoading(true);
     setError('');
 
     try {
-      const result = await getWebsiteEnquiries({ communityKey: 'marketing', limit: 200 });
+      const result = await getWebsiteEnquiries({ communityKey, limit: 200 });
       setData(
         (result.items || []).map((item) => ({
           ...item,
@@ -72,20 +98,24 @@ export default function MarketingEnquiries() {
       );
       setCounts({ all: result.total, ...result.statusCounts });
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to load marketing enquiries');
+      setError(
+        requestError.response?.data?.message ||
+          `Unable to load ${sourceLabel.toLowerCase()} enquiries`,
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [communityKey, sourceLabel]);
 
   useEffect(() => {
     loadEnquiries();
-    getWebsiteEnquiryOptions('marketing')
-      .then((result) => setEmployees(result.employees || []))
-      .catch((requestError) => {
-        setError(requestError.response?.data?.message || 'Unable to load employee options');
-      });
-  }, [loadEnquiries]);
+    if (canAssign)
+      getWebsiteEnquiryOptions(communityKey)
+        .then((result) => setEmployees(result.employees || []))
+        .catch((requestError) => {
+          setError(requestError.response?.data?.message || 'Unable to load employee options');
+        });
+  }, [loadEnquiries, canAssign, communityKey]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === 'visible') loadEnquiries();
@@ -120,7 +150,7 @@ export default function MarketingEnquiries() {
       await assignWebsiteEnquiries({
         ids: selected,
         employeeId: clear ? '' : assignTo,
-        communityKey: 'marketing',
+        communityKey,
       });
       setSelected([]);
       await loadEnquiries();
@@ -131,7 +161,7 @@ export default function MarketingEnquiries() {
   const saveAction = async () => {
     try {
       const item = await updateWebsiteEnquiryAction(action._id, {
-        communityKey: 'marketing',
+        communityKey,
         status: actionStatus,
         remark,
         followUpDate: followUp,
@@ -149,6 +179,7 @@ export default function MarketingEnquiries() {
         ),
       );
       setSaved(true);
+      await loadEnquiries();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to save action');
     }
@@ -162,7 +193,11 @@ export default function MarketingEnquiries() {
       )}
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-300 bg-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">Marketing enquiry table</h2>
+          <h2 className="text-sm font-semibold text-slate-800">{sourceLabel} enquiry table</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            New enquiries are shared with the {sourceLabel} team. The first status update claims the
+            enquiry.
+          </p>
           <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
               <label className="relative w-full xl:max-w-sm">
@@ -178,7 +213,12 @@ export default function MarketingEnquiries() {
                 />
               </label>
               <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-3">
-                <Filter value={status} set={setStatus} label="All statuses" items={STATUSES} />
+                <Filter
+                  value={status}
+                  set={setStatus}
+                  label="All statuses"
+                  items={STATUSES}
+                />
                 <select
                   value={employee}
                   onChange={(e) => setEmployee(e.target.value)}
@@ -186,7 +226,10 @@ export default function MarketingEnquiries() {
                 >
                   <option value="all">All employees</option>
                   {employees.map((x) => (
-                    <option key={x._id} value={x._id}>
+                    <option
+                      key={x._id}
+                      value={x._id}
+                    >
                       {x.name || x.email}
                     </option>
                   ))}
@@ -226,82 +269,87 @@ export default function MarketingEnquiries() {
               </div>
             </div>
           </div>
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
-            <div className="grid gap-3 lg:grid-cols-[auto_minmax(10rem,0.7fr)_minmax(16rem,1.2fr)_auto] lg:items-end">
-              <div>
-                <Label>Row selection</Label>
+          {canAssign && (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="grid gap-3 lg:grid-cols-[auto_minmax(10rem,0.7fr)_minmax(16rem,1.2fr)_auto] lg:items-end">
+                <div>
+                  <Label>Row selection</Label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        setSelected(
+                          rows.filter((row) => row.assignee === 'Unassigned').map((row) => row._id),
+                        )
+                      }
+                      className="h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold hover:bg-blue-50"
+                    >
+                      Select free rows
+                    </button>
+                    <button
+                      onClick={() => setSelected([])}
+                      disabled={!selected.length}
+                      className="h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold disabled:opacity-40"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <label>
+                  <Label>Distribution</Label>
+                  <select
+                    value={distribution}
+                    onChange={(e) => setDistribution(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="full">Full data ({rows.length})</option>
+                    <option value="half">Half data ({Math.ceil(rows.length / 2)})</option>
+                    <option value="limited">Limited records</option>
+                    <option value="selected">Selected rows ({selected.length})</option>
+                  </select>
+                </label>
+                <label>
+                  <Label>Assign employees</Label>
+                  <select
+                    value={assignTo}
+                    onChange={(e) => setAssignTo(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">Select employees</option>
+                    {employees.map((x) => (
+                      <option
+                        key={x._id}
+                        value={x._id}
+                      >
+                        {x.name || x.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="flex gap-2">
                   <button
-                    onClick={() =>
-                      setSelected(
-                        rows.filter((row) => row.assignee === 'Unassigned').map((row) => row._id),
-                      )
-                    }
-                    className="h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold hover:bg-blue-50"
+                    onClick={() => assign(false)}
+                    disabled={!assignTo || !selected.length}
+                    className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
                   >
-                    Select free rows
+                    Assign
                   </button>
                   <button
-                    onClick={() => setSelected([])}
+                    onClick={() => assign(true)}
                     disabled={!selected.length}
-                    className="h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold disabled:opacity-40"
+                    className="h-10 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-600 disabled:opacity-40"
                   >
-                    Clear
+                    Unassign
                   </button>
                 </div>
               </div>
-              <label>
-                <Label>Distribution</Label>
-                <select
-                  value={distribution}
-                  onChange={(e) => setDistribution(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-                >
-                  <option value="full">Full data ({rows.length})</option>
-                  <option value="half">Half data ({Math.ceil(rows.length / 2)})</option>
-                  <option value="limited">Limited records</option>
-                  <option value="selected">Selected rows ({selected.length})</option>
-                </select>
-              </label>
-              <label>
-                <Label>Assign employees</Label>
-                <select
-                  value={assignTo}
-                  onChange={(e) => setAssignTo(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-                >
-                  <option value="">Select employees</option>
-                  {employees.map((x) => (
-                    <option key={x._id} value={x._id}>
-                      {x.name || x.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => assign(false)}
-                  disabled={!assignTo || !selected.length}
-                  className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
-                >
-                  Assign
-                </button>
-                <button
-                  onClick={() => assign(true)}
-                  disabled={!selected.length}
-                  className="h-10 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-600 disabled:opacity-40"
-                >
-                  Unassign
-                </button>
-              </div>
             </div>
-          </div>
+          )}
         </div>
         <div className="overflow-auto">
           <table className="compact-crm-table min-w-[80rem] w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="bg-slate-100">
-                <TH center>Select</TH>
+                {canAssign && <TH center>Select</TH>}
                 {[
                   'S.No.',
                   'Enquiry ID',
@@ -317,7 +365,10 @@ export default function MarketingEnquiries() {
                   'Meeting',
                   'Actions',
                 ].map((x) => (
-                  <TH key={x} center={x === 'S.No.' || x === 'Meeting' || x === 'Actions'}>
+                  <TH
+                    key={x}
+                    center={x === 'S.No.' || x === 'Meeting' || x === 'Actions'}
+                  >
                     {x}
                   </TH>
                 ))}
@@ -325,18 +376,23 @@ export default function MarketingEnquiries() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.id} className={rowStyle[r.status] || 'bg-white'}>
-                  <TD center>
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(r._id)}
-                      onChange={() =>
-                        setSelected((c) =>
-                          c.includes(r._id) ? c.filter((id) => id !== r._id) : [...c, r._id],
-                        )
-                      }
-                    />
-                  </TD>
+                <tr
+                  key={r.id}
+                  className={rowStyle[r.status] || 'bg-white'}
+                >
+                  {canAssign && (
+                    <TD center>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(r._id)}
+                        onChange={() =>
+                          setSelected((c) =>
+                            c.includes(r._id) ? c.filter((id) => id !== r._id) : [...c, r._id],
+                          )
+                        }
+                      />
+                    </TD>
+                  )}
                   <TD center>{i + 1}</TD>
                   <TD>{r.id}</TD>
                   <TD>{r.name}</TD>
@@ -357,7 +413,7 @@ export default function MarketingEnquiries() {
                     )}
                   </TD>
                   <TD center>
-                    {r.status === 'Interested' ? (
+                    {communityKey === 'marketing' && r.status === 'Interested' ? (
                       <button className="inline-flex items-center gap-1 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800">
                         <CalendarDays size={14} />
                         Schedule meeting
@@ -409,6 +465,38 @@ export default function MarketingEnquiries() {
             ) : (
               <div className="max-h-[calc(90vh-74px)] overflow-y-auto p-5">
                 <div className="space-y-5">
+                  {communityKey === 'live' && (
+                    <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <h4 className="text-sm font-semibold text-slate-900">
+                        {action.name} / {action.company || 'Live website enquiry'}
+                      </h4>
+                      <p className="text-xs text-slate-600">
+                        {action.email} / {action.phone}
+                      </p>
+                      <div>
+                        <Label>Original enquiry</Label>
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                          {action.message || 'No message provided'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Source page</Label>
+                        {/^https?:\/\//i.test(action.pageUrl || '') ? (
+                          <a
+                            href={action.pageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-xs text-blue-700 underline"
+                          >
+                            {action.pageUrl}
+                          </a>
+                        ) : (
+                          <p className="text-xs text-slate-500">Not recorded</p>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
                   <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                     <label>
                       <Label>Status</Label>
@@ -518,7 +606,11 @@ export default function MarketingEnquiries() {
 
 function Filter({ value, set, label, items }) {
   return (
-    <select value={value} onChange={(e) => set(e.target.value)} className={field}>
+    <select
+      value={value}
+      onChange={(e) => set(e.target.value)}
+      className={field}
+    >
       <option value="all">{label}</option>
       {items.map((x) => (
         <option key={x}>{x}</option>

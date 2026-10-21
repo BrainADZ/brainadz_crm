@@ -23,6 +23,7 @@ const activitySchema = new mongoose.Schema(
 const websiteEnquirySchema = new mongoose.Schema(
   {
     enquiryNumber: { type: String, required: true, unique: true, index: true },
+    websiteRequestId: { type: String, maxlength: 80 },
     communityKey: {
       type: String,
       enum: COMMUNITIES,
@@ -58,6 +59,10 @@ const websiteEnquirySchema = new mongoose.Schema(
 );
 
 websiteEnquirySchema.index({ communityKey: 1, createdAt: -1 });
+websiteEnquirySchema.index(
+  { communityKey: 1, websiteRequestId: 1 },
+  { unique: true, partialFilterExpression: { websiteRequestId: { $type: 'string' } } },
+);
 websiteEnquirySchema.index({ communityKey: 1, status: 1, assignedTo: 1 });
 websiteEnquirySchema.index({
   name: 'text',

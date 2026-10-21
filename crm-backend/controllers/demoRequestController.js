@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const DemoRequest = require('../models/DemoRequest');
-const { canAccessLiveDemoRequests } = require('../services/demoRequestAccessService');
+const User = require('../models/User');
+const { canAccessLiveDemoRequests, canManageDemoAssignments } = require('../services/demoRequestAccessService');
 
 const TYPES = ['erp', 'crm', 'pos', 'hospitality', 'software'];
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Closed'];
@@ -112,7 +113,7 @@ const updateDelivery = async (req, res, next) => {
 const checkAccess = async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
-    return res.json({ allowed: await canAccessLiveDemoRequests(req.user) });
+    return res.json({ allowed: await canAccessLiveDemoRequests(req.user), canAssign: canManageDemoAssignments(req.user) });
   } catch (error) {
     return next(error);
   }
@@ -123,6 +124,9 @@ const listRequests = async (req, res, next) => {
     const page = Math.max(1, Math.min(100000, Number.parseInt(req.query.page, 10) || 1));
     const limit = 25;
     const filter = { communityKey: 'live' };
+    if (!canManageDemoAssignments(req.user)) {
+      filter.assignedTo = { $in: [null, req.user._id] };
+    }
     if (STATUSES.includes(req.query.status)) filter.status = req.query.status;
     if (TYPES.includes(req.query.demoType)) filter.demoType = req.query.demoType;
     if (['pending', 'sent', 'failed'].includes(req.query.deliveryStatus))
@@ -137,6 +141,7 @@ const listRequests = async (req, res, next) => {
         .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
+        .populate('assignedTo', 'name email employeeId')
         .lean(),
       DemoRequest.countDocuments(filter),
     ]);
@@ -155,16 +160,70 @@ const updateRequest = async (req, res, next) => {
       req.body.notes.length > 4000
     )
       throw fail('Provide a valid status and notes (up to 4000 characters).');
+    const current = await DemoRequest.findOne({ _id: req.params.id, communityKey: 'live' });
+    if (!current) throw fail('Demo request not found', 404);
+    const manager = canManageDemoAssignments(req.user);
+    if (current.assignedTo && String(current.assignedTo) !== String(req.user._id) && !manager)
+      throw fail('This demo request is already owned by another employee.', 409);
+    if (!current.assignedTo && current.status === req.body.status)
+      throw fail('Change the status to claim this demo request.', 400);
+    const claiming = !current.assignedTo;
     const request = await DemoRequest.findOneAndUpdate(
-      { _id: req.params.id, communityKey: 'live' },
-      { $set: { status: req.body.status, notes: req.body.notes.trim(), updatedBy: req.user._id } },
+      {
+        _id: req.params.id,
+        communityKey: 'live',
+        assignedTo: current.assignedTo || null,
+        status: current.status,
+      },
+      { $set: {
+        status: req.body.status,
+        notes: req.body.notes.trim(),
+        updatedBy: req.user._id,
+        ...(claiming ? { assignedTo: req.user._id, assignedBy: req.user._id, assignedAt: new Date() } : {}),
+      } },
       { new: true, runValidators: true },
-    );
-    if (!request) throw fail('Demo request not found', 404);
+    ).populate('assignedTo', 'name email employeeId');
+    if (!request) throw fail('Another employee claimed or updated this request. Refresh and try again.', 409);
     return res.json({ request });
   } catch (error) {
     return next(error);
   }
+};
+
+const getAssignmentOptions = async (_req, res, next) => {
+  try {
+    const employees = await User.find({
+      userType: 'employee', accountStatus: 'active', isDeleted: { $ne: true }, communities: 'live',
+    }).select('name email employeeId').sort({ name: 1 }).lean();
+    res.json({ employees });
+  } catch (error) { next(error); }
+};
+
+const assignRequest = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) throw fail('Invalid demo request ID');
+    const employeeId = req.body?.employeeId || null;
+    if (employeeId && !mongoose.isValidObjectId(employeeId)) throw fail('Invalid employee ID');
+    if (employeeId) {
+      const employee = await User.findOne({
+        _id: employeeId, userType: 'employee', accountStatus: 'active',
+        isDeleted: { $ne: true }, communities: 'live',
+      });
+      if (!employee || !(await canAccessLiveDemoRequests(employee)))
+        throw fail('Choose an active BrainADZ Live employee.');
+    }
+    const current = await DemoRequest.findOne({ _id: req.params.id, communityKey: 'live' });
+    if (!current) throw fail('Demo request not found', 404);
+    if (String(current.assignedTo || '') === String(employeeId || ''))
+      return res.json({ request: current });
+    const request = await DemoRequest.findOneAndUpdate(
+      { _id: current._id, communityKey: 'live', assignedTo: current.assignedTo || null },
+      { $set: { assignedTo: employeeId, assignedBy: req.user._id, assignedAt: employeeId ? new Date() : null } },
+      { new: true, runValidators: true },
+    ).populate('assignedTo', 'name email employeeId');
+    if (!request) throw fail('Assignment changed. Refresh and try again.', 409);
+    res.json({ request });
+  } catch (error) { next(error); }
 };
 
 module.exports = {
@@ -173,5 +232,7 @@ module.exports = {
   checkAccess,
   listRequests,
   updateRequest,
+  getAssignmentOptions,
+  assignRequest,
   normalizeRequest,
 };

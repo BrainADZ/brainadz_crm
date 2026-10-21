@@ -96,7 +96,7 @@ const createWithUniqueNumber = async (communityKey, payload) => {
         enquiryNumber: await getNextNumber(communityKey),
       });
     } catch (error) {
-      if (error.code !== 11000 || attempt === 2) {
+      if (error.code !== 11000 || error.keyPattern?.websiteRequestId || attempt === 2) {
         throw error;
       }
     }
@@ -183,6 +183,73 @@ const createPublicEnquiry = async (req, res, next) => {
   }
 };
 
+const createLivePublicEnquiry = async (req, res, next) => {
+  try {
+    const requestId = normalize(req.body.requestId, 80);
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestId)) {
+      throw httpError(400, 'A valid website request ID is required');
+    }
+    const safeFields = getSafeEnquiryFields(req.body);
+    validateRequiredEnquiryFields(safeFields);
+    const identity = { communityKey: 'live', websiteRequestId: requestId };
+    const submittedAt = req.body.submittedAt ? new Date(req.body.submittedAt) : new Date();
+    if (Number.isNaN(submittedAt.getTime()) || submittedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+      throw httpError(400, 'Invalid website submission date');
+    }
+    const existingResponse = (existing) => {
+      for (const key of [
+        'name',
+        'email',
+        'phone',
+        'company',
+        'serviceCategory',
+        'service',
+        'message',
+        'pageUrl',
+      ]) {
+        if (existing[key] !== safeFields[key])
+          throw httpError(409, 'This website request ID has already been used');
+      }
+      return res.status(200).json({ enquiryNumber: existing.enquiryNumber, duplicate: true });
+    };
+    const existing = await WebsiteEnquiry.findOne(identity);
+    if (existing) return existingResponse(existing);
+    let enquiry;
+    try {
+      enquiry = await createWithUniqueNumber('live', {
+        ...safeFields,
+        ...identity,
+        source: 'BrainADZ Live website',
+        priority: 'Medium',
+        status: 'Pending',
+        createdBy: null,
+        createdAt: submittedAt,
+        activity: [
+          {
+            type: 'created',
+            message: 'Enquiry received from BrainADZ Live website',
+            changedBy: null,
+            changedByName: 'BrainADZ Live Website',
+            changedAt: submittedAt,
+          },
+        ],
+      });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      const duplicate = await WebsiteEnquiry.findOne(identity);
+      if (!duplicate) throw error;
+      return existingResponse(duplicate);
+    }
+    await notifyWebsiteEnquiry({ enquiry });
+    // The Live website API owns email delivery; do not email the same enquiry twice.
+    return res
+      .status(201)
+      .json({ message: 'Live enquiry saved', enquiryNumber: enquiry.enquiryNumber });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getOptions = async (req, res, next) => {
   try {
     const communityKey = getCommunityKey(req.query.communityKey);
@@ -192,6 +259,7 @@ const getOptions = async (req, res, next) => {
       accountStatus: 'active',
       isDeleted: { $ne: true },
       communities: communityKey,
+      ...(communityKey === 'marketing' ? { officeModule: { $in: ['Sales', 'Marketing'] } } : {}),
     })
       .select('name email employeeId communities')
       .sort({ name: 1 })
@@ -310,6 +378,7 @@ const assignEnquiries = async (req, res, next) => {
         accountStatus: 'active',
         isDeleted: { $ne: true },
         communities: communityKey,
+        ...(communityKey === 'marketing' ? { officeModule: { $in: ['Sales', 'Marketing'] } } : {}),
       }).select('name email role roleKey crmRole communities permissionOverrides');
       if (!employee) throw httpError(400, 'Employee is not active in this business unit');
       if (!getPermission(await resolveEffectivePermissions(employee), 'website_enquiries', 'view'))
@@ -376,12 +445,62 @@ const updateAction = async (req, res, next) => {
     const previousStatus = enquiry.status;
     const previousRemark = enquiry.remark;
     const previousFollowUp = enquiry.followUpDate?.toISOString() || '';
-    enquiry.status = nextStatus;
-    enquiry.remark = nextRemark;
-    enquiry.followUpDate = nextStatus === 'Follow Up' ? followUpDate : null;
-    const followUpChanged = previousFollowUp !== (enquiry.followUpDate?.toISOString() || '');
+    const nextFollowUp = nextStatus === 'Follow Up' ? followUpDate : null;
+    const followUpChanged = previousFollowUp !== (nextFollowUp?.toISOString() || '');
     const changed =
       previousStatus !== nextStatus || previousRemark !== nextRemark || followUpChanged;
+    if (['marketing', 'live'].includes(communityKey)) {
+      const manager = ['company_admin', 'super_admin'].includes(
+        req.user.roleKey || req.user.crmRole,
+      );
+      if (enquiry.assignedTo && String(enquiry.assignedTo) !== String(req.user._id) && !manager)
+        throw httpError(409, 'This enquiry is already owned by another employee');
+      if (!enquiry.assignedTo && previousStatus === nextStatus)
+        throw httpError(400, 'Change the status to claim this enquiry');
+      if (!changed) return res.json(await populate(WebsiteEnquiry.findById(enquiry._id)));
+      const claiming = !enquiry.assignedTo;
+      const event = {
+        type: previousStatus !== nextStatus ? 'status' : followUpChanged ? 'follow_up' : 'remark',
+        previousStatus,
+        currentStatus: nextStatus,
+        previousRemark,
+        currentRemark: nextRemark,
+        message: claiming
+          ? 'Status updated and enquiry automatically claimed'
+          : 'Enquiry action updated',
+        changedBy: req.user._id,
+        changedByName: req.user.name || req.user.email,
+      };
+      const updated = await WebsiteEnquiry.findOneAndUpdate(
+        scopedQuery(req, communityKey, {
+          _id: enquiry._id,
+          assignedTo: enquiry.assignedTo || null,
+          status: previousStatus,
+        }),
+        {
+          $set: {
+            status: nextStatus,
+            remark: nextRemark,
+            followUpDate: nextFollowUp,
+            ...(claiming
+              ? { assignedTo: req.user._id, assignedBy: req.user._id, assignedAt: new Date() }
+              : {}),
+          },
+          $push: { activity: event },
+        },
+        { new: true, runValidators: true },
+      );
+      if (!updated)
+        throw httpError(
+          409,
+          'Another employee claimed or updated this enquiry. Refresh and try again.',
+        );
+      await notifyWebsiteEnquiry({ enquiry: updated, actor: req.user });
+      return res.json(await populate(WebsiteEnquiry.findById(enquiry._id)));
+    }
+    enquiry.status = nextStatus;
+    enquiry.remark = nextRemark;
+    enquiry.followUpDate = nextFollowUp;
     if (changed) {
       enquiry.activity.push({
         type: previousStatus !== nextStatus ? 'status' : followUpChanged ? 'follow_up' : 'remark',
@@ -410,6 +529,7 @@ const updateAction = async (req, res, next) => {
 };
 
 module.exports = {
+  createLivePublicEnquiry,
   assignEnquiries,
   createEnquiry,
   createPublicEnquiry,

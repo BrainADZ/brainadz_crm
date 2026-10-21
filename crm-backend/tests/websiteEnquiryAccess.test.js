@@ -46,7 +46,7 @@ for (const scope of [
       applyAccessScope('website_enquiries')(req, res, () => {});
       assert.deepEqual(
         rows.filter(sift(req.accessQuery)).map((row) => row.name),
-        ['assigned'],
+        ['assigned', 'unassigned'],
       );
       const reassigned = { ...rows[0], assignedTo: other };
       assert.equal(sift(req.accessQuery)(reassigned), false);
@@ -80,6 +80,13 @@ test('direct assignment never bypasses module permission or an explicit denial',
     );
     assert.equal(status, 403);
   }
+});
+
+test('shared Marketing queue requires Marketing or Sales profile in the authorized community', () => {
+  const creative = { ...user, officeModule: 'Creative' };
+  assert.deepEqual(rows.filter(sift(buildScopeQuery(creative, 'ASSIGNED', null, 'website_enquiries'))).map((row) => row.name), ['assigned']);
+  const liveOnly = { ...user, communities: ['live'] };
+  assert.deepEqual(rows.filter(sift(buildScopeQuery(liveOnly, 'ASSIGNED', null, 'website_enquiries'))).map((row) => row.name), ['other unit']);
 });
 
 test('community/admin access and other resource scopes keep their existing behavior', () => {

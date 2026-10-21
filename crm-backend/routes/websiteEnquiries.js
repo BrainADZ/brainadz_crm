@@ -3,6 +3,7 @@ const {
   assignEnquiries,
   createEnquiry,
   createPublicEnquiry,
+  createLivePublicEnquiry,
   getOptions,
   listEnquiries,
   updateAction,
@@ -18,6 +19,7 @@ const {
 const router = express.Router();
 
 router.post('/public', authenticateWebsiteIngestion, createPublicEnquiry);
+router.post('/public/live', authenticateWebsiteIngestion, createLivePublicEnquiry);
 
 router.use(authMiddleware, loadAuthorization);
 
@@ -32,6 +34,10 @@ router.post('/', requirePermission('website_enquiries', 'create'), createEnquiry
 router.patch(
   '/assign',
   requirePermission('website_enquiries', 'assign'),
+  (req, res, next) =>
+    ['company_admin', 'super_admin'].includes(req.user.roleKey || req.user.crmRole)
+      ? next()
+      : res.status(403).json({ message: 'Only Admin or Super Admin can assign enquiries.' }),
   applyAccessScope('website_enquiries'),
   assignEnquiries,
 );

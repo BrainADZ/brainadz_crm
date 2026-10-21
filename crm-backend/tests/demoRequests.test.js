@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const jwt = require('jsonwebtoken');
 const express = require('express');
+const sift = require('sift').default;
 
 // All database methods are stubbed: no customer records are read or written.
 const setModule = (path, exports) => {
@@ -12,30 +13,38 @@ const setModule = (path, exports) => {
 const records = new Map();
 const users = {
   live: { _id: 'live', userType: 'employee', accountStatus: 'active', roleKey: 'employee' },
+  live2: { _id: 'live2', userType: 'employee', accountStatus: 'active', roleKey: 'employee' },
   marketing: { _id: 'marketing', userType: 'employee', accountStatus: 'active' },
   vendor: { _id: 'vendor', userType: 'vendor', accountStatus: 'active' },
   inactive: { _id: 'inactive', userType: 'employee', accountStatus: 'inactive' },
   admin: { _id: 'admin', userType: 'employee', accountStatus: 'active', roleKey: 'super_admin' },
 };
 const DemoModel = require('../models/DemoRequest');
-setModule('../models/User', { findById: (id) => ({ select: async () => users[id] }) });
+setModule('../models/User', {
+  findById: (id) => ({ select: async () => users[id] }),
+  findOne: async (filter) => Object.values(users).find((user) => String(user._id) === String(filter._id)) || null,
+  find: () => ({ select: () => ({ sort: () => ({ lean: async () => [users.live, users.live2] }) }) }),
+});
 setModule('../models/BusinessUnit', {
   findOne: () => ({ lean: async () => ({ _id: 'live-unit' }) }),
 });
 setModule('../services/organizationAccessService', {
   resolveUserAccess: async (id) => ({
     bypass: id === 'admin',
-    businessUnitIds: id === 'live' ? ['live-unit'] : ['marketing-unit'],
+    businessUnitIds: ['live', 'live2'].includes(id) ? ['live-unit'] : ['marketing-unit'],
   }),
 });
 let lastFilter;
 setModule('../models/DemoRequest', {
-  findOneAndUpdate: async (filter, update) => {
+  findOne: async (filter) => [...records.values()].find((request) =>
+    request._id === String(filter._id) && request.communityKey === filter.communityKey) || null,
+  findOneAndUpdate: (filter, update) => {
     const existing = filter.requestId
       ? records.get(filter.requestId)
       : [...records.values()].find((request) => request._id === filter._id);
+    const chain = (value) => ({ populate: async () => value, then: (resolve) => Promise.resolve(value).then(resolve) });
     if (update.$setOnInsert) {
-      if (existing) return existing;
+      if (existing) return chain(existing);
       const request = {
         ...update.$setOnInsert,
         _id: '507f1f77bcf86cd799439011',
@@ -43,11 +52,11 @@ setModule('../models/DemoRequest', {
         status: 'New',
       };
       records.set(filter.requestId, request);
-      return request;
+      return chain(request);
     }
-    if (!existing) return null;
+    if (!existing || (Object.hasOwn(filter, 'assignedTo') && String(existing.assignedTo || '') !== String(filter.assignedTo || '')) || (filter.status && existing.status !== filter.status)) return chain(null);
     Object.assign(existing, update.$set);
-    return existing;
+    return chain(existing);
   },
   find: (filter) => {
     lastFilter = filter;
@@ -55,11 +64,12 @@ setModule('../models/DemoRequest', {
       sort: () => chain,
       skip: () => chain,
       limit: () => chain,
-      lean: async () => [...records.values()],
+      populate: () => chain,
+      lean: async () => [...records.values()].filter(sift(filter)),
     };
     return chain;
   },
-  countDocuments: async () => records.size,
+  countDocuments: async (filter) => [...records.values()].filter(sift(filter)).length,
 });
 
 test('CRM demo ingestion and Live-only authorization', async (t) => {
@@ -209,6 +219,7 @@ test('CRM demo ingestion and Live-only authorization', async (t) => {
     assert.equal(request.status, 'Contacted');
     assert.equal(request.notes, 'Demo discussed');
     assert.equal(request.updatedBy, 'live');
+    assert.equal(request.assignedTo, 'live');
     assert.equal(request.companyName, body.companyName);
     assert.equal(
       (
@@ -220,6 +231,32 @@ test('CRM demo ingestion and Live-only authorization', async (t) => {
       ).status,
       400,
     );
+  });
+  await t.test('first status update owns the request; another employee cannot take it', async () => {
+    const headers = { ...employeeHeaders('live2'), 'Content-Type': 'application/json' };
+    const response = await fetch(`${base}/507f1f77bcf86cd799439011`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ status: 'Qualified', notes: 'Attempted takeover' }),
+    });
+    assert.equal(response.status, 409);
+    assert.equal(records.get(body.requestId).assignedTo, 'live');
+    const forbidden = await fetch(`${base}/507f1f77bcf86cd799439011/assign`, {
+      method: 'PATCH', headers, body: JSON.stringify({ employeeId: null }),
+    });
+    assert.equal(forbidden.status, 403);
+    const sharedQueue = await (await fetch(base, { headers: employeeHeaders('live2') })).json();
+    const ownerQueue = await (await fetch(base, { headers: employeeHeaders('live') })).json();
+    assert.equal(sharedQueue.total, 0);
+    assert.equal(ownerQueue.total, 1);
+  });
+  await t.test('Super Admin can unassign a claimed request', async () => {
+    const response = await fetch(`${base}/507f1f77bcf86cd799439011/assign`, {
+      method: 'PATCH',
+      headers: { ...employeeHeaders('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: null }),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(records.get(body.requestId).assignedTo, null);
   });
   await t.test(
     'delivery updates do not permit modifying lead fields or adding passwords',

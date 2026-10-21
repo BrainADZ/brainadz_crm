@@ -144,15 +144,43 @@ const getAuthorizedCommunities = (user, selectedCommunity = null) => {
 };
 
 const buildScopeQuery = (user, scope, selectedCommunity = null, resource = null) => {
-  // Direct assignment grants record visibility within an already-authorized module
-  // and business unit, even when the user's role uses an own/team/department scope.
+  // Marketing and Live enquiries enter their authorized shared queues. After the first status update,
+  // the claimed enquiry is visible to its owner and administrators.
   if (
     resource === 'website_enquiries' &&
-    ['self', 'OWN', 'team', 'TEAM', 'MULTIPLE_TEAMS', 'department', 'DEPARTMENT'].includes(scope)
+    [
+      'self',
+      'OWN',
+      'assigned',
+      'ASSIGNED',
+      'team',
+      'TEAM',
+      'MULTIPLE_TEAMS',
+      'department',
+      'DEPARTMENT',
+    ].includes(scope)
   ) {
+    const authorizedCommunities = getAuthorizedCommunities(user, selectedCommunity);
+    const marketingSalesEmployee = ['marketing', 'sales'].includes(
+      String(user.officeModule || user.department || '').toLowerCase(),
+    );
     return {
-      communityKey: { $in: getAuthorizedCommunities(user, selectedCommunity) },
-      $or: [{ assignedTo: user._id }, buildScopeQuery(user, scope, selectedCommunity)],
+      communityKey: { $in: authorizedCommunities },
+      $or: [
+        { assignedTo: user._id },
+        ...(authorizedCommunities.includes('marketing') && marketingSalesEmployee
+          ? [{ assignedTo: null, communityKey: 'marketing' }]
+          : []),
+        ...(authorizedCommunities.includes('live')
+          ? [{ assignedTo: null, communityKey: 'live' }]
+          : []),
+        {
+          $and: [
+            { communityKey: { $nin: ['marketing', 'live'] } },
+            buildScopeQuery(user, scope, selectedCommunity),
+          ],
+        },
+      ],
     };
   }
   if (['all', 'COMPANY'].includes(scope) && !selectedCommunity) return {};

@@ -333,6 +333,10 @@ const resolveUserAccess = async (userId) => {
   const departmentModuleKeys = new Set(
     assignedDepartments.flatMap((department) => department.defaultModuleIds || []),
   );
+  // Marketing/Sales employees with Website Enquiry role access must see the
+  // shared incoming queue even in workspaces created before this module existed.
+  if (assignedDepartments.some((department) => ['marketing', 'sales'].includes(department.slug)))
+    departmentModuleKeys.add('website_enquiries');
   const managedAssignments = assignments.filter((assignment) => assignment._id !== 'legacy');
   const hasOrganizationWideAssignment = managedAssignments.some((assignment) =>
     ['BUSINESS_UNIT', 'MULTIPLE_BUSINESS_UNITS', 'COMPANY'].includes(assignment.dataScope),

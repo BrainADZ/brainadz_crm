@@ -22,6 +22,7 @@ import PermissionsHub from './pages/PermissionsHub';
 import Meetings from './pages/Meetings';
 import Quotations from './pages/Quotations';
 import MarketingEnquiries from './pages/MarketingEnquiries';
+import LiveEnquiries from './pages/LiveEnquiries';
 import WebsiteEnquiryComingSoon from './pages/WebsiteEnquiryComingSoon';
 import TeamWorkload from './pages/TeamWorkload';
 import { getAuthenticatedRole, isSalesSession } from './utils/auth';
@@ -189,6 +190,14 @@ const AppRoutes = () => {
           element={
             <AccessRoute moduleKey="website_enquiries">
               <MarketingEnquiries />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="website-enquiries/live"
+          element={
+            <AccessRoute moduleKey="website_enquiries">
+              <LiveEnquiries />
             </AccessRoute>
           }
         />
