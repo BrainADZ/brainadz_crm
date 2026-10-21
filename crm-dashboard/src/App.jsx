@@ -25,6 +25,7 @@ import MarketingEnquiries from './pages/MarketingEnquiries';
 import LiveEnquiries from './pages/LiveEnquiries';
 import WebsiteEnquiryComingSoon from './pages/WebsiteEnquiryComingSoon';
 import TeamWorkload from './pages/TeamWorkload';
+import DevelopmentDailyReporting from './pages/DevelopmentDailyReporting';
 import { getAuthenticatedRole, isSalesSession } from './utils/auth';
 
 const DashboardHome = () => (isSalesSession() ? <SalesDashboard /> : <AdminDashboardHome />);
@@ -98,9 +99,11 @@ const AppRoutes = () => {
         <Route
           path="demo-requests"
           element={
-            <LiveEmployeeRoute>
-              <DemoRequests />
-            </LiveEmployeeRoute>
+            <AccessRoute moduleKey="demo_requests">
+              <LiveEmployeeRoute>
+                <DemoRequests />
+              </LiveEmployeeRoute>
+            </AccessRoute>
           }
         />
         <Route
@@ -157,7 +160,34 @@ const AppRoutes = () => {
           path="tasks"
           element={
             <AccessRoute moduleKey="projects">
-              <AdminTasks />
+              <Navigate
+                to="/dashboard/tasks/my"
+                replace
+              />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="tasks/my"
+          element={
+            <AccessRoute moduleKey="projects">
+              <AdminTasks view="my" />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="tasks/board"
+          element={
+            <AccessRoute moduleKey="projects">
+              <AdminTasks view="board" />
+            </AccessRoute>
+          }
+        />
+        <Route
+          path="daily-reporting"
+          element={
+            <AccessRoute moduleKey="projects">
+              <DevelopmentDailyReporting />
             </AccessRoute>
           }
         />

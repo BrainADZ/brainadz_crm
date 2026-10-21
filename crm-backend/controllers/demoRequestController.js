@@ -1,7 +1,10 @@
 const mongoose = require('mongoose');
 const DemoRequest = require('../models/DemoRequest');
 const User = require('../models/User');
-const { canAccessLiveDemoRequests, canManageDemoAssignments } = require('../services/demoRequestAccessService');
+const {
+  canAccessLiveDemoRequests,
+  canManageDemoAssignments,
+} = require('../services/demoRequestAccessService');
 
 const TYPES = ['erp', 'crm', 'pos', 'hospitality', 'software'];
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Closed'];
@@ -113,7 +116,13 @@ const updateDelivery = async (req, res, next) => {
 const checkAccess = async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
-    return res.json({ allowed: await canAccessLiveDemoRequests(req.user), canAssign: canManageDemoAssignments(req.user) });
+    const allowed = await canAccessLiveDemoRequests(req.user);
+    const canUpdate = allowed && (await canAccessLiveDemoRequests(req.user, 'update'));
+    const canAssign =
+      allowed &&
+      canManageDemoAssignments(req.user) &&
+      (await canAccessLiveDemoRequests(req.user, 'assign'));
+    return res.json({ allowed, canUpdate, canAssign });
   } catch (error) {
     return next(error);
   }
@@ -175,15 +184,20 @@ const updateRequest = async (req, res, next) => {
         assignedTo: current.assignedTo || null,
         status: current.status,
       },
-      { $set: {
-        status: req.body.status,
-        notes: req.body.notes.trim(),
-        updatedBy: req.user._id,
-        ...(claiming ? { assignedTo: req.user._id, assignedBy: req.user._id, assignedAt: new Date() } : {}),
-      } },
+      {
+        $set: {
+          status: req.body.status,
+          notes: req.body.notes.trim(),
+          updatedBy: req.user._id,
+          ...(claiming
+            ? { assignedTo: req.user._id, assignedBy: req.user._id, assignedAt: new Date() }
+            : {}),
+        },
+      },
       { new: true, runValidators: true },
     ).populate('assignedTo', 'name email employeeId');
-    if (!request) throw fail('Another employee claimed or updated this request. Refresh and try again.', 409);
+    if (!request)
+      throw fail('Another employee claimed or updated this request. Refresh and try again.', 409);
     return res.json({ request });
   } catch (error) {
     return next(error);
@@ -193,10 +207,18 @@ const updateRequest = async (req, res, next) => {
 const getAssignmentOptions = async (_req, res, next) => {
   try {
     const employees = await User.find({
-      userType: 'employee', accountStatus: 'active', isDeleted: { $ne: true }, communities: 'live',
-    }).select('name email employeeId').sort({ name: 1 }).lean();
+      userType: 'employee',
+      accountStatus: 'active',
+      isDeleted: { $ne: true },
+      communities: 'live',
+    })
+      .select('name email employeeId')
+      .sort({ name: 1 })
+      .lean();
     res.json({ employees });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 const assignRequest = async (req, res, next) => {
@@ -206,8 +228,11 @@ const assignRequest = async (req, res, next) => {
     if (employeeId && !mongoose.isValidObjectId(employeeId)) throw fail('Invalid employee ID');
     if (employeeId) {
       const employee = await User.findOne({
-        _id: employeeId, userType: 'employee', accountStatus: 'active',
-        isDeleted: { $ne: true }, communities: 'live',
+        _id: employeeId,
+        userType: 'employee',
+        accountStatus: 'active',
+        isDeleted: { $ne: true },
+        communities: 'live',
       });
       if (!employee || !(await canAccessLiveDemoRequests(employee)))
         throw fail('Choose an active BrainADZ Live employee.');
@@ -218,12 +243,20 @@ const assignRequest = async (req, res, next) => {
       return res.json({ request: current });
     const request = await DemoRequest.findOneAndUpdate(
       { _id: current._id, communityKey: 'live', assignedTo: current.assignedTo || null },
-      { $set: { assignedTo: employeeId, assignedBy: req.user._id, assignedAt: employeeId ? new Date() : null } },
+      {
+        $set: {
+          assignedTo: employeeId,
+          assignedBy: req.user._id,
+          assignedAt: employeeId ? new Date() : null,
+        },
+      },
       { new: true, runValidators: true },
     ).populate('assignedTo', 'name email employeeId');
     if (!request) throw fail('Assignment changed. Refresh and try again.', 409);
     res.json({ request });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {

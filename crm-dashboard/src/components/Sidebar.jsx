@@ -38,6 +38,24 @@ const projectWorkItems = [
     to: '/dashboard/tasks',
     label: 'Tasks',
     icon: ListTodo,
+    exact: true,
+  },
+  {
+    to: '/dashboard/tasks/my',
+    label: 'My Tasks',
+    icon: ListTodo,
+    nested: true,
+  },
+  {
+    to: '/dashboard/tasks/board',
+    label: 'Workload Board',
+    icon: LayoutDashboard,
+    nested: true,
+  },
+  {
+    to: '/dashboard/daily-reporting',
+    label: 'Daily Reporting',
+    icon: CalendarDays,
   },
   {
     to: '/dashboard/workload',
@@ -118,6 +136,7 @@ const navItems = [
     to: '/dashboard/demo-requests',
     label: 'Demo Requests',
     icon: Inbox,
+    moduleKey: 'demo_requests',
     liveOnly: true,
   },
   {
@@ -134,7 +153,7 @@ const navItems = [
   },
   {
     id: 'project-work',
-    label: 'Project Work',
+    label: 'Development Tracker',
     icon: FolderKanban,
     children: projectWorkItems,
     moduleKey: 'projects',
@@ -252,10 +271,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   const visibleNavItems = useMemo(
     () =>
       navItems
-        .filter((item) =>
-          item.liveOnly
-            ? canViewDemoRequests
-            : visibleModules === null || visibleModules.has(item.moduleKey),
+        .filter(
+          (item) =>
+            (!item.liveOnly || canViewDemoRequests) &&
+            (visibleModules === null || visibleModules.has(item.moduleKey)),
         )
         .map((item) => (salesSession && item.exact ? { ...item, label: 'Sales Dashboard' } : item)),
     [salesSession, visibleModules, canViewDemoRequests],
@@ -575,32 +594,34 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
                   {groupOpen && (
                     <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
-                      {item.children.map((child) => {
-                        const ChildIcon = child.icon;
+                      {item.children
+                        .filter((child) => !child.hidden)
+                        .map((child) => {
+                          const ChildIcon = child.icon;
 
-                        const childActive = isActive(child);
+                          const childActive = isActive(child);
 
-                        return (
-                          <Link
-                            key={child.to}
-                            to={child.to}
-                            className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                              childActive
-                                ? 'app-nav-active shadow-sm'
-                                : 'app-sidebar-muted app-sidebar-hover'
-                            }`}
-                          >
-                            <ChildIcon
-                              size={17}
-                              strokeWidth={1.7}
-                              className="shrink-0 text-current"
-                              style={iconStyle}
-                            />
+                          return (
+                            <Link
+                              key={child.to}
+                              to={child.to}
+                              className={`group flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-all ${child.nested ? 'pl-6 pr-3' : 'px-3'} ${
+                                childActive
+                                  ? 'app-nav-active shadow-sm'
+                                  : 'app-sidebar-muted app-sidebar-hover'
+                              }`}
+                            >
+                              <ChildIcon
+                                size={17}
+                                strokeWidth={1.7}
+                                className="shrink-0 text-current"
+                                style={iconStyle}
+                              />
 
-                            <span className="truncate">{child.label}</span>
-                          </Link>
-                        );
-                      })}
+                              <span className="truncate">{child.label}</span>
+                            </Link>
+                          );
+                        })}
                     </div>
                   )}
 
@@ -626,40 +647,42 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                         </div>
 
                         <div className="space-y-1">
-                          {item.children.map((child) => {
-                            const ChildIcon = child.icon;
+                          {item.children
+                            .filter((child) => !child.hidden)
+                            .map((child) => {
+                              const ChildIcon = child.icon;
 
-                            const childActive = isActive(child);
+                              const childActive = isActive(child);
 
-                            return (
-                              <Link
-                                key={child.to}
-                                to={child.to}
-                                onMouseEnter={() => {
-                                  clearFlyoutCloseTimer();
-                                }}
-                                onClick={() => {
-                                  clearFlyoutCloseTimer();
+                              return (
+                                <Link
+                                  key={child.to}
+                                  to={child.to}
+                                  onMouseEnter={() => {
+                                    clearFlyoutCloseTimer();
+                                  }}
+                                  onClick={() => {
+                                    clearFlyoutCloseTimer();
 
-                                  setCollapsedFlyout(null);
-                                }}
-                                className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
-                                  childActive
-                                    ? 'app-nav-active shadow-sm'
-                                    : 'app-sidebar-muted app-sidebar-hover'
-                                }`}
-                              >
-                                <ChildIcon
-                                  size={18}
-                                  strokeWidth={1.7}
-                                  className="shrink-0 text-current"
-                                  style={iconStyle}
-                                />
+                                    setCollapsedFlyout(null);
+                                  }}
+                                  className={`group flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all ${child.nested ? 'pl-6 pr-3' : 'px-3'} ${
+                                    childActive
+                                      ? 'app-nav-active shadow-sm'
+                                      : 'app-sidebar-muted app-sidebar-hover'
+                                  }`}
+                                >
+                                  <ChildIcon
+                                    size={18}
+                                    strokeWidth={1.7}
+                                    className="shrink-0 text-current"
+                                    style={iconStyle}
+                                  />
 
-                                <span className="truncate">{child.label}</span>
-                              </Link>
-                            );
-                          })}
+                                  <span className="truncate">{child.label}</span>
+                                </Link>
+                              );
+                            })}
                         </div>
                       </div>,
                       document.body,

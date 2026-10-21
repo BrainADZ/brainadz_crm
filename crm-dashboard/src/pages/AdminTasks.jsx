@@ -20,13 +20,16 @@ import {
   createBusinessResource,
   deleteBusinessResource,
   getAdminHeaders,
+  getMyProfile,
   listBusinessResource,
   updateBusinessResource,
 } from '../services/businessApi';
+import { getAuthenticatedRole, getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
+import { isDevelopmentProject, isDevelopmentTask, isMyTask } from '../utils/developmentTracker';
 
 const taskStatuses = ['Backlog', 'To Do', 'In Progress', 'Review', 'Complete'];
 const priorityOptions = ['High', 'Medium', 'Low'];
-const teamOptions = ['Delivery', 'Sales', 'Marketing', 'Accounts', 'Operations', 'Support'];
+const teamOptions = ['Development', 'Engineering', 'Delivery'];
 
 const todayKey = new Date().toISOString().slice(0, 10);
 
@@ -35,7 +38,7 @@ const emptyTask = {
   project: '',
   assignee: '',
   assigneeEmail: '',
-  team: 'Delivery',
+  team: 'Development',
   due: todayKey,
   status: 'To Do',
   progress: 0,
@@ -101,7 +104,9 @@ const Modal = ({ title, children, onClose }) => (
   </div>
 );
 
-const AdminTasks = () => {
+const AdminTasks = ({ view = 'my' }) => {
+  const [currentUser, setCurrentUser] = useState(getAuthenticatedUser);
+  const isAdmin = getAuthenticatedRole() === 'admin';
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -118,35 +123,44 @@ const AdminTasks = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const fetchWorkspace = useCallback(async ({ silent = false } = {}) => {
-    if (silent) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError('');
+  const fetchWorkspace = useCallback(
+    async ({ silent = false } = {}) => {
+      if (silent) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError('');
 
-    try {
-      const [projectRows, taskRows, employeeResponse] = await Promise.all([
-        listBusinessResource('projects'),
-        listBusinessResource('project-tasks'),
-        axios.get(`${API_BASE_URL}/api/employees`, { headers: getAdminHeaders() }),
-      ]);
+      try {
+        const [projectRows, taskRows, employeeResponse, profile] = await Promise.all([
+          listBusinessResource('projects'),
+          listBusinessResource('project-tasks'),
+          isAdmin
+            ? axios.get(`${API_BASE_URL}/api/employees`, { headers: getAdminHeaders() })
+            : Promise.resolve({ data: [] }),
+          getMyProfile(),
+        ]);
 
-      setProjects(projectRows || []);
-      setTasks(taskRows || []);
-      setEmployees(
-        Array.isArray(employeeResponse.data)
-          ? employeeResponse.data
-          : employeeResponse.data?.employees || [],
-      );
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to load employee tasks');
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+        const developmentProjects = (projectRows || []).filter(isDevelopmentProject);
+        const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
+        setProjects(developmentProjects);
+        setTasks((taskRows || []).filter((task) => isDevelopmentTask(task, projectIds)));
+        setCurrentUser(profile);
+        setEmployees(
+          Array.isArray(employeeResponse.data)
+            ? employeeResponse.data
+            : employeeResponse.data?.employees || [],
+        );
+      } catch (requestError) {
+        setError(requestError.response?.data?.message || 'Unable to load employee tasks');
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [isAdmin],
+  );
 
   useEffect(() => {
     fetchWorkspace();
@@ -166,6 +180,7 @@ const AdminTasks = () => {
   const filteredTasks = useMemo(
     () =>
       tasks.filter((task) => {
+        if (view === 'my' && !isMyTask(task, currentUser)) return false;
         const matchesSearch =
           !normalizedSearch ||
           [
@@ -192,21 +207,19 @@ const AdminTasks = () => {
 
         return matchesSearch && matchesStatus && matchesOwner;
       }),
-    [normalizedSearch, ownerFilter, projectById, statusFilter, tasks],
+    [currentUser, normalizedSearch, ownerFilter, projectById, statusFilter, tasks, view],
   );
 
-  const openTasks = useMemo(() => tasks.filter((task) => task.status !== 'Complete'), [tasks]);
-  const dueToday = useMemo(
-    () => openTasks.filter((task) => task.due === todayKey).length,
-    [openTasks],
-  );
-  const overdue = useMemo(
-    () => openTasks.filter((task) => task.due && task.due < todayKey).length,
-    [openTasks],
-  );
-  const milestoneCount = useMemo(() => tasks.filter((task) => task.milestone).length, [tasks]);
-  const completionRate = tasks.length
-    ? Math.round((tasks.filter((task) => task.status === 'Complete').length / tasks.length) * 100)
+  const visibleTasks = view === 'my' ? tasks.filter((task) => isMyTask(task, currentUser)) : tasks;
+  const openTasks = visibleTasks.filter((task) => task.status !== 'Complete');
+  const dueToday = openTasks.filter((task) => task.due === todayKey).length;
+  const overdue = openTasks.filter((task) => task.due && task.due < todayKey).length;
+  const milestoneCount = visibleTasks.filter((task) => task.milestone).length;
+  const completionRate = visibleTasks.length
+    ? Math.round(
+        (visibleTasks.filter((task) => task.status === 'Complete').length / visibleTasks.length) *
+          100,
+      )
     : 0;
 
   const metricCards = [
@@ -248,7 +261,7 @@ const AdminTasks = () => {
     {
       label: 'Completion Rate',
       value: `${completionRate}%`,
-      copy: `${tasks.filter((task) => task.status === 'Complete').length} completed tasks`,
+      copy: `${visibleTasks.filter((task) => task.status === 'Complete').length} completed tasks`,
       icon: CheckCircle2,
       tone: 'bg-emerald-50 text-emerald-700',
     },
@@ -294,11 +307,13 @@ const AdminTasks = () => {
 
       await createBusinessResource('project-tasks', {
         ...taskForm,
+        communityKey: selectedProject?.communityKey || getCurrentCommunityKey(),
+        officeModule: 'Development',
         project: selectedProject?._id || undefined,
         projectName: selectedProject?.name || 'General Task',
         assignee: selectedEmployee?.name || taskForm.assignee,
         assigneeEmail: selectedEmployee?.email || taskForm.assigneeEmail,
-        team: selectedEmployee?.team || taskForm.team,
+        team: taskForm.team,
         progress,
       });
 
@@ -441,12 +456,15 @@ const AdminTasks = () => {
           </span>
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Employee task control
+              Development team tracker
             </p>
-            <h1 className="text-2xl font-bold text-slate-950">Tasks</h1>
+            <h1 className="text-2xl font-bold text-slate-950">
+              {view === 'my' ? 'My Tasks' : 'Workload Board'}
+            </h1>
             <p className="mt-2 max-w-3xl text-sm font-medium text-slate-500">
-              Project and team tasks for employees. Sales import data remains in Clients/Sales; this
-              section is for internal execution.
+              {view === 'my'
+                ? 'Your assigned development work and progress.'
+                : 'Development tasks across the team, from backlog to complete.'}
             </p>
           </div>
         </div>
@@ -462,14 +480,16 @@ const AdminTasks = () => {
               className="h-10 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          <button
-            type="button"
-            onClick={openTaskModal}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Assign Task
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={openTaskModal}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Assign Task
+            </button>
+          )}
           <button
             type="button"
             title="Refresh"
@@ -529,261 +549,271 @@ const AdminTasks = () => {
         })}
       </section>
 
-      <section className="rounded-md border border-slate-300 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-300 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-base font-bold text-slate-950">Task Register</h2>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              Assign employee work, update progress, and track dependencies.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              value={ownerFilter}
-              onChange={(event) => setOwnerFilter(event.target.value)}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 pr-8 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="all">All assignees</option>
-              {employees.map((employee) => (
-                <option
-                  key={employee._id || employee.email}
-                  value={employee.email || employee.name}
+      {view === 'my' && (
+        <section className="rounded-md border border-slate-300 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-300 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Task Register</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Assign employee work, update progress, and track dependencies.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {isAdmin && (
+                <select
+                  value={ownerFilter}
+                  onChange={(event) => setOwnerFilter(event.target.value)}
+                  className="h-9 rounded-lg border border-slate-300 bg-white px-3 pr-8 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-                  {employee.name || employee.email}
-                </option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 pr-8 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="all">All statuses</option>
-              {taskStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+                  <option value="all">All assignees</option>
+                  {employees.map((employee) => (
+                    <option
+                      key={employee._id || employee.email}
+                      value={employee.email || employee.name}
+                    >
+                      {employee.name || employee.email}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3 pr-8 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="all">All statuses</option>
+                {taskStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="compact-crm-table min-w-[68rem] w-full table-fixed border-collapse text-left">
-            <thead className="bg-slate-50 text-slate-700">
-              <tr>
-                <th className="w-72 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Task
-                </th>
-                <th className="w-52 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Assigned
-                </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">Due</th>
-                <th className="w-44 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Status
-                </th>
-                <th className="w-44 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Progress
-                </th>
-                <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Priority
-                </th>
-                <th className="w-52 border-b border-r border-slate-300 px-4 py-2 font-bold">
-                  Dependency
-                </th>
-                <th className="w-20 border-b border-slate-300 px-4 py-2 text-right font-bold">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTasks.map((task) => {
-                const projectName =
-                  task.projectName || projectById[String(task.project)]?.name || 'General Task';
-                return (
-                  <tr key={task._id} className="bg-white transition hover:bg-blue-50/40">
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <p className="truncate font-bold text-slate-950">{task.name}</p>
-                      <p className="mt-0.5 truncate text-xs font-semibold text-blue-700">
-                        {projectName}
+          <div className="overflow-x-auto">
+            <table className="compact-crm-table min-w-[68rem] w-full table-fixed border-collapse text-left">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="w-72 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Task
+                  </th>
+                  <th className="w-52 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Assigned
+                  </th>
+                  <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Due
+                  </th>
+                  <th className="w-44 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Status
+                  </th>
+                  <th className="w-44 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Progress
+                  </th>
+                  <th className="w-36 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Priority
+                  </th>
+                  <th className="w-52 border-b border-r border-slate-300 px-4 py-2 font-bold">
+                    Dependency
+                  </th>
+                  <th className="w-20 border-b border-slate-300 px-4 py-2 text-right font-bold">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTasks.map((task) => {
+                  const projectName =
+                    task.projectName || projectById[String(task.project)]?.name || 'General Task';
+                  return (
+                    <tr key={task._id} className="bg-white transition hover:bg-blue-50/40">
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <p className="truncate font-bold text-slate-950">{task.name}</p>
+                        <p className="mt-0.5 truncate text-xs font-semibold text-blue-700">
+                          {projectName}
+                        </p>
+                        {task.milestone && (
+                          <span className="mt-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
+                            Milestone
+                          </span>
+                        )}
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <div className="flex max-w-full items-center gap-2">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+                            {getInitials(task.assignee)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-semibold text-slate-800">
+                              {task.assignee || 'Unassigned'}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {task.team || task.assigneeEmail || 'Team'}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <span
+                          className={`font-bold ${task.status !== 'Complete' && task.due && task.due < todayKey ? 'text-red-700' : 'text-slate-700'}`}
+                        >
+                          {formatDate(task.due)}
+                        </span>
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <select
+                          value={task.status}
+                          onChange={(event) => updateTask(task, { status: event.target.value })}
+                          className={`w-full rounded-lg border px-2 py-1.5 text-xs font-bold outline-none ${statusTone[task.status] || statusTone.Backlog}`}
+                        >
+                          {taskStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={task.progress || 0}
+                            onChange={(event) => updateTask(task, { progress: event.target.value })}
+                            className="h-9 w-20 rounded-lg border border-slate-300 px-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <div className="h-2 flex-1 rounded-full bg-slate-100">
+                            <div
+                              className="h-2 rounded-full bg-blue-600"
+                              style={{ width: `${clampProgress(task.progress)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${priorityTone[task.priority] || priorityTone.Medium}`}
+                        >
+                          {task.priority || 'Medium'}
+                        </span>
+                      </td>
+                      <td className="border-b border-r border-slate-200 px-4 py-3 text-slate-600">
+                        <span className="block truncate">{task.dependency || '-'}</span>
+                      </td>
+                      <td className="border-b border-slate-200 px-4 py-3 text-right">
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => removeTask(task)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
+                            title="Delete task"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredTasks.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="h-64 px-4 py-16 text-center">
+                      <p className="text-base font-bold text-slate-700">No employee tasks found</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Use Assign Task to create project or general work for the team.
                       </p>
-                      {task.milestone && (
-                        <span className="mt-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
-                          Milestone
-                        </span>
-                      )}
                     </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <div className="flex max-w-full items-center gap-2">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
-                          {getInitials(task.assignee)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold text-slate-800">
-                            {task.assignee || 'Unassigned'}
-                          </span>
-                          <span className="block truncate text-xs text-slate-500">
-                            {task.team || task.assigneeEmail || 'Team'}
-                          </span>
-                        </span>
-                      </div>
-                    </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <span
-                        className={`font-bold ${task.status !== 'Complete' && task.due && task.due < todayKey ? 'text-red-700' : 'text-slate-700'}`}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {view === 'board' && (
+        <section>
+          <article className="rounded-md border border-slate-300 bg-white shadow-sm">
+            <div className="border-b border-slate-300 px-4 py-3">
+              <h2 className="text-base font-bold text-slate-950">Workflow Board</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Drag tasks between stages to update the development workflow.
+              </p>
+            </div>
+            <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-5">
+              {groupedTasks.map((column) => (
+                <div
+                  key={column.status}
+                  onDragEnter={(event) => handleStatusDragOver(event, column.status)}
+                  onDragOver={(event) => handleStatusDragOver(event, column.status)}
+                  onDrop={(event) => dropTaskOnStatus(event, column.status)}
+                  className={`min-h-72 rounded-md border bg-slate-50 transition ${
+                    draggedTaskId && activeDropStatus === column.status
+                      ? 'border-blue-400 bg-blue-50/70 ring-2 ring-blue-100'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+                    <span className="text-sm font-bold text-slate-800">{column.status}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-500">
+                      {column.tasks.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2 p-3">
+                    {column.tasks.map((task) => (
+                      <div
+                        key={task._id}
+                        draggable
+                        onDragStart={(event) => startTaskDrag(event, task)}
+                        onDragEnd={finishTaskDrag}
+                        title="Move task"
+                        className={`cursor-grab select-none rounded-md border border-slate-200 bg-white p-3 shadow-sm transition active:cursor-grabbing ${
+                          draggedTaskId === task._id
+                            ? 'opacity-50 ring-2 ring-blue-200'
+                            : 'hover:border-blue-200 hover:shadow-md'
+                        }`}
                       >
-                        {formatDate(task.due)}
-                      </span>
-                    </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <select
-                        value={task.status}
-                        onChange={(event) => updateTask(task, { status: event.target.value })}
-                        className={`w-full rounded-lg border px-2 py-1.5 text-xs font-bold outline-none ${statusTone[task.status] || statusTone.Backlog}`}
-                      >
-                        {taskStatuses.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={task.progress || 0}
-                          onChange={(event) => updateTask(task, { progress: event.target.value })}
-                          className="h-9 w-20 rounded-lg border border-slate-300 px-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        />
-                        <div className="h-2 flex-1 rounded-full bg-slate-100">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            <p className="min-w-0 text-sm font-bold text-slate-950">{task.name}</p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${priorityTone[task.priority] || priorityTone.Medium}`}
+                          >
+                            {task.priority || 'Medium'}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-xs font-semibold text-blue-700">
+                          {task.projectName ||
+                            projectById[String(task.project)]?.name ||
+                            'General Task'}
+                        </p>
+                        <div className="mt-3 flex items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+                          <span>{task.assignee || 'Unassigned'}</span>
+                          <span>{formatDate(task.due)}</span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-slate-100">
                           <div
                             className="h-2 rounded-full bg-blue-600"
                             style={{ width: `${clampProgress(task.progress)}%` }}
                           />
                         </div>
                       </div>
-                    </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${priorityTone[task.priority] || priorityTone.Medium}`}
-                      >
-                        {task.priority || 'Medium'}
-                      </span>
-                    </td>
-                    <td className="border-b border-r border-slate-200 px-4 py-3 text-slate-600">
-                      <span className="block truncate">{task.dependency || '-'}</span>
-                    </td>
-                    <td className="border-b border-slate-200 px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => removeTask(task)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
-                        title="Delete task"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredTasks.length === 0 && (
-                <tr>
-                  <td colSpan="8" className="h-64 px-4 py-16 text-center">
-                    <p className="text-base font-bold text-slate-700">No employee tasks found</p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      Use Assign Task to create project or general work for the team.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <article className="rounded-md border border-slate-300 bg-white shadow-sm">
-          <div className="border-b border-slate-300 px-4 py-3">
-            <h2 className="text-base font-bold text-slate-950">Workflow Board</h2>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              Same flow as the business OS task board, backed by the CRM database.
-            </p>
-          </div>
-          <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-5">
-            {groupedTasks.map((column) => (
-              <div
-                key={column.status}
-                onDragEnter={(event) => handleStatusDragOver(event, column.status)}
-                onDragOver={(event) => handleStatusDragOver(event, column.status)}
-                onDrop={(event) => dropTaskOnStatus(event, column.status)}
-                className={`min-h-72 rounded-md border bg-slate-50 transition ${
-                  draggedTaskId && activeDropStatus === column.status
-                    ? 'border-blue-400 bg-blue-50/70 ring-2 ring-blue-100'
-                    : 'border-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-                  <span className="text-sm font-bold text-slate-800">{column.status}</span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-500">
-                    {column.tasks.length}
-                  </span>
-                </div>
-                <div className="space-y-2 p-3">
-                  {column.tasks.map((task) => (
-                    <div
-                      key={task._id}
-                      draggable
-                      onDragStart={(event) => startTaskDrag(event, task)}
-                      onDragEnd={finishTaskDrag}
-                      title="Move task"
-                      className={`cursor-grab select-none rounded-md border border-slate-200 bg-white p-3 shadow-sm transition active:cursor-grabbing ${
-                        draggedTaskId === task._id
-                          ? 'opacity-50 ring-2 ring-blue-200'
-                          : 'hover:border-blue-200 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                          <p className="min-w-0 text-sm font-bold text-slate-950">{task.name}</p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${priorityTone[task.priority] || priorityTone.Medium}`}
-                        >
-                          {task.priority || 'Medium'}
-                        </span>
-                      </div>
-                      <p className="mt-1 truncate text-xs font-semibold text-blue-700">
-                        {task.projectName ||
-                          projectById[String(task.project)]?.name ||
-                          'General Task'}
+                    ))}
+                    {column.tasks.length === 0 && (
+                      <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-xs font-semibold text-slate-500">
+                        No tasks
                       </p>
-                      <div className="mt-3 flex items-center justify-between gap-2 text-xs font-semibold text-slate-500">
-                        <span>{task.assignee || 'Unassigned'}</span>
-                        <span>{formatDate(task.due)}</span>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-blue-600"
-                          style={{ width: `${clampProgress(task.progress)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  {column.tasks.length === 0 && (
-                    <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-xs font-semibold text-slate-500">
-                      No tasks
-                    </p>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
+              ))}
+            </div>
+          </article>
+        </section>
+      )}
 
       {isModalOpen && (
         <Modal title="Assign Employee Task" onClose={() => setIsModalOpen(false)}>

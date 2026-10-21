@@ -39,6 +39,22 @@ const selectStyle = {
 const field =
   'h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none';
 
+function formatEnquiryPhone(phone) {
+  const value = String(phone ?? '').trim();
+
+  if (!value) return '—';
+  if (value.startsWith('+')) return value;
+
+  const digits = value.replace(/\D/g, '');
+
+  if (digits.length === 10) return `+91 ${digits}`;
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91 ${digits.slice(2)}`;
+  }
+
+  return value;
+}
+
 export default function MarketingEnquiries({ communityKey = 'marketing' }) {
   const sourceLabel = communityKey === 'live' ? 'Live' : 'Marketing';
   const user = getAuthenticatedUser();
@@ -397,7 +413,7 @@ export default function MarketingEnquiries({ communityKey = 'marketing' }) {
                   <TD>{r.id}</TD>
                   <TD>{r.name}</TD>
                   <TD>{r.company}</TD>
-                  <TD>+91 {r.phone}</TD>
+                  <TD>{formatEnquiryPhone(r.phone)}</TD>
                   <TD>{r.email}</TD>
                   <TD>{r.serviceCategory}</TD>
                   <TD>{r.service}</TD>
@@ -471,7 +487,7 @@ export default function MarketingEnquiries({ communityKey = 'marketing' }) {
                         {action.name} / {action.company || 'Live website enquiry'}
                       </h4>
                       <p className="text-xs text-slate-600">
-                        {action.email} / {action.phone}
+                        {action.email} / {formatEnquiryPhone(action.phone)}
                       </p>
                       <div>
                         <Label>Original enquiry</Label>

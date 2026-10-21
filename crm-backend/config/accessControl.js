@@ -50,6 +50,7 @@ const PERMISSION_RESOURCES = [
   'pipelines',
   'communication',
   'website_enquiries',
+  'demo_requests',
   'marketing',
   'campaigns',
   'accounting',
@@ -100,6 +101,7 @@ const MODULES = [
     label: 'Website Enquiry',
     resources: ['website_enquiries'],
   },
+  { key: 'demo_requests', label: 'Demo Requests', resources: ['demo_requests'] },
   { key: 'marketing', label: 'Marketing', resources: ['marketing', 'campaigns'] },
   {
     key: 'accounting',
@@ -156,7 +158,14 @@ const DEPARTMENT_SEEDS = [
     slug: 'marketing',
     icon: 'Megaphone',
     businessUnitKeys: ['marketing', 'live', 'exhibition'],
-    defaultModuleKeys: ['dashboard', 'marketing', 'website_enquiries', 'communication', 'projects', 'documents'],
+    defaultModuleKeys: [
+      'dashboard',
+      'marketing',
+      'website_enquiries',
+      'communication',
+      'projects',
+      'documents',
+    ],
   },
   {
     name: 'Creative',

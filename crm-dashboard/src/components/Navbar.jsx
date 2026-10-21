@@ -11,13 +11,15 @@ const getPageTitle = (pathname, salesSession) => {
   if (pathname.startsWith('/dashboard/quotations')) return 'Quotations';
 
   if (pathname.startsWith('/dashboard/employees')) return 'Employees';
-  if (pathname.startsWith('/dashboard/tasks')) return 'Tasks';
+  if (pathname.startsWith('/dashboard/tasks/board')) return 'Workload Board';
+  if (pathname.startsWith('/dashboard/tasks')) return 'My Tasks';
+  if (pathname.startsWith('/dashboard/daily-reporting')) return 'Daily Reporting';
   if (pathname.startsWith('/dashboard/workload')) return 'Team Workload';
   if (pathname.startsWith('/dashboard/meetings')) return 'Meetings';
   if (pathname.startsWith('/dashboard/communication')) return 'Communication Hub';
   if (pathname.startsWith('/dashboard/marketing')) return 'Marketing Hub';
   if (pathname.startsWith('/dashboard/accounting')) return 'Accounting';
-  if (pathname.startsWith('/dashboard/projects')) return 'Projects';
+  if (pathname.startsWith('/dashboard/projects')) return 'Development Projects';
   if (pathname.startsWith('/dashboard/documents')) return 'Documents';
   if (pathname.startsWith('/dashboard/permissions')) return 'Permissions';
   if (pathname.startsWith('/dashboard/whatsapp')) return 'WhatsApp Demo';

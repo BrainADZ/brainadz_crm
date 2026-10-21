@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { Building2, Gauge, RefreshCw, Search, UsersRound } from 'lucide-react';
-import { API_BASE_URL } from '../config/api';
-import { getAdminHeaders, getWorkStructure, listBusinessResource } from '../services/businessApi';
+import {
+  getWorkStructure,
+  listBusinessResource,
+  listDevelopmentTeamMembers,
+  listDevelopmentWorkloadTasks,
+} from '../services/businessApi';
+import { isDevelopmentProject, isDevelopmentTask } from '../utils/developmentTracker';
 
 const todayKey = new Date().toISOString().slice(0, 10);
 const capacityPerEmployee = 5;
@@ -36,17 +40,25 @@ const TeamWorkload = () => {
     setError('');
 
     try {
-      const [employeeResponse, taskRows, structureResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/employees`, { headers: getAdminHeaders() }),
-        listBusinessResource('project-tasks'),
+      const [employeeRows, taskRows, projectRows, structureResponse] = await Promise.all([
+        listDevelopmentTeamMembers(),
+        listDevelopmentWorkloadTasks(),
+        listBusinessResource('projects'),
         getWorkStructure(),
       ]);
 
-      setEmployees(Array.isArray(employeeResponse.data) ? employeeResponse.data : []);
-      setTasks(taskRows || []);
+      const projectIds = new Set(
+        (projectRows || []).filter(isDevelopmentProject).map((project) => String(project._id)),
+      );
+      setEmployees(employeeRows || []);
+      setTasks((taskRows || []).filter((task) => isDevelopmentTask(task, projectIds)));
       setStructure({
-        modules: structureResponse.modules || [],
-        teams: structureResponse.teams || [],
+        modules: (structureResponse.modules || []).filter((item) =>
+          ['Development', 'Projects'].includes(item.name),
+        ),
+        teams: (structureResponse.teams || []).filter((item) =>
+          ['Development', 'Projects'].includes(item.moduleName),
+        ),
       });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to load team workload');
@@ -201,7 +213,7 @@ const TeamWorkload = () => {
             </p>
             <h1 className="text-2xl font-bold text-slate-950">Team Workload</h1>
             <p className="mt-2 max-w-3xl text-sm font-medium text-slate-500">
-              Module, team and employee wise open task load.
+              Development team members and their open task load.
             </p>
           </div>
         </div>

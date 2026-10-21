@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const ClientDataset = require('../models/ClientDataset');
 const Meeting = require('../models/Meeting');
 const User = require('../models/User');
@@ -6,6 +7,7 @@ const BusinessCampaign = require('../models/BusinessCampaign');
 const FinanceRecord = require('../models/FinanceRecord');
 const BusinessProject = require('../models/BusinessProject');
 const BusinessProjectTask = require('../models/BusinessProjectTask');
+const DevelopmentDailyReport = require('../models/DevelopmentDailyReport');
 const DocumentRecord = require('../models/DocumentRecord');
 const CommunicationLog = require('../models/CommunicationLog');
 const Quotation = require('../models/Quotation');
@@ -32,6 +34,7 @@ const defaultOfficeModules = [
   'Marketing',
   'Accounts',
   'Projects',
+  'Development',
   'Operations',
   'Support',
 ];
@@ -45,6 +48,7 @@ const defaultOfficeTeams = [
   { name: 'Billing Team', moduleName: 'Accounts' },
   { name: 'Delivery Team', moduleName: 'Projects' },
   { name: 'Engineering Team', moduleName: 'Projects' },
+  { name: 'Development Team', moduleName: 'Development' },
   { name: 'Operations Team', moduleName: 'Operations' },
   { name: 'Support Team', moduleName: 'Support' },
 ];
@@ -354,6 +358,16 @@ const ensureDefaults = async (createdBy) => {
   }
 
   await Promise.all(
+    defaultOfficeModules.map((name) =>
+      OfficeStructure.updateOne(
+        { type: 'module', name },
+        { $setOnInsert: { type: 'module', name, createdBy } },
+        { upsert: true },
+      ),
+    ),
+  );
+
+  await Promise.all(
     defaultOfficeTeams.map((team) =>
       OfficeStructure.updateOne(
         { type: 'team', name: team.name },
@@ -404,60 +418,60 @@ const ensureDefaults = async (createdBy) => {
       );
       const [fortis, hyatt] = projects;
       await BusinessProjectTask.insertMany([
-      {
-        project: fortis._id,
-        projectName: fortis.name,
-        name: 'Prepare final SOW',
-        assignee: 'Project Manager',
-        assigneeEmail: 'project@demo.com',
-        team: 'Delivery',
-        due: '2026-06-26',
-        status: 'In Progress',
-        progress: 70,
-        priority: 'High',
-        createdBy,
-      },
-      {
-        project: fortis._id,
-        projectName: fortis.name,
-        name: 'Confirm integration APIs',
-        assignee: 'Sales Manager',
-        assigneeEmail: 'sales@demo.com',
-        team: 'Engineering',
-        due: '2026-06-28',
-        status: 'To Do',
-        progress: 10,
-        priority: 'High',
-        dependency: 'Prepare final SOW',
-        createdBy,
-      },
-      {
-        project: hyatt._id,
-        projectName: hyatt.name,
-        name: 'Branch dashboard build',
-        assignee: 'Project Manager',
-        assigneeEmail: 'project@demo.com',
-        team: 'Engineering',
-        due: '2026-06-24',
-        status: 'In Progress',
-        progress: 45,
-        priority: 'Medium',
-        createdBy,
-      },
-      {
-        project: hyatt._id,
-        projectName: hyatt.name,
-        name: 'Client review deck',
-        assignee: 'Sales Manager',
-        assigneeEmail: 'sales@demo.com',
-        team: 'Delivery',
-        due: '2026-06-30',
-        status: 'Review',
-        progress: 80,
-        priority: 'Medium',
-        milestone: true,
-        createdBy,
-      },
+        {
+          project: fortis._id,
+          projectName: fortis.name,
+          name: 'Prepare final SOW',
+          assignee: 'Project Manager',
+          assigneeEmail: 'project@demo.com',
+          team: 'Delivery',
+          due: '2026-06-26',
+          status: 'In Progress',
+          progress: 70,
+          priority: 'High',
+          createdBy,
+        },
+        {
+          project: fortis._id,
+          projectName: fortis.name,
+          name: 'Confirm integration APIs',
+          assignee: 'Sales Manager',
+          assigneeEmail: 'sales@demo.com',
+          team: 'Engineering',
+          due: '2026-06-28',
+          status: 'To Do',
+          progress: 10,
+          priority: 'High',
+          dependency: 'Prepare final SOW',
+          createdBy,
+        },
+        {
+          project: hyatt._id,
+          projectName: hyatt.name,
+          name: 'Branch dashboard build',
+          assignee: 'Project Manager',
+          assigneeEmail: 'project@demo.com',
+          team: 'Engineering',
+          due: '2026-06-24',
+          status: 'In Progress',
+          progress: 45,
+          priority: 'Medium',
+          createdBy,
+        },
+        {
+          project: hyatt._id,
+          projectName: hyatt.name,
+          name: 'Client review deck',
+          assignee: 'Sales Manager',
+          assigneeEmail: 'sales@demo.com',
+          team: 'Delivery',
+          due: '2026-06-30',
+          status: 'Review',
+          progress: 80,
+          priority: 'Medium',
+          milestone: true,
+          createdBy,
+        },
       ]);
     }
 
@@ -875,6 +889,146 @@ router.delete('/work-structure/designations/:id', requireAdmin, async (req, res)
     });
     if (!designation) return res.status(404).json({ message: 'Designation not found' });
     return res.json({ message: 'Designation removed', ...(await getWorkStructure()) });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.get('/development/daily-reports', async (req, res) => {
+  try {
+    if (!getPermission(req.effectivePermissions, 'daily_reports', 'view'))
+      return res.status(403).json({ message: 'Access denied: daily_reports.view required' });
+    const communityKey =
+      req.selectedCommunity || req.user.primaryCommunity || getAuthorizedCommunities(req.user)[0];
+    if (!getAuthorizedCommunities(req.user).includes(communityKey))
+      return res.status(403).json({ message: 'Community access denied' });
+    const reports = await DevelopmentDailyReport.find({
+      user: req.user.id,
+      communityKey,
+    }).sort({ reportDate: -1, updatedAt: -1 });
+    return res.json(reports);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.get('/development/team-members', async (req, res) => {
+  try {
+    if (!getPermission(req.effectivePermissions, 'projects', 'view'))
+      return res.status(403).json({ message: 'Access denied: projects.view required' });
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const query = {
+      role: 'employee',
+      isDeleted: { $ne: true },
+      communities: { $in: communities },
+      $or: [
+        { officeModule: { $in: ['Development', 'Projects'] } },
+        { team: { $in: ['Development Team', 'Engineering Team', 'Delivery Team'] } },
+      ],
+    };
+    if (req.user.role !== 'admin') query.team = req.user.team;
+    const members = await User.find(query)
+      .select('name email officeModule team position')
+      .sort({ name: 1 });
+    return res.json(members);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.get('/development/workload-tasks', async (req, res) => {
+  try {
+    if (
+      !getPermission(req.effectivePermissions, 'projects', 'view') ||
+      !getPermission(req.effectivePermissions, 'tasks', 'view')
+    )
+      return res.status(403).json({ message: 'Access denied: workload view required' });
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const memberQuery = {
+      role: 'employee',
+      isDeleted: { $ne: true },
+      communities: { $in: communities },
+      $or: [
+        { officeModule: { $in: ['Development', 'Projects'] } },
+        { team: { $in: ['Development Team', 'Engineering Team', 'Delivery Team'] } },
+      ],
+    };
+    if (req.user.role !== 'admin') memberQuery.team = req.user.team;
+    const members = await User.find(memberQuery).select('name email');
+    const emails = members.map((member) => member.email).filter(Boolean);
+    const names = members.map((member) => member.name).filter(Boolean);
+    if (!emails.length && !names.length) return res.json([]);
+    const tasks = await BusinessProjectTask.find({
+      communityKey: { $in: communities },
+      officeModule: { $in: ['Development', 'Projects'] },
+      $or: [{ assigneeEmail: { $in: emails } }, { assignee: { $in: names } }],
+    }).select('name project projectName assignee assigneeEmail team due status priority progress');
+    return res.json(tasks);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.put('/development/daily-reports/:date', async (req, res) => {
+  try {
+    const reportDate = String(req.params.date || '');
+    const parsedDate = new Date(`${reportDate}T00:00:00Z`);
+    const todayInIndia = new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(reportDate) ||
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== reportDate ||
+      reportDate > todayInIndia
+    )
+      return res.status(400).json({ message: 'Invalid report date' });
+    const communityKey = String(
+      req.body.communityKey ||
+        req.selectedCommunity ||
+        req.user.primaryCommunity ||
+        getAuthorizedCommunities(req.user)[0] ||
+        '',
+    ).toLowerCase();
+    if (!getAuthorizedCommunities(req.user).includes(communityKey))
+      return res.status(403).json({ message: 'Community access denied' });
+    const reportKey = { communityKey, user: req.user.id, reportDate };
+    const existing = await DevelopmentDailyReport.exists(reportKey);
+    const action = existing ? 'update' : 'create';
+    if (!getPermission(req.effectivePermissions, 'daily_reports', action))
+      return res.status(403).json({ message: `Access denied: daily_reports.${action} required` });
+    const completedWork = String(req.body.completedWork || '').trim();
+    const hoursWorked = Number(req.body.hoursWorked || 0);
+    if (
+      !completedWork ||
+      completedWork.length > 5000 ||
+      !Number.isFinite(hoursWorked) ||
+      hoursWorked < 0 ||
+      hoursWorked > 24
+    )
+      return res.status(400).json({ message: 'Completed work and valid hours are required' });
+    const taskIds = Array.isArray(req.body.taskIds) ? req.body.taskIds : [];
+    if (taskIds.length > 100 || taskIds.some((id) => !mongoose.isValidObjectId(id)))
+      return res.status(400).json({ message: 'Invalid task selection' });
+    const reportOwner = await User.findById(req.user.id).select('name email');
+    const assignedTasks = await BusinessProjectTask.find({
+      _id: { $in: taskIds },
+      communityKey,
+      ...buildAssignedTaskQuery(reportOwner),
+    }).select('_id');
+    if (assignedTasks.length !== new Set(taskIds.map(String)).size)
+      return res.status(400).json({ message: 'Select only your accessible tasks' });
+    const payload = {
+      taskIds,
+      completedWork,
+      blockers: String(req.body.blockers || '').trim(),
+      nextPlan: String(req.body.nextPlan || '').trim(),
+      hoursWorked,
+    };
+    const report = await DevelopmentDailyReport.findOneAndUpdate(
+      reportKey,
+      { $set: payload },
+      { upsert: true, new: true, runValidators: true },
+    );
+    return res.json({ message: 'Daily report saved', item: report });
   } catch (error) {
     return res.status(500).json({ message: error.message || 'Server error' });
   }

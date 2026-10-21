@@ -6,10 +6,47 @@ export const getAdminHeaders = () => ({
   Authorization: `Bearer ${getValidToken('admin') || getValidToken('employee') || ''}`,
 });
 
+export const getMyProfile = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/profile`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data.user;
+};
+
 export const getBusinessSummary = async () => {
   const response = await axios.get(`${API_BASE_URL}/api/business/summary`, {
     headers: getAdminHeaders(),
   });
+  return response.data;
+};
+
+export const listDevelopmentDailyReports = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/daily-reports`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
+export const listDevelopmentTeamMembers = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/team-members`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
+export const listDevelopmentWorkloadTasks = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/workload-tasks`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
+export const saveDevelopmentDailyReport = async (date, payload) => {
+  const response = await axios.put(
+    `${API_BASE_URL}/api/business/development/daily-reports/${date}`,
+    payload,
+    { headers: getAdminHeaders() },
+  );
   return response.data;
 };
 

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { MessageSquareText, RefreshCw, Search, X } from 'lucide-react';
-import { assignDemoRequest, getDemoRequestCapabilities, getDemoRequestOptions, getDemoRequests, updateDemoRequest } from '../services/demoRequestApi';
+import {
+  assignDemoRequest,
+  getDemoRequestCapabilities,
+  getDemoRequestOptions,
+  getDemoRequests,
+  updateDemoRequest,
+} from '../services/demoRequestApi';
 
 const STATUSES = ['New', 'Contacted', 'Qualified', 'Closed'];
 const field =
@@ -40,16 +46,23 @@ export default function DemoRequests() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [canAssign, setCanAssign] = useState(false);
+  const [canUpdate, setCanUpdate] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [assigneeId, setAssigneeId] = useState('');
   const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
-    getDemoRequestCapabilities().then(async (access) => {
-      if (!access.canAssign) return;
-      setCanAssign(true);
-      setEmployees(await getDemoRequestOptions());
-    }).catch(() => setCanAssign(false));
+    getDemoRequestCapabilities()
+      .then(async (access) => {
+        setCanUpdate(Boolean(access.canUpdate));
+        if (!access.canAssign) return;
+        setCanAssign(true);
+        setEmployees(await getDemoRequestOptions());
+      })
+      .catch(() => {
+        setCanAssign(false);
+        setCanUpdate(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -143,7 +156,8 @@ export default function DemoRequests() {
             <div>
               <h1 className="text-sm font-semibold text-slate-800">Demo request table</h1>
               <p className="mt-1 text-xs text-slate-500">
-                New enquiries are shared with the Live team. The first status update claims the request.
+                New enquiries are shared with the Live team. The first status update claims the
+                request.
               </p>
             </div>
             <button
@@ -462,7 +476,8 @@ export default function DemoRequests() {
                 'Emailed at': date(selected.emailedAt),
                 'Access type': selected.accessType,
                 'Delivery note': selected.deliveryError || '—',
-                'Assigned to': selected.assignedTo?.name || selected.assignedTo?.email || 'Unassigned',
+                'Assigned to':
+                  selected.assignedTo?.name || selected.assignedTo?.email || 'Unassigned',
               }).map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt>
@@ -485,13 +500,35 @@ export default function DemoRequests() {
             )}
             {canAssign && (
               <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <label className="block text-sm font-semibold" htmlFor="demo-assignee">Assign / reassign</label>
+                <label
+                  className="block text-sm font-semibold"
+                  htmlFor="demo-assignee"
+                >
+                  Assign / reassign
+                </label>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <select id="demo-assignee" className={field} value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
+                  <select
+                    id="demo-assignee"
+                    className={field}
+                    value={assigneeId}
+                    onChange={(event) => setAssigneeId(event.target.value)}
+                  >
                     <option value="">Unassigned (shared Live queue)</option>
-                    {employees.map((employee) => <option key={employee._id} value={employee._id}>{employee.name || employee.email}</option>)}
+                    {employees.map((employee) => (
+                      <option
+                        key={employee._id}
+                        value={employee._id}
+                      >
+                        {employee.name || employee.email}
+                      </option>
+                    ))}
                   </select>
-                  <button type="button" disabled={assigning} onClick={saveAssignment} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                  <button
+                    type="button"
+                    disabled={assigning}
+                    onClick={saveAssignment}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
                     {assigning ? 'Saving...' : assigneeId ? 'Assign' : 'Unassign'}
                   </button>
                 </div>
@@ -505,6 +542,7 @@ export default function DemoRequests() {
                 Status
                 <select
                   className={`${field} mt-2 block w-full`}
+                  disabled={!canUpdate}
                   value={editStatus}
                   onChange={(event) => setEditStatus(event.target.value)}
                 >
@@ -519,6 +557,7 @@ export default function DemoRequests() {
                   className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-blue-500"
                   rows={4}
                   maxLength={4000}
+                  readOnly={!canUpdate}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                 />
@@ -531,13 +570,15 @@ export default function DemoRequests() {
                   {saveError}
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-[#193175] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {saving ? 'Saving…' : 'Save changes'}
-              </button>
+              {canUpdate && (
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg bg-[#193175] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              )}
             </form>
           </section>
         </div>

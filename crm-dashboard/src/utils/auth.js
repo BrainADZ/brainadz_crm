@@ -58,6 +58,19 @@ export const getAuthenticatedUser = () => {
   return decodeJwtPayload(adminToken || employeeToken || '')?.user || null;
 };
 
+export const getCurrentCommunityKey = () => {
+  const user = getAuthenticatedUser();
+  if (!user) return '';
+  try {
+    const profile = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    if (String(profile.id) === String(user.id) && profile.primaryCommunity)
+      return profile.primaryCommunity;
+  } catch {
+    // A stale profile should not prevent the signed-in user's default community.
+  }
+  return user.communities?.[0] || '';
+};
+
 export const isSalesRoleKey = (value) => {
   const roleKey = String(value || '')
     .trim()

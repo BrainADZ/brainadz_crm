@@ -6,6 +6,8 @@ import {
   listBusinessResource,
   updateBusinessResource,
 } from '../services/businessApi';
+import { isDevelopmentProject, isDevelopmentTask } from '../utils/developmentTracker';
+import { getAuthenticatedRole, getCurrentCommunityKey } from '../utils/auth';
 
 const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
@@ -66,13 +68,14 @@ const Stat = ({ label, value, note }) => (
 );
 
 const ProjectsHub = () => {
+  const isAdmin = getAuthenticatedRole() === 'admin';
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProject);
   const [taskForm, setTaskForm] = useState(emptyTask);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState('projects');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -86,8 +89,10 @@ const ProjectsHub = () => {
         listBusinessResource('projects'),
         listBusinessResource('project-tasks'),
       ]);
-      setProjects(projectRows);
-      setTasks(taskRows);
+      const developmentProjects = projectRows.filter(isDevelopmentProject);
+      const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
+      setProjects(developmentProjects);
+      setTasks(taskRows.filter((task) => isDevelopmentTask(task, projectIds)));
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to load projects');
     } finally {
@@ -134,7 +139,12 @@ const ProjectsHub = () => {
     setMessage('');
     setError('');
     try {
-      const response = await createBusinessResource('projects', projectForm);
+      const response = await createBusinessResource('projects', {
+        ...projectForm,
+        communityKey: getCurrentCommunityKey(),
+        officeModule: 'Development',
+        team: 'Development Team',
+      });
       setProjects((previous) => [response.item, ...previous]);
       setProjectForm(emptyProject);
       setProjectModalOpen(false);
@@ -155,6 +165,9 @@ const ProjectsHub = () => {
       const project = projects.find((item) => item._id === taskForm.project);
       const response = await createBusinessResource('project-tasks', {
         ...taskForm,
+        communityKey: project?.communityKey || getCurrentCommunityKey(),
+        officeModule: 'Development',
+        team: 'Development',
         projectName: project?.name || '',
       });
       setTasks((previous) => [response.item, ...previous]);
@@ -204,31 +217,34 @@ const ProjectsHub = () => {
             <FolderKanban size={20} strokeWidth={1.9} />
           </span>
           <div>
-            <p className="text-xs font-semibold text-slate-500">Delivery and work management</p>
-            <h1 className="text-2xl font-bold text-slate-950">Projects</h1>
+            <p className="text-xs font-semibold text-slate-500">Development team tracker</p>
+            <h1 className="text-2xl font-bold text-slate-950">Development Projects</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Create client projects, assign tasks, track stages, deadlines, milestones, health and
-              progress from MongoDB.
+              Track development projects, delivery stages, deadlines, milestones and progress.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setProjectModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-          >
-            <Plus size={16} strokeWidth={1.9} />
-            Create Project
-          </button>
-          <button
-            type="button"
-            onClick={() => setTaskModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
-          >
-            <Plus size={16} strokeWidth={1.9} />
-            Assign Task
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setProjectModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+            >
+              <Plus size={16} strokeWidth={1.9} />
+              Create Project
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setTaskModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+            >
+              <Plus size={16} strokeWidth={1.9} />
+              Assign Task
+            </button>
+          )}
           <button
             type="button"
             onClick={loadData}
@@ -320,6 +336,7 @@ const ProjectsHub = () => {
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <select
+                          disabled={!isAdmin}
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold"
                           value={task.status}
                           onChange={(event) =>
@@ -340,6 +357,7 @@ const ProjectsHub = () => {
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <div className="flex items-center gap-2">
                           <input
+                            disabled={!isAdmin}
                             type="number"
                             min="0"
                             max="100"
@@ -360,14 +378,16 @@ const ProjectsHub = () => {
                         </div>
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3">
-                        <button
-                          type="button"
-                          className={iconButtonClass}
-                          onClick={() => deleteItem('project-tasks', task, setTasks)}
-                          title="Delete task"
-                        >
-                          <Trash2 size={15} strokeWidth={1.9} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className={iconButtonClass}
+                            onClick={() => deleteItem('project-tasks', task, setTasks)}
+                            title="Delete task"
+                          >
+                            <Trash2 size={15} strokeWidth={1.9} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -445,14 +465,16 @@ const ProjectsHub = () => {
                         {project.progress || 0}%
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3">
-                        <button
-                          type="button"
-                          className={iconButtonClass}
-                          onClick={() => deleteItem('projects', project, setProjects)}
-                          title="Delete project"
-                        >
-                          <Trash2 size={15} strokeWidth={1.9} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className={iconButtonClass}
+                            onClick={() => deleteItem('projects', project, setProjects)}
+                            title="Delete project"
+                          >
+                            <Trash2 size={15} strokeWidth={1.9} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
