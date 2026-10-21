@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import {
   AlertTriangle,
   CalendarClock,
@@ -15,17 +14,18 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { API_BASE_URL } from '../config/api';
 import {
   createBusinessResource,
   deleteBusinessResource,
-  getAdminHeaders,
   getMyProfile,
+  listDevelopmentAssignees,
   listBusinessResource,
   updateBusinessResource,
 } from '../services/businessApi';
-import { getAuthenticatedRole, getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
+import { getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
 import { isDevelopmentProject, isDevelopmentTask, isMyTask } from '../utils/developmentTracker';
+import { getMyAccess } from '../services/accessApi';
+import { canAccessResource } from '../utils/resourceAccess';
 
 const taskStatuses = ['Backlog', 'To Do', 'In Progress', 'Review', 'Complete'];
 const priorityOptions = ['High', 'Medium', 'Low'];
@@ -106,7 +106,7 @@ const Modal = ({ title, children, onClose }) => (
 
 const AdminTasks = ({ view = 'my' }) => {
   const [currentUser, setCurrentUser] = useState(getAuthenticatedUser);
-  const isAdmin = getAuthenticatedRole() === 'admin';
+  const [access, setAccess] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -123,44 +123,47 @@ const AdminTasks = ({ view = 'my' }) => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const fetchWorkspace = useCallback(
-    async ({ silent = false } = {}) => {
-      if (silent) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-      setError('');
+  const fetchWorkspace = useCallback(async ({ silent = false } = {}) => {
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError('');
 
-      try {
-        const [projectRows, taskRows, employeeResponse, profile] = await Promise.all([
-          listBusinessResource('projects'),
-          listBusinessResource('project-tasks'),
-          isAdmin
-            ? axios.get(`${API_BASE_URL}/api/employees`, { headers: getAdminHeaders() })
-            : Promise.resolve({ data: [] }),
-          getMyProfile(),
-        ]);
+    try {
+      const resolvedAccess = await getMyAccess();
+      const [projectRows, taskRows, employeeRows, profile] = await Promise.all([
+        canAccessResource(resolvedAccess, 'projects')
+          ? listBusinessResource('projects')
+          : Promise.resolve([]),
+        listBusinessResource('project-tasks'),
+        canAccessResource(resolvedAccess, 'tasks', 'assign')
+          ? listDevelopmentAssignees()
+          : Promise.resolve([]),
+        getMyProfile(),
+      ]);
 
-        const developmentProjects = (projectRows || []).filter(isDevelopmentProject);
-        const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
-        setProjects(developmentProjects);
-        setTasks((taskRows || []).filter((task) => isDevelopmentTask(task, projectIds)));
-        setCurrentUser(profile);
-        setEmployees(
-          Array.isArray(employeeResponse.data)
-            ? employeeResponse.data
-            : employeeResponse.data?.employees || [],
-        );
-      } catch (requestError) {
-        setError(requestError.response?.data?.message || 'Unable to load employee tasks');
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [isAdmin],
-  );
+      const developmentProjects = (projectRows || []).filter(isDevelopmentProject);
+      const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
+      setProjects(developmentProjects);
+      setTasks((taskRows || []).filter((task) => isDevelopmentTask(task, projectIds)));
+      setCurrentUser(profile);
+      setEmployees(employeeRows || []);
+      setAccess(resolvedAccess);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to load employee tasks');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  const canCreateTask = canAccessResource(access, 'tasks', 'create');
+  const canAssignTask = canAccessResource(access, 'tasks', 'assign');
+  const canUpdateTask = canAccessResource(access, 'tasks', 'update');
+  const canDeleteTask = canAccessResource(access, 'tasks', 'delete');
+  const canExportTask = canAccessResource(access, 'tasks', 'export');
 
   useEffect(() => {
     fetchWorkspace();
@@ -319,7 +322,7 @@ const AdminTasks = ({ view = 'my' }) => {
 
       setTaskForm(emptyTask);
       setIsModalOpen(false);
-      setMessage('Task assigned successfully.');
+      setMessage(canAssignTask ? 'Task assigned successfully.' : 'Task created successfully.');
       await fetchWorkspace({ silent: true });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to save this task');
@@ -480,14 +483,14 @@ const AdminTasks = ({ view = 'my' }) => {
               className="h-10 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          {isAdmin && (
+          {canCreateTask && (
             <button
               type="button"
               onClick={openTaskModal}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />
-              Assign Task
+              {canAssignTask ? 'Assign Task' : 'Create Task'}
             </button>
           )}
           <button
@@ -498,14 +501,16 @@ const AdminTasks = ({ view = 'my' }) => {
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            type="button"
-            title="Export tasks"
-            onClick={downloadTaskCsv}
-            className={iconButtonClass}
-          >
-            <Download className="h-4 w-4" />
-          </button>
+          {canExportTask && (
+            <button
+              type="button"
+              title="Export tasks"
+              onClick={downloadTaskCsv}
+              className={iconButtonClass}
+            >
+              <Download className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </section>
 
@@ -559,7 +564,7 @@ const AdminTasks = ({ view = 'my' }) => {
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              {isAdmin && (
+              {canAssignTask && (
                 <select
                   value={ownerFilter}
                   onChange={(event) => setOwnerFilter(event.target.value)}
@@ -662,6 +667,7 @@ const AdminTasks = ({ view = 'my' }) => {
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <select
+                          disabled={!canUpdateTask}
                           value={task.status}
                           onChange={(event) => updateTask(task, { status: event.target.value })}
                           className={`w-full rounded-lg border px-2 py-1.5 text-xs font-bold outline-none ${statusTone[task.status] || statusTone.Backlog}`}
@@ -676,6 +682,7 @@ const AdminTasks = ({ view = 'my' }) => {
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <div className="flex items-center gap-3">
                           <input
+                            disabled={!canUpdateTask}
                             type="number"
                             min="0"
                             max="100"
@@ -702,7 +709,7 @@ const AdminTasks = ({ view = 'my' }) => {
                         <span className="block truncate">{task.dependency || '-'}</span>
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3 text-right">
-                        {isAdmin && (
+                        {canDeleteTask && (
                           <button
                             type="button"
                             onClick={() => removeTask(task)}
@@ -736,7 +743,7 @@ const AdminTasks = ({ view = 'my' }) => {
         <section>
           <article className="rounded-md border border-slate-300 bg-white shadow-sm">
             <div className="border-b border-slate-300 px-4 py-3">
-              <h2 className="text-base font-bold text-slate-950">Workflow Board</h2>
+            <h2 className="text-base font-bold text-slate-950">Workload Board</h2>
               <p className="mt-1 text-xs font-medium text-slate-500">
                 Drag tasks between stages to update the development workflow.
               </p>
@@ -764,7 +771,7 @@ const AdminTasks = ({ view = 'my' }) => {
                     {column.tasks.map((task) => (
                       <div
                         key={task._id}
-                        draggable
+                        draggable={canUpdateTask}
                         onDragStart={(event) => startTaskDrag(event, task)}
                         onDragEnd={finishTaskDrag}
                         title="Move task"
@@ -815,8 +822,11 @@ const AdminTasks = ({ view = 'my' }) => {
         </section>
       )}
 
-      {isModalOpen && (
-        <Modal title="Assign Employee Task" onClose={() => setIsModalOpen(false)}>
+      {isModalOpen && canCreateTask && (
+        <Modal
+          title={canAssignTask ? 'Assign Employee Task' : 'Create My Task'}
+          onClose={() => setIsModalOpen(false)}
+        >
           <form onSubmit={submitTask} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 md:col-span-2">
@@ -844,24 +854,26 @@ const AdminTasks = ({ view = 'my' }) => {
                   ))}
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className={labelClass}>Assignee</span>
-                <select
-                  value={taskForm.assignee}
-                  onChange={(event) => updateForm('assignee', event.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Unassigned</option>
-                  {employees.map((employee) => (
-                    <option
-                      key={employee._id || employee.email}
-                      value={employee._id || employee.email}
-                    >
-                      {employee.name || employee.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {canAssignTask && (
+                <label className="space-y-1">
+                  <span className={labelClass}>Assignee</span>
+                  <select
+                    value={taskForm.assignee}
+                    onChange={(event) => updateForm('assignee', event.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Assign to myself</option>
+                    {employees.map((employee) => (
+                      <option
+                        key={employee._id || employee.email}
+                        value={employee._id || employee.email}
+                      >
+                        {employee.name || employee.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="space-y-1">
                 <span className={labelClass}>Team</span>
                 <select

@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Gauge, RefreshCw, Search, UsersRound } from 'lucide-react';
 import {
   getWorkStructure,
-  listBusinessResource,
   listDevelopmentTeamMembers,
   listDevelopmentWorkloadTasks,
 } from '../services/businessApi';
-import { isDevelopmentProject, isDevelopmentTask } from '../utils/developmentTracker';
 
 const todayKey = new Date().toISOString().slice(0, 10);
 const capacityPerEmployee = 5;
@@ -40,18 +38,13 @@ const TeamWorkload = () => {
     setError('');
 
     try {
-      const [employeeRows, taskRows, projectRows, structureResponse] = await Promise.all([
+      const [employeeRows, taskRows, structureResponse] = await Promise.all([
         listDevelopmentTeamMembers(),
         listDevelopmentWorkloadTasks(),
-        listBusinessResource('projects'),
         getWorkStructure(),
       ]);
-
-      const projectIds = new Set(
-        (projectRows || []).filter(isDevelopmentProject).map((project) => String(project._id)),
-      );
       setEmployees(employeeRows || []);
-      setTasks((taskRows || []).filter((task) => isDevelopmentTask(task, projectIds)));
+      setTasks(taskRows || []);
       setStructure({
         modules: (structureResponse.modules || []).filter((item) =>
           ['Development', 'Projects'].includes(item.name),

@@ -43,15 +43,9 @@ const AppRoutes = () => {
         path="/"
         element={
           authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
-            <Navigate
-              to="/dashboard"
-              replace
-            />
+            <Navigate to="/dashboard" replace />
           ) : (
-            <Navigate
-              to="/login"
-              replace
-            />
+            <Navigate to="/login" replace />
           )
         }
       />
@@ -60,24 +54,13 @@ const AppRoutes = () => {
         path="/login"
         element={
           authenticatedRole === 'admin' || authenticatedRole === 'employee' ? (
-            <Navigate
-              to="/dashboard"
-              replace
-            />
+            <Navigate to="/dashboard" replace />
           ) : (
             <Login />
           )
         }
       />
-      <Route
-        path="/employee-login"
-        element={
-          <Navigate
-            to="/login"
-            replace
-          />
-        }
-      />
+      <Route path="/employee-login" element={<Navigate to="/login" replace />} />
 
       {/* Shared CRM dashboard. The sidebar and every route are permission-gated. */}
       <Route
@@ -106,15 +89,7 @@ const AppRoutes = () => {
             </AccessRoute>
           }
         />
-        <Route
-          path="business"
-          element={
-            <Navigate
-              to="/dashboard"
-              replace
-            />
-          }
-        />
+        <Route path="business" element={<Navigate to="/dashboard" replace />} />
         <Route
           path="clients"
           element={
@@ -147,30 +122,19 @@ const AppRoutes = () => {
             </AccessRoute>
           }
         />
-        <Route
-          path="departments"
-          element={
-            <Navigate
-              to="/dashboard/permissions"
-              replace
-            />
-          }
-        />
+        <Route path="departments" element={<Navigate to="/dashboard/permissions" replace />} />
         <Route
           path="tasks"
           element={
-            <AccessRoute moduleKey="projects">
-              <Navigate
-                to="/dashboard/tasks/my"
-                replace
-              />
+            <AccessRoute moduleKey="projects" resourceKey="tasks">
+              <Navigate to="/dashboard/tasks/my" replace />
             </AccessRoute>
           }
         />
         <Route
           path="tasks/my"
           element={
-            <AccessRoute moduleKey="projects">
+            <AccessRoute moduleKey="projects" resourceKey="tasks">
               <AdminTasks view="my" />
             </AccessRoute>
           }
@@ -178,7 +142,7 @@ const AppRoutes = () => {
         <Route
           path="tasks/board"
           element={
-            <AccessRoute moduleKey="projects">
+            <AccessRoute moduleKey="projects" resourceKey="tasks">
               <AdminTasks view="board" />
             </AccessRoute>
           }
@@ -186,7 +150,7 @@ const AppRoutes = () => {
         <Route
           path="daily-reporting"
           element={
-            <AccessRoute moduleKey="projects">
+            <AccessRoute moduleKey="projects" resourceKey="daily_reports">
               <DevelopmentDailyReporting />
             </AccessRoute>
           }
@@ -194,7 +158,7 @@ const AppRoutes = () => {
         <Route
           path="workload"
           element={
-            <AccessRoute moduleKey="projects">
+            <AccessRoute moduleKey="projects" resourceKey="team_workload">
               <TeamWorkload />
             </AccessRoute>
           }
@@ -258,7 +222,7 @@ const AppRoutes = () => {
         <Route
           path="projects"
           element={
-            <AccessRoute moduleKey="projects">
+            <AccessRoute moduleKey="projects" resourceKey="projects">
               <ProjectsHub />
             </AccessRoute>
           }
@@ -291,38 +255,14 @@ const AppRoutes = () => {
           path="settings"
           element={<AccountSettings role={authenticatedRole === 'admin' ? 'admin' : 'employee'} />}
         />
-        <Route
-          path="assign-clients"
-          element={
-            <Navigate
-              to="/dashboard/tasks"
-              replace
-            />
-          }
-        />
+        <Route path="assign-clients" element={<Navigate to="/dashboard/tasks" replace />} />
       </Route>
 
       {/* Legacy employee-only links now use the shared CRM dashboard. */}
-      <Route
-        path="/employee-dashboard/*"
-        element={
-          <Navigate
-            to="/dashboard"
-            replace
-          />
-        }
-      />
+      <Route path="/employee-dashboard/*" element={<Navigate to="/dashboard" replace />} />
 
       {/* Catch-all Route for Undefined Paths */}
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to="/"
-            replace
-          />
-        }
-      />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

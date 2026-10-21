@@ -34,6 +34,13 @@ export const listDevelopmentTeamMembers = async () => {
   return response.data;
 };
 
+export const listDevelopmentAssignees = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/assignees`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
 export const listDevelopmentWorkloadTasks = async () => {
   const response = await axios.get(`${API_BASE_URL}/api/business/development/workload-tasks`, {
     headers: getAdminHeaders(),

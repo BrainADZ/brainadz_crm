@@ -117,7 +117,7 @@ const MODULES = [
   },
   {
     key: 'projects',
-    label: 'Project Work',
+    label: 'Development Tracker',
     resources: ['projects', 'tasks', 'team_workload', 'daily_reports', 'vendors'],
   },
   { key: 'documents', label: 'Documents', resources: ['documents'] },

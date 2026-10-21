@@ -7,6 +7,8 @@ import {
   saveDevelopmentDailyReport,
 } from '../services/businessApi';
 import { getCurrentCommunityKey } from '../utils/auth';
+import { getMyAccess } from '../services/accessApi';
+import { canAccessResource } from '../utils/resourceAccess';
 import { isDevelopmentProject, isDevelopmentTask, isMyTask } from '../utils/developmentTracker';
 
 const localDateKey = () => {
@@ -30,6 +32,7 @@ const DevelopmentDailyReporting = () => {
   const [form, setForm] = useState(emptyForm);
   const [reports, setReports] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [access, setAccess] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -39,17 +42,25 @@ const DevelopmentDailyReporting = () => {
     setLoading(true);
     setError('');
     try {
-      const [reportRows, projectRows, taskRows, profile] = await Promise.all([
+      const [reportRows, resolvedAccess, profile] = await Promise.all([
         listDevelopmentDailyReports(),
-        listBusinessResource('projects'),
-        listBusinessResource('project-tasks'),
+        getMyAccess(),
         getMyProfile(),
+      ]);
+      const [projectRows, taskRows] = await Promise.all([
+        canAccessResource(resolvedAccess, 'projects')
+          ? listBusinessResource('projects')
+          : Promise.resolve([]),
+        canAccessResource(resolvedAccess, 'tasks')
+          ? listBusinessResource('project-tasks')
+          : Promise.resolve([]),
       ]);
       const projectIds = new Set(
         projectRows.filter(isDevelopmentProject).map((project) => String(project._id)),
       );
       const communityKey = getCurrentCommunityKey();
       setReports(reportRows || []);
+      setAccess(resolvedAccess);
       setTasks(
         (taskRows || []).filter(
           (task) =>
@@ -73,6 +84,7 @@ const DevelopmentDailyReporting = () => {
     () => reports.find((report) => report.reportDate === date),
     [date, reports],
   );
+  const canSave = canAccessResource(access, 'daily_reports', selectedReport ? 'update' : 'create');
 
   useEffect(() => {
     setForm(
@@ -175,98 +187,106 @@ const DevelopmentDailyReporting = () => {
               />
             </label>
           </div>
-          <label className="block text-sm font-semibold text-slate-700">
-            Work completed / progress today
-            <textarea
-              value={form.completedWork}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, completedWork: event.target.value }))
-              }
-              required
-              maxLength={5000}
-              rows={5}
-              placeholder="Describe the development work, result and current state"
-              className={`${inputClass} mt-1 resize-y`}
-            />
-          </label>
-          <div>
-            <p className="text-sm font-semibold text-slate-700">Related tasks</p>
-            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
-              {tasks.map((task) => (
-                <label
-                  key={task._id}
-                  className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.taskIds.includes(String(task._id))}
-                    onChange={() => toggleTask(String(task._id))}
-                    className="mt-1"
-                  />
-                  <span>
-                    <strong>{task.name}</strong>
-                    <span className="block text-xs text-slate-500">
-                      {task.projectName || 'General task'} · {task.status}
+          {!canSave && !loading && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              You can view this report, but your role cannot {selectedReport ? 'edit' : 'create'}{' '}
+              it.
+            </p>
+          )}
+          <fieldset disabled={!canSave} className="space-y-5 disabled:opacity-70">
+            <label className="block text-sm font-semibold text-slate-700">
+              Work completed / progress today
+              <textarea
+                value={form.completedWork}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, completedWork: event.target.value }))
+                }
+                required
+                maxLength={5000}
+                rows={5}
+                placeholder="Describe the development work, result and current state"
+                className={`${inputClass} mt-1 resize-y`}
+              />
+            </label>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Related tasks</p>
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                {tasks.map((task) => (
+                  <label
+                    key={task._id}
+                    className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.taskIds.includes(String(task._id))}
+                      onChange={() => toggleTask(String(task._id))}
+                      className="mt-1"
+                    />
+                    <span>
+                      <strong>{task.name}</strong>
+                      <span className="block text-xs text-slate-500">
+                        {task.projectName || 'General task'} · {task.status}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
-              {!tasks.length && (
-                <p className="px-2 py-3 text-xs text-slate-500">
-                  No assigned development tasks yet. You can still submit a report.
-                </p>
-              )}
+                  </label>
+                ))}
+                {!tasks.length && (
+                  <p className="px-2 py-3 text-xs text-slate-500">
+                    No assigned development tasks yet. You can still submit a report.
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-semibold text-slate-700">
-              Blockers
-              <textarea
-                value={form.blockers}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Blockers
+                <textarea
+                  value={form.blockers}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, blockers: event.target.value }))
+                  }
+                  maxLength={3000}
+                  rows={3}
+                  placeholder="Anything blocking progress?"
+                  className={`${inputClass} mt-1 resize-y`}
+                />
+              </label>
+              <label className="text-sm font-semibold text-slate-700">
+                Next plan
+                <textarea
+                  value={form.nextPlan}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, nextPlan: event.target.value }))
+                  }
+                  maxLength={3000}
+                  rows={3}
+                  placeholder="What will you work on next?"
+                  className={`${inputClass} mt-1 resize-y`}
+                />
+              </label>
+            </div>
+            <label className="block max-w-40 text-sm font-semibold text-slate-700">
+              Hours worked
+              <input
+                type="number"
+                min="0"
+                max="24"
+                step="0.25"
+                value={form.hoursWorked}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, blockers: event.target.value }))
+                  setForm((current) => ({ ...current, hoursWorked: event.target.value }))
                 }
-                maxLength={3000}
-                rows={3}
-                placeholder="Anything blocking progress?"
-                className={`${inputClass} mt-1 resize-y`}
+                className={`${inputClass} mt-1`}
               />
             </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Next plan
-              <textarea
-                value={form.nextPlan}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, nextPlan: event.target.value }))
-                }
-                maxLength={3000}
-                rows={3}
-                placeholder="What will you work on next?"
-                className={`${inputClass} mt-1 resize-y`}
-              />
-            </label>
-          </div>
-          <label className="block max-w-40 text-sm font-semibold text-slate-700">
-            Hours worked
-            <input
-              type="number"
-              min="0"
-              max="24"
-              step="0.25"
-              value={form.hoursWorked}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, hoursWorked: event.target.value }))
-              }
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={saving || loading || !date}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save report'}
-          </button>
+            <button
+              type="submit"
+              disabled={saving || loading || !date || !canSave}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save size={16} /> {saving ? 'Saving...' : 'Save report'}
+            </button>
+          </fieldset>
         </form>
 
         <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -501,6 +501,50 @@ const buildAssignedTaskQuery = (employee) => ({
   $or: [{ assigneeEmail: employee.email }, { assignee: employee.name }],
 });
 
+const buildEmployeeTaskScopeQuery = async (employee, permission, selectedCommunity) => {
+  const communityKey = { $in: getAuthorizedCommunities(employee, selectedCommunity) };
+  if (['TEAM', 'team', 'MULTIPLE_TEAMS'].includes(permission.scope) && employee.team) {
+    const members = await User.find({
+      role: 'employee',
+      team: employee.team,
+      isDeleted: { $ne: true },
+      communities: { $in: communityKey.$in },
+    }).select('name email');
+    return {
+      communityKey,
+      $or: [
+        { assigneeEmail: { $in: members.map((member) => member.email).filter(Boolean) } },
+        { assignee: { $in: members.map((member) => member.name).filter(Boolean) } },
+      ],
+    };
+  }
+  return { communityKey, ...buildAssignedTaskQuery(employee) };
+};
+
+const buildDevelopmentMemberQuery = (user, permission, communities) => {
+  const query = {
+    role: 'employee',
+    isDeleted: { $ne: true },
+    communities: { $in: communities },
+    $or: [
+      { officeModule: { $in: ['Development', 'Projects'] } },
+      { team: { $in: ['Development Team', 'Engineering Team', 'Delivery Team'] } },
+    ],
+  };
+  if (user.role === 'admin') return query;
+  if (['DEPARTMENT', 'department'].includes(permission.scope))
+    return { ...query, officeModule: user.officeModule };
+  if (['TEAM', 'team', 'MULTIPLE_TEAMS'].includes(permission.scope))
+    return { ...query, team: user.team };
+  if (
+    ['COMPANY', 'all', 'BUSINESS_UNIT', 'MULTIPLE_BUSINESS_UNITS', 'community'].includes(
+      permission.scope,
+    )
+  )
+    return query;
+  return { ...query, _id: user.id };
+};
+
 const getDatasetSummary = (dataset) => {
   const { columns, rows } = addWorkColumnsAfterWebsite(dataset.columns || [], dataset.rows || []);
   const statusIndex = getColumnIndex(columns, ['Status']);
@@ -697,7 +741,11 @@ const resourceConfig = {
     sort: { due: 1, updatedAt: -1 },
     beforeCreate: async (payload) => {
       if (!payload.project) return payload;
-      const project = await BusinessProject.findById(payload.project);
+      const project = await BusinessProject.findOne({
+        _id: payload.project,
+        communityKey: payload.communityKey,
+      });
+      if (!project) throw new Error('Project not found in the selected community');
       return {
         ...payload,
         projectName: payload.projectName || project?.name || '',
@@ -914,19 +962,11 @@ router.get('/development/daily-reports', async (req, res) => {
 
 router.get('/development/team-members', async (req, res) => {
   try {
-    if (!getPermission(req.effectivePermissions, 'projects', 'view'))
-      return res.status(403).json({ message: 'Access denied: projects.view required' });
+    const permission = getPermission(req.effectivePermissions, 'team_workload', 'view');
+    if (!permission)
+      return res.status(403).json({ message: 'Access denied: team_workload.view required' });
     const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
-    const query = {
-      role: 'employee',
-      isDeleted: { $ne: true },
-      communities: { $in: communities },
-      $or: [
-        { officeModule: { $in: ['Development', 'Projects'] } },
-        { team: { $in: ['Development Team', 'Engineering Team', 'Delivery Team'] } },
-      ],
-    };
-    if (req.user.role !== 'admin') query.team = req.user.team;
+    const query = buildDevelopmentMemberQuery(req.user, permission, communities);
     const members = await User.find(query)
       .select('name email officeModule team position')
       .sort({ name: 1 });
@@ -936,24 +976,26 @@ router.get('/development/team-members', async (req, res) => {
   }
 });
 
+router.get('/development/assignees', async (req, res) => {
+  try {
+    const permission = getPermission(req.effectivePermissions, 'tasks', 'assign');
+    if (!permission)
+      return res.status(403).json({ message: 'Access denied: tasks.assign required' });
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const query = buildDevelopmentMemberQuery(req.user, permission, communities);
+    return res.json(await User.find(query).select('name email team communities').sort({ name: 1 }));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
 router.get('/development/workload-tasks', async (req, res) => {
   try {
-    if (
-      !getPermission(req.effectivePermissions, 'projects', 'view') ||
-      !getPermission(req.effectivePermissions, 'tasks', 'view')
-    )
-      return res.status(403).json({ message: 'Access denied: workload view required' });
+    const permission = getPermission(req.effectivePermissions, 'team_workload', 'view');
+    if (!permission)
+      return res.status(403).json({ message: 'Access denied: team_workload.view required' });
     const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
-    const memberQuery = {
-      role: 'employee',
-      isDeleted: { $ne: true },
-      communities: { $in: communities },
-      $or: [
-        { officeModule: { $in: ['Development', 'Projects'] } },
-        { team: { $in: ['Development Team', 'Engineering Team', 'Delivery Team'] } },
-      ],
-    };
-    if (req.user.role !== 'admin') memberQuery.team = req.user.team;
+    const memberQuery = buildDevelopmentMemberQuery(req.user, permission, communities);
     const members = await User.find(memberQuery).select('name email');
     const emails = members.map((member) => member.email).filter(Boolean);
     const names = members.map((member) => member.name).filter(Boolean);
@@ -962,7 +1004,7 @@ router.get('/development/workload-tasks', async (req, res) => {
       communityKey: { $in: communities },
       officeModule: { $in: ['Development', 'Projects'] },
       $or: [{ assigneeEmail: { $in: emails } }, { assignee: { $in: names } }],
-    }).select('name project projectName assignee assigneeEmail team due status priority progress');
+    }).select('assignee assigneeEmail due status priority');
     return res.json(tasks);
   } catch (error) {
     return res.status(500).json({ message: error.message || 'Server error' });
@@ -1048,9 +1090,9 @@ router.get('/:resource', async (req, res) => {
     await ensureDefaults(req.user.id);
     let query = buildScopeQuery(req.user, permission.scope, req.selectedCommunity);
     if (req.params.resource === 'project-tasks' && req.user.role === 'employee') {
-      const employee = await User.findById(req.user.id).select('name email');
+      const employee = await User.findById(req.user.id).select('name email team communities role');
       if (!employee) return res.status(404).json({ message: 'Employee not found' });
-      query = { $and: [query, buildAssignedTaskQuery(employee)] };
+      query = await buildEmployeeTaskScopeQuery(employee, permission, req.selectedCommunity);
     }
 
     const items = await config.model.find(query).sort(config.sort);
@@ -1078,6 +1120,37 @@ router.post('/:resource', async (req, res) => {
     if (req.user.roleKey !== 'super_admin' && !req.user.communities.includes(requestedCommunity))
       return res.status(403).json({ message: 'Community access denied' });
     const input = { ...req.body, communityKey: requestedCommunity };
+    if (req.params.resource === 'projects' && req.user.role === 'employee') {
+      input.team = req.user.team;
+      input.ownerUser = req.user.id;
+      input.owner = req.user.name;
+      input.ownerEmail = req.user.email;
+    }
+    if (req.params.resource === 'project-tasks' && req.user.role === 'employee') {
+      const requestedEmail = String(input.assigneeEmail || '')
+        .trim()
+        .toLowerCase();
+      const requestedName = String(input.assignee || '').trim();
+      const selfAssigned =
+        (!requestedEmail && !requestedName) ||
+        (requestedEmail && requestedEmail === req.user.email) ||
+        (!requestedEmail && requestedName === req.user.name);
+      let assignee = req.user;
+      if (!selfAssigned) {
+        const assignmentPermission = getPermission(req.effectivePermissions, 'tasks', 'assign');
+        if (!assignmentPermission)
+          return res.status(403).json({ message: 'Access denied: tasks.assign required' });
+        assignee = await User.findOne({
+          ...buildDevelopmentMemberQuery(req.user, assignmentPermission, [requestedCommunity]),
+          ...(requestedEmail ? { email: requestedEmail } : { name: requestedName }),
+        });
+        if (!assignee)
+          return res.status(400).json({ message: 'Select an assignee in your access scope' });
+      }
+      input.assigneeUser = assignee._id;
+      input.assignee = assignee.name;
+      input.assigneeEmail = assignee.email;
+    }
     const payload = config.beforeCreate ? await config.beforeCreate(input) : input;
     const item = await config.model.create({ ...payload, createdBy: req.user.id });
     await writeAuditLog({
@@ -1112,7 +1185,7 @@ router.patch('/:resource/:id', async (req, res) => {
         return res.status(403).json({ message: 'Access denied: Admins only' });
       }
 
-      const employee = await User.findById(req.user.id).select('name email');
+      const employee = await User.findById(req.user.id).select('name email team communities role');
       if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
       const payload = {};
@@ -1135,7 +1208,11 @@ router.patch('/:resource/:id', async (req, res) => {
       const item = await BusinessProjectTask.findOneAndUpdate(
         {
           _id: req.params.id,
-          ...buildAssignedTaskQuery(employee),
+          ...(await buildEmployeeTaskScopeQuery(
+            employee,
+            getPermission(req.effectivePermissions, 'tasks', 'update'),
+            req.selectedCommunity,
+          )),
         },
         payload,
         {

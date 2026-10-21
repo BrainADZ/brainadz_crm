@@ -7,7 +7,9 @@ import {
   updateBusinessResource,
 } from '../services/businessApi';
 import { isDevelopmentProject, isDevelopmentTask } from '../utils/developmentTracker';
-import { getAuthenticatedRole, getCurrentCommunityKey } from '../utils/auth';
+import { getCurrentCommunityKey } from '../utils/auth';
+import { getMyAccess } from '../services/accessApi';
+import { canAccessResource } from '../utils/resourceAccess';
 
 const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
@@ -68,7 +70,7 @@ const Stat = ({ label, value, note }) => (
 );
 
 const ProjectsHub = () => {
-  const isAdmin = getAuthenticatedRole() === 'admin';
+  const [access, setAccess] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProject);
@@ -85,10 +87,14 @@ const ProjectsHub = () => {
     setIsLoading(true);
     setError('');
     try {
-      const [projectRows, taskRows] = await Promise.all([
+      const [projectRows, resolvedAccess] = await Promise.all([
         listBusinessResource('projects'),
-        listBusinessResource('project-tasks'),
+        getMyAccess(),
       ]);
+      const taskRows = canAccessResource(resolvedAccess, 'tasks')
+        ? await listBusinessResource('project-tasks')
+        : [];
+      setAccess(resolvedAccess);
       const developmentProjects = projectRows.filter(isDevelopmentProject);
       const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
       setProjects(developmentProjects);
@@ -99,6 +105,14 @@ const ProjectsHub = () => {
       setIsLoading(false);
     }
   }, []);
+
+  const canViewTasks = canAccessResource(access, 'tasks');
+  const canCreateProject = canAccessResource(access, 'projects', 'create');
+  const canDeleteProject = canAccessResource(access, 'projects', 'delete');
+  const canCreateTask = canAccessResource(access, 'tasks', 'create');
+  const canAssignTask = canAccessResource(access, 'tasks', 'assign');
+  const canUpdateTask = canAccessResource(access, 'tasks', 'update');
+  const canDeleteTask = canAccessResource(access, 'tasks', 'delete');
 
   useEffect(() => {
     loadData();
@@ -225,7 +239,7 @@ const ProjectsHub = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin && (
+          {canCreateProject && (
             <button
               type="button"
               onClick={() => setProjectModalOpen(true)}
@@ -235,14 +249,14 @@ const ProjectsHub = () => {
               Create Project
             </button>
           )}
-          {isAdmin && (
+          {canCreateTask && canViewTasks && (
             <button
               type="button"
               onClick={() => setTaskModalOpen(true)}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
             >
               <Plus size={16} strokeWidth={1.9} />
-              Assign Task
+              {canAssignTask ? 'Assign Task' : 'Create Task'}
             </button>
           )}
           <button
@@ -282,7 +296,7 @@ const ProjectsHub = () => {
               </p>
             </div>
             <div className="flex rounded-full border border-slate-300 p-1">
-              {['tasks', 'projects'].map((tab) => (
+              {(canViewTasks ? ['projects', 'tasks'] : ['projects']).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -336,7 +350,7 @@ const ProjectsHub = () => {
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <select
-                          disabled={!isAdmin}
+                          disabled={!canUpdateTask}
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold"
                           value={task.status}
                           onChange={(event) =>
@@ -357,7 +371,7 @@ const ProjectsHub = () => {
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <div className="flex items-center gap-2">
                           <input
-                            disabled={!isAdmin}
+                            disabled={!canUpdateTask}
                             type="number"
                             min="0"
                             max="100"
@@ -378,7 +392,7 @@ const ProjectsHub = () => {
                         </div>
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3">
-                        {isAdmin && (
+                        {canDeleteTask && (
                           <button
                             type="button"
                             className={iconButtonClass}
@@ -465,7 +479,7 @@ const ProjectsHub = () => {
                         {project.progress || 0}%
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3">
-                        {isAdmin && (
+                        {canDeleteProject && (
                           <button
                             type="button"
                             className={iconButtonClass}
@@ -599,8 +613,11 @@ const ProjectsHub = () => {
         </FormModal>
       )}
 
-      {taskModalOpen && (
-        <FormModal title="Assign Task" onClose={() => setTaskModalOpen(false)}>
+      {taskModalOpen && canCreateTask && (
+        <FormModal
+          title={canAssignTask ? 'Assign Task' : 'Create Task'}
+          onClose={() => setTaskModalOpen(false)}
+        >
           <form onSubmit={submitTask} className="space-y-5 p-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="sm:col-span-2">
@@ -628,14 +645,16 @@ const ProjectsHub = () => {
                   required
                 />
               </label>
-              <label>
-                <span className={labelClass}>Assignee</span>
-                <input
-                  className={inputClass}
-                  value={taskForm.assignee}
-                  onChange={(event) => handleTaskChange('assignee', event.target.value)}
-                />
-              </label>
+              {canAssignTask && (
+                <label>
+                  <span className={labelClass}>Assignee</span>
+                  <input
+                    className={inputClass}
+                    value={taskForm.assignee}
+                    onChange={(event) => handleTaskChange('assignee', event.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 <span className={labelClass}>Due</span>
                 <input
