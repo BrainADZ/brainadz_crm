@@ -1,6 +1,7 @@
 backend-dev*.log
 frontend-dev*.log
 node_modules/
+crm-backend/private-uploads/
 
 # Local credentials and machine-specific API URLs
 .env

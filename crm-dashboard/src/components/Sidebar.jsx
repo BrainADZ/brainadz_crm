@@ -23,7 +23,7 @@ import {
 
 import { getDemoRequestAccess } from '../services/demoRequestApi';
 import { getMyAccess } from '../services/accessApi';
-import { isSalesSession, isSuperAdminSession } from '../utils/auth';
+import { getAuthenticatedRole, isSalesSession, isSuperAdminSession } from '../utils/auth';
 import { canAccessResource } from '../utils/resourceAccess';
 
 const FULL_LOGO = '/main-logo.png';
@@ -194,6 +194,7 @@ const navItems = [
 ];
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
+  const adminSession = getAuthenticatedRole() === 'admin';
   const location = useLocation();
   const salesSession = isSalesSession();
 
@@ -288,15 +289,24 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         .map((item) => {
           const next = salesSession && item.exact ? { ...item, label: 'Sales Dashboard' } : item;
           if (next.id !== 'project-work') return next;
-          return {
-            ...next,
-            children: next.children.filter((child) =>
-              canAccessResource(resourceAccess, child.resourceKey),
-            ),
-          };
+          const children = next.children
+            .filter((child) => canAccessResource(resourceAccess, child.resourceKey))
+            .map((child) => {
+              if (adminSession && child.resourceKey === 'daily_reports')
+                return { ...child, label: 'Team Reports' };
+              if (!adminSession && child.resourceKey === 'projects')
+                return { ...child, label: 'My Projects' };
+              return child;
+            });
+
+          if (!adminSession && children.length === 1 && children[0].resourceKey === 'daily_reports') {
+            return { ...children[0], moduleKey: next.moduleKey };
+          }
+
+          return { ...next, children };
         })
         .filter((item) => !item.children || item.children.length > 0),
-    [salesSession, visibleModules, canViewDemoRequests, resourceAccess],
+    [adminSession, salesSession, visibleModules, canViewDemoRequests, resourceAccess],
   );
 
   const isActive = (item) => {

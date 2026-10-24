@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderKanban, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { FolderKanban, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
 import {
   createBusinessResource,
   deleteBusinessResource,
+  getMyProfile,
+  listDevelopmentProjectMembers,
   listBusinessResource,
   updateBusinessResource,
 } from '../services/businessApi';
-import { isDevelopmentProject, isDevelopmentTask } from '../utils/developmentTracker';
-import { getCurrentCommunityKey } from '../utils/auth';
+import { isDevelopmentProject, isDevelopmentTask, isMyTask } from '../utils/developmentTracker';
+import { getAuthenticatedRole, getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
 import { getMyAccess } from '../services/accessApi';
 import { canAccessResource } from '../utils/resourceAccess';
 
@@ -36,6 +38,7 @@ const priorities = ['High', 'Medium', 'Low'];
 
 const emptyProject = {
   name: '',
+  communityKey: '',
   client: '',
   owner: 'Project Manager',
   ownerEmail: '',
@@ -45,6 +48,7 @@ const emptyProject = {
   health: 'Healthy',
   progress: 0,
   notes: '',
+  memberUserIds: [],
 };
 
 const emptyTask = {
@@ -52,6 +56,7 @@ const emptyTask = {
   name: '',
   assignee: '',
   assigneeEmail: '',
+  assigneeUser: '',
   team: 'Delivery',
   due: new Date().toISOString().slice(0, 10),
   status: 'To Do',
@@ -70,9 +75,13 @@ const Stat = ({ label, value, note }) => (
 );
 
 const ProjectsHub = () => {
+  const [currentUser, setCurrentUser] = useState(getAuthenticatedUser);
   const [access, setAccess] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [membersProject, setMembersProject] = useState(null);
+  const [memberSelection, setMemberSelection] = useState([]);
   const [projectForm, setProjectForm] = useState(emptyProject);
   const [taskForm, setTaskForm] = useState(emptyTask);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -87,14 +96,22 @@ const ProjectsHub = () => {
     setIsLoading(true);
     setError('');
     try {
-      const [projectRows, resolvedAccess] = await Promise.all([
+      const [projectRows, resolvedAccess, profile] = await Promise.all([
         listBusinessResource('projects'),
         getMyAccess(),
+        getMyProfile(),
       ]);
-      const taskRows = canAccessResource(resolvedAccess, 'tasks')
-        ? await listBusinessResource('project-tasks')
-        : [];
+      const [taskRows, memberRows] = await Promise.all([
+        canAccessResource(resolvedAccess, 'tasks')
+          ? listBusinessResource('project-tasks')
+          : Promise.resolve([]),
+        (canAccessResource(resolvedAccess, 'projects', 'create') || canAccessResource(resolvedAccess, 'tasks', 'assign'))
+          ? listDevelopmentProjectMembers()
+          : Promise.resolve([]),
+      ]);
       setAccess(resolvedAccess);
+      setCurrentUser(profile);
+      setMembers(memberRows);
       const developmentProjects = projectRows.filter(isDevelopmentProject);
       const projectIds = new Set(developmentProjects.map((project) => String(project._id)));
       setProjects(developmentProjects);
@@ -108,11 +125,22 @@ const ProjectsHub = () => {
 
   const canViewTasks = canAccessResource(access, 'tasks');
   const canCreateProject = canAccessResource(access, 'projects', 'create');
+  const canManageMembers = getAuthenticatedRole() === 'admin' && canAccessResource(access, 'projects', 'update');
   const canDeleteProject = canAccessResource(access, 'projects', 'delete');
   const canCreateTask = canAccessResource(access, 'tasks', 'create');
   const canAssignTask = canAccessResource(access, 'tasks', 'assign');
-  const canUpdateTask = canAccessResource(access, 'tasks', 'update');
+  const canUpdateTask = getAuthenticatedRole() !== 'admin' && canAccessResource(access, 'tasks', 'update');
+  const canReassignTask = getAuthenticatedRole() === 'admin' && canAccessResource(access, 'tasks', 'update');
+  const canEditTask = (task) => canUpdateTask && isMyTask(task, currentUser);
   const canDeleteTask = canAccessResource(access, 'tasks', 'delete');
+  const taskProject = projects.find((project) => String(project._id) === String(taskForm.project));
+  const communityOptions = currentUser?.communities?.length ? currentUser.communities : ['marketing', 'live', 'exhibition'];
+  const selectedProjectCommunity = projectForm.communityKey || getCurrentCommunityKey() || communityOptions[0];
+  const projectMemberOptions = members.filter((member) => member.communities?.includes(selectedProjectCommunity));
+  const existingProjectMemberOptions = members.filter((member) => member.communities?.includes(membersProject?.communityKey));
+  const taskAssignees = members.filter((member) =>
+    taskProject?.memberUserIds?.some((id) => String(id) === String(member._id)),
+  );
 
   useEffect(() => {
     loadData();
@@ -136,13 +164,26 @@ const ProjectsHub = () => {
   }, [projects, tasks]);
 
   const handleProjectChange = (name, value) => {
-    setProjectForm((previous) => ({ ...previous, [name]: value }));
+    setProjectForm((previous) => ({ ...previous, [name]: value, ...(name === 'communityKey' ? { memberUserIds: [] } : {}) }));
     setMessage('');
     setError('');
   };
 
+  const toggleProjectMember = (memberId) => {
+    setProjectForm((previous) => ({
+      ...previous,
+      memberUserIds: previous.memberUserIds.includes(memberId)
+        ? previous.memberUserIds.filter((id) => id !== memberId)
+        : [...previous.memberUserIds, memberId],
+    }));
+  };
+
   const handleTaskChange = (name, value) => {
-    setTaskForm((previous) => ({ ...previous, [name]: value }));
+    setTaskForm((previous) => ({
+      ...previous,
+      [name]: value,
+      ...(name === 'project' ? { assigneeUser: '' } : {}),
+    }));
     setMessage('');
     setError('');
   };
@@ -153,9 +194,13 @@ const ProjectsHub = () => {
     setMessage('');
     setError('');
     try {
+      if (!projectForm.memberUserIds.length) {
+        setError('Select at least one project member');
+        return;
+      }
       const response = await createBusinessResource('projects', {
         ...projectForm,
-        communityKey: getCurrentCommunityKey(),
+        communityKey: selectedProjectCommunity,
         officeModule: 'Development',
         team: 'Development Team',
       });
@@ -170,6 +215,27 @@ const ProjectsHub = () => {
     }
   };
 
+  const saveProjectMembers = async (event) => {
+    event.preventDefault();
+    if (!membersProject || !memberSelection.length) return;
+    setIsSaving(true);
+    setError('');
+    try {
+      const response = await updateBusinessResource('projects', membersProject._id, {
+        memberUserIds: memberSelection,
+      });
+      setProjects((previous) => previous.map((project) =>
+        project._id === membersProject._id ? response.item : project,
+      ));
+      setMembersProject(null);
+      setMessage('Project members updated');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to update project members');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const submitTask = async (event) => {
     event.preventDefault();
     setIsSaving(true);
@@ -177,6 +243,10 @@ const ProjectsHub = () => {
     setError('');
     try {
       const project = projects.find((item) => item._id === taskForm.project);
+      if (!project || !taskForm.assigneeUser) {
+        setError('Select a project and one of its members');
+        return;
+      }
       const response = await createBusinessResource('project-tasks', {
         ...taskForm,
         communityKey: project?.communityKey || getCurrentCommunityKey(),
@@ -196,6 +266,7 @@ const ProjectsHub = () => {
   };
 
   const updateTask = async (task, patch) => {
+    if (!canEditTask(task)) return;
     setMessage('');
     setError('');
     try {
@@ -206,6 +277,18 @@ const ProjectsHub = () => {
       setMessage('Task updated');
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Unable to update task');
+    }
+  };
+
+  const reassignTask = async (task, assigneeUser) => {
+    if (!canReassignTask || !assigneeUser) return;
+    setError('');
+    try {
+      const response = await updateBusinessResource('project-tasks', task._id, { assigneeUser });
+      setTasks((previous) => previous.map((item) => item._id === task._id ? response.item : item));
+      setMessage('Task reassigned');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to reassign task');
     }
   };
 
@@ -232,7 +315,9 @@ const ProjectsHub = () => {
           </span>
           <div>
             <p className="text-xs font-semibold text-slate-500">Development team tracker</p>
-            <h1 className="text-2xl font-bold text-slate-950">Development Projects</h1>
+            <h1 className="text-2xl font-bold text-slate-950">
+              {getAuthenticatedRole() === 'admin' ? 'Development Projects' : 'My Projects'}
+            </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
               Track development projects, delivery stages, deadlines, milestones and progress.
             </p>
@@ -249,7 +334,7 @@ const ProjectsHub = () => {
               Create Project
             </button>
           )}
-          {canCreateTask && canViewTasks && (
+          {canCreateTask && canAssignTask && canViewTasks && (
             <button
               type="button"
               onClick={() => setTaskModalOpen(true)}
@@ -292,7 +377,9 @@ const ProjectsHub = () => {
                 {activeTab === 'tasks' ? 'Project Tasks' : 'Project List'}
               </h2>
               <p className="mt-1 text-xs font-medium text-slate-500">
-                Update task progress and status inline.
+                {getAuthenticatedRole() === 'admin'
+                  ? 'Review project and task progress. Assigned employees update their tasks.'
+                  : 'Update progress and status on your assigned tasks.'}
               </p>
             </div>
             <div className="flex rounded-full border border-slate-300 p-1">
@@ -343,14 +430,23 @@ const ProjectsHub = () => {
                         {task.projectName || '-'}
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
-                        {task.assignee || '-'}
+                        {canReassignTask ? (
+                          <select
+                            value={task.assigneeUser || ''}
+                            onChange={(event) => reassignTask(task, event.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold"
+                            aria-label={`Assignee for ${task.name}`}
+                          >
+                            <option value="">{task.assignee || 'Select member'}</option>
+                            {members.filter((member) => projects.find((project) => String(project._id) === String(task.project))?.memberUserIds?.some((id) => String(id) === String(member._id))).map((member) => <option key={member._id} value={member._id}>{member.name}</option>)}
+                          </select>
+                        ) : task.assignee || '-'}
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         {task.due || '-'}
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
-                        <select
-                          disabled={!canUpdateTask}
+                        {canEditTask(task) ? <select
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold"
                           value={task.status}
                           onChange={(event) =>
@@ -363,15 +459,14 @@ const ProjectsHub = () => {
                           {taskStatuses.map((status) => (
                             <option key={status}>{status}</option>
                           ))}
-                        </select>
+                        </select> : <span className="text-xs font-semibold text-slate-700">{task.status}</span>}
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         {task.priority}
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <input
-                            disabled={!canUpdateTask}
+                          {canEditTask(task) ? <input
                             type="number"
                             min="0"
                             max="100"
@@ -382,7 +477,7 @@ const ProjectsHub = () => {
                               })
                             }
                             className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold"
-                          />
+                          /> : <span className="w-16 text-xs font-semibold text-slate-700">{task.progress || 0}%</span>}
                           <div className="h-1.5 w-20 rounded-full bg-slate-100">
                             <div
                               className="h-1.5 rounded-full bg-blue-600"
@@ -457,6 +552,9 @@ const ProjectsHub = () => {
                     <tr key={project._id} className="bg-white transition hover:bg-blue-50/40">
                       <td className="border-b border-r border-slate-200 px-4 py-3 font-bold text-blue-700">
                         {project.name}
+                        <span className="mt-1 block text-xs font-medium text-slate-500">
+                          {project.memberUserIds?.length || 0} members
+                        </span>
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         {project.client}
@@ -479,6 +577,19 @@ const ProjectsHub = () => {
                         {project.progress || 0}%
                       </td>
                       <td className="border-b border-slate-200 px-4 py-3">
+                        {canManageMembers && (
+                          <button
+                            type="button"
+                            className={iconButtonClass}
+                            onClick={() => {
+                              setMembersProject(project);
+                              setMemberSelection((project.memberUserIds || []).map(String));
+                            }}
+                            title="Manage project members"
+                          >
+                            <Users size={15} strokeWidth={1.9} />
+                          </button>
+                        )}
                         {canDeleteProject && (
                           <button
                             type="button"
@@ -530,6 +641,12 @@ const ProjectsHub = () => {
                   onChange={(event) => handleProjectChange('client', event.target.value)}
                   required
                 />
+              </label>
+              <label>
+                <span className={labelClass}>Work area</span>
+                <select className={inputClass} value={selectedProjectCommunity} onChange={(event) => handleProjectChange('communityKey', event.target.value)} required>
+                  {communityOptions.map((key) => <option key={key} value={key}>{key === 'live' ? 'Live / Events' : key.charAt(0).toUpperCase() + key.slice(1)}</option>)}
+                </select>
               </label>
               <label>
                 <span className={labelClass}>Owner</span>
@@ -595,6 +712,18 @@ const ProjectsHub = () => {
                   onChange={(event) => handleProjectChange('progress', Number(event.target.value))}
                 />
               </label>
+              <fieldset className="sm:col-span-2">
+                <legend className={labelClass}>Team members involved *</legend>
+                <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-300 p-2">
+                  {projectMemberOptions.map((member) => (
+                    <label key={member._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                      <input type="checkbox" checked={projectForm.memberUserIds.includes(String(member._id))} onChange={() => toggleProjectMember(String(member._id))} />
+                      <span>{member.name} <span className="text-xs text-slate-500">{member.email}</span></span>
+                    </label>
+                  ))}
+                  {!projectMemberOptions.length && <p className="px-2 py-2 text-sm text-slate-500">No development employees are available in this work area.</p>}
+                </div>
+              </fieldset>
               <label className="sm:col-span-2">
                 <span className={labelClass}>Notes</span>
                 <textarea
@@ -609,6 +738,23 @@ const ProjectsHub = () => {
               isSaving={isSaving}
               submitLabel="Create Project"
             />
+          </form>
+        </FormModal>
+      )}
+
+      {membersProject && (
+        <FormModal title={`Project team · ${membersProject.name}`} onClose={() => setMembersProject(null)}>
+          <form onSubmit={saveProjectMembers} className="space-y-4 p-5">
+            <p className="text-sm text-slate-600">Choose the employees involved in this project. Tasks can then be assigned to these members.</p>
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-300 p-2">
+              {existingProjectMemberOptions.map((member) => (
+                <label key={member._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                  <input type="checkbox" checked={memberSelection.includes(String(member._id))} onChange={() => setMemberSelection((current) => current.includes(String(member._id)) ? current.filter((id) => id !== String(member._id)) : [...current, String(member._id)])} />
+                  <span>{member.name} <span className="text-xs text-slate-500">{member.email}</span></span>
+                </label>
+              ))}
+            </div>
+            <ModalActions onCancel={() => setMembersProject(null)} isSaving={isSaving} submitLabel="Save members" />
           </form>
         </FormModal>
       )}
@@ -647,12 +793,17 @@ const ProjectsHub = () => {
               </label>
               {canAssignTask && (
                 <label>
-                  <span className={labelClass}>Assignee</span>
-                  <input
+                  <span className={labelClass}>Assign to project member</span>
+                  <select
                     className={inputClass}
-                    value={taskForm.assignee}
-                    onChange={(event) => handleTaskChange('assignee', event.target.value)}
-                  />
+                    value={taskForm.assigneeUser}
+                    onChange={(event) => handleTaskChange('assigneeUser', event.target.value)}
+                    required
+                  >
+                    <option value="">Select team member</option>
+                    {taskAssignees.map((member) => <option key={member._id} value={member._id}>{member.name}</option>)}
+                  </select>
+                  {taskForm.project && !taskAssignees.length && <span className="mt-1 block text-xs text-amber-700">Add members to this project first.</span>}
                 </label>
               )}
               <label>

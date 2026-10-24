@@ -22,7 +22,7 @@ import {
   listBusinessResource,
   updateBusinessResource,
 } from '../services/businessApi';
-import { getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
+import { getAuthenticatedRole, getAuthenticatedUser, getCurrentCommunityKey } from '../utils/auth';
 import { isDevelopmentProject, isDevelopmentTask, isMyTask } from '../utils/developmentTracker';
 import { getMyAccess } from '../services/accessApi';
 import { canAccessResource } from '../utils/resourceAccess';
@@ -105,6 +105,7 @@ const Modal = ({ title, children, onClose }) => (
 );
 
 const AdminTasks = ({ view = 'my' }) => {
+  const isAdmin = getAuthenticatedRole() === 'admin';
   const [currentUser, setCurrentUser] = useState(getAuthenticatedUser);
   const [access, setAccess] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -161,9 +162,14 @@ const AdminTasks = ({ view = 'my' }) => {
 
   const canCreateTask = canAccessResource(access, 'tasks', 'create');
   const canAssignTask = canAccessResource(access, 'tasks', 'assign');
-  const canUpdateTask = canAccessResource(access, 'tasks', 'update');
+  const canUpdateTask = !isAdmin && canAccessResource(access, 'tasks', 'update');
   const canDeleteTask = canAccessResource(access, 'tasks', 'delete');
   const canExportTask = canAccessResource(access, 'tasks', 'export');
+  const canMoveTask = (task) => canUpdateTask && isMyTask(task, currentUser);
+  const selectedTaskProject = projects.find((project) => String(project._id) === String(taskForm.project));
+  const projectAssignees = employees.filter((employee) =>
+    selectedTaskProject?.memberUserIds?.some((id) => String(id) === String(employee._id)),
+  );
 
   useEffect(() => {
     fetchWorkspace();
@@ -306,6 +312,10 @@ const AdminTasks = ({ view = 'my' }) => {
       const selectedProject = projects.find(
         (project) => String(project._id) === String(taskForm.project),
       );
+      if (!selectedProject || !selectedEmployee || !selectedProject.memberUserIds?.some((id) => String(id) === String(selectedEmployee._id))) {
+        setError('Select a project and one of its members');
+        return;
+      }
       const progress = taskForm.status === 'Complete' ? 100 : clampProgress(taskForm.progress);
 
       await createBusinessResource('project-tasks', {
@@ -314,6 +324,7 @@ const AdminTasks = ({ view = 'my' }) => {
         officeModule: 'Development',
         project: selectedProject?._id || undefined,
         projectName: selectedProject?.name || 'General Task',
+        assigneeUser: selectedEmployee._id,
         assignee: selectedEmployee?.name || taskForm.assignee,
         assigneeEmail: selectedEmployee?.email || taskForm.assigneeEmail,
         team: taskForm.team,
@@ -332,6 +343,7 @@ const AdminTasks = ({ view = 'my' }) => {
   };
 
   const updateTask = async (task, patch) => {
+    if (!canMoveTask(task)) return;
     const nextPatch = { ...patch };
     if (nextPatch.progress !== undefined) nextPatch.progress = clampProgress(nextPatch.progress);
     if (nextPatch.status === 'Complete' && nextPatch.progress === undefined)
@@ -357,6 +369,10 @@ const AdminTasks = ({ view = 'my' }) => {
   };
 
   const startTaskDrag = (event, task) => {
+    if (!canMoveTask(task)) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', task._id);
     setDraggedTaskId(task._id);
@@ -369,6 +385,7 @@ const AdminTasks = ({ view = 'my' }) => {
   };
 
   const handleStatusDragOver = (event, status) => {
+    if (!draggedTaskId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     setActiveDropStatus(status);
@@ -379,7 +396,7 @@ const AdminTasks = ({ view = 'my' }) => {
     const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
     const task = tasks.find((item) => item._id === taskId);
     finishTaskDrag();
-    if (!task || task.status === status) return;
+    if (!task || !canMoveTask(task) || task.status === status) return;
     await updateTask(task, { status });
   };
 
@@ -483,7 +500,7 @@ const AdminTasks = ({ view = 'my' }) => {
               className="h-10 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          {canCreateTask && (
+          {canCreateTask && canAssignTask && !(isAdmin && view === 'board') && (
             <button
               type="button"
               onClick={openTaskModal}
@@ -667,7 +684,7 @@ const AdminTasks = ({ view = 'my' }) => {
                       </td>
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <select
-                          disabled={!canUpdateTask}
+                          disabled={!canMoveTask(task)}
                           value={task.status}
                           onChange={(event) => updateTask(task, { status: event.target.value })}
                           className={`w-full rounded-lg border px-2 py-1.5 text-xs font-bold outline-none ${statusTone[task.status] || statusTone.Backlog}`}
@@ -682,7 +699,7 @@ const AdminTasks = ({ view = 'my' }) => {
                       <td className="border-b border-r border-slate-200 px-4 py-3">
                         <div className="flex items-center gap-3">
                           <input
-                            disabled={!canUpdateTask}
+                            disabled={!canMoveTask(task)}
                             type="number"
                             min="0"
                             max="100"
@@ -745,7 +762,9 @@ const AdminTasks = ({ view = 'my' }) => {
             <div className="border-b border-slate-300 px-4 py-3">
             <h2 className="text-base font-bold text-slate-950">Workload Board</h2>
               <p className="mt-1 text-xs font-medium text-slate-500">
-                Drag tasks between stages to update the development workflow.
+                {isAdmin
+                  ? 'Review development task progress. Assigned employees update their tasks.'
+                  : 'Drag your assigned tasks between stages to update progress.'}
               </p>
             </div>
             <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-5">
@@ -771,11 +790,11 @@ const AdminTasks = ({ view = 'my' }) => {
                     {column.tasks.map((task) => (
                       <div
                         key={task._id}
-                        draggable={canUpdateTask}
+                        draggable={canMoveTask(task)}
                         onDragStart={(event) => startTaskDrag(event, task)}
                         onDragEnd={finishTaskDrag}
-                        title="Move task"
-                        className={`cursor-grab select-none rounded-md border border-slate-200 bg-white p-3 shadow-sm transition active:cursor-grabbing ${
+                        title={canMoveTask(task) ? 'Move your task' : 'View task'}
+                        className={`${canMoveTask(task) ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} select-none rounded-md border border-slate-200 bg-white p-3 shadow-sm transition ${
                           draggedTaskId === task._id
                             ? 'opacity-50 ring-2 ring-blue-200'
                             : 'hover:border-blue-200 hover:shadow-md'
@@ -783,7 +802,7 @@ const AdminTasks = ({ view = 'my' }) => {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex min-w-0 items-start gap-2">
-                            <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            {canMoveTask(task) && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />}
                             <p className="min-w-0 text-sm font-bold text-slate-950">{task.name}</p>
                           </div>
                           <span
@@ -843,10 +862,11 @@ const AdminTasks = ({ view = 'my' }) => {
                 <span className={labelClass}>Project</span>
                 <select
                   value={taskForm.project}
-                  onChange={(event) => updateForm('project', event.target.value)}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, project: event.target.value, assignee: '' }))}
                   className={inputClass}
+                  required
                 >
-                  <option value="">General Task</option>
+                  <option value="">Select project</option>
                   {projects.map((project) => (
                     <option key={project._id} value={project._id}>
                       {project.name}
@@ -861,9 +881,10 @@ const AdminTasks = ({ view = 'my' }) => {
                     value={taskForm.assignee}
                     onChange={(event) => updateForm('assignee', event.target.value)}
                     className={inputClass}
+                    required
                   >
-                    <option value="">Assign to myself</option>
-                    {employees.map((employee) => (
+                    <option value="">Select project member</option>
+                    {projectAssignees.map((employee) => (
                       <option
                         key={employee._id || employee.email}
                         value={employee._id || employee.email}

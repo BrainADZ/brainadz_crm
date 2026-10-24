@@ -27,6 +27,13 @@ export const listDevelopmentDailyReports = async () => {
   return response.data;
 };
 
+export const getDevelopmentReportOptions = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/report-options`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
 export const listDevelopmentTeamMembers = async () => {
   const response = await axios.get(`${API_BASE_URL}/api/business/development/team-members`, {
     headers: getAdminHeaders(),
@@ -36,6 +43,13 @@ export const listDevelopmentTeamMembers = async () => {
 
 export const listDevelopmentAssignees = async () => {
   const response = await axios.get(`${API_BASE_URL}/api/business/development/assignees`, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
+export const listDevelopmentProjectMembers = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/project-members`, {
     headers: getAdminHeaders(),
   });
   return response.data;
@@ -55,6 +69,28 @@ export const saveDevelopmentDailyReport = async (date, payload) => {
     { headers: getAdminHeaders() },
   );
   return response.data;
+};
+
+export const uploadDevelopmentReportAttachments = async (date, communityKey, files) => {
+  const form = new FormData();
+  form.append('communityKey', communityKey);
+  files.forEach((file) => form.append('files', file));
+  const response = await axios.post(`${API_BASE_URL}/api/business/development/daily-reports/${date}/attachments`, form, {
+    headers: getAdminHeaders(),
+  });
+  return response.data;
+};
+
+export const downloadDevelopmentReportAttachment = async (reportId, attachment) => {
+  const response = await axios.get(`${API_BASE_URL}/api/business/development/daily-reports/${reportId}/attachments/${attachment._id}`, {
+    headers: getAdminHeaders(), responseType: 'blob',
+  });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = attachment.name;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 export const listBusinessResource = async (resource) => {

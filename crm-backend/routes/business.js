@@ -1,5 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const multer = require('multer');
 const ClientDataset = require('../models/ClientDataset');
 const Meeting = require('../models/Meeting');
 const User = require('../models/User');
@@ -26,6 +30,15 @@ const { writeAuditLog } = require('../services/auditService');
 const { ensureAccessFoundation } = require('../services/organizationAccessService');
 
 const router = express.Router();
+const reportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 3 } });
+const reportFileTypes = { 'image/png': '.png', 'image/jpeg': '.jpg', 'application/pdf': '.pdf' };
+const reportFilesDirectory = path.join(__dirname, '..', 'private-uploads', 'daily-reports');
+const validReportFile = (file) => {
+  if (file.mimetype === 'image/png') return file.buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  if (file.mimetype === 'image/jpeg') return file.buffer.subarray(0, 3).equals(Buffer.from([255, 216, 255]));
+  if (file.mimetype === 'application/pdf') return file.buffer.subarray(0, 5).toString() === '%PDF-';
+  return false;
+};
 
 const taskStatuses = ['Backlog', 'To Do', 'In Progress', 'Review', 'Complete'];
 
@@ -498,8 +511,58 @@ const getWorkStructure = async () => {
 };
 
 const buildAssignedTaskQuery = (employee) => ({
-  $or: [{ assigneeEmail: employee.email }, { assignee: employee.name }],
+  $or: [
+    { assigneeUser: employee._id || employee.id },
+    { assignedUserIds: employee._id || employee.id },
+    ...(employee.email ? [{ assigneeEmail: employee.email }] : []),
+    ...(employee.name ? [{ assignee: employee.name }] : []),
+  ],
 });
+
+const buildProjectMembershipQuery = (employee, taskProjectIds = []) => ({
+  $or: [
+    { ownerUser: employee._id || employee.id },
+    { memberUserIds: employee._id || employee.id },
+    ...(employee.email
+      ? [{ ownerEmail: employee.email }, { 'assignedTeam.email': employee.email }]
+      : []),
+    { _id: { $in: taskProjectIds } },
+  ],
+});
+
+const getDevelopmentProjectMembers = async (ids, communityKey, user, permission) => {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 100 || ids.some((id) => !mongoose.isValidObjectId(id)))
+    return null;
+  const uniqueIds = [...new Set(ids.map(String))];
+  const members = await User.find({
+    ...buildDevelopmentMemberQuery(user, permission, [communityKey]),
+    _id: { $in: uniqueIds },
+  }).select('_id name email communities');
+  return members.length === uniqueIds.length ? members : null;
+};
+
+const getDailyReportAssignments = async (employee, communityKey) => {
+  const tasks = await BusinessProjectTask.find({
+    communityKey,
+    officeModule: { $in: ['Development', 'Projects'] },
+    ...buildAssignedTaskQuery(employee),
+  }).select('_id project name status projectName');
+  const taskProjectIds = tasks.map((task) => task.project).filter(Boolean);
+  const projects = await BusinessProject.find({
+    communityKey,
+    officeModule: { $in: ['Development', 'Projects'] },
+    $or: [
+      { _id: { $in: taskProjectIds } },
+      { ownerUser: employee._id || employee.id },
+      { memberUserIds: employee._id || employee.id },
+      ...(employee.email
+        ? [{ ownerEmail: employee.email }, { 'assignedTeam.email': employee.email }]
+        : []),
+    ],
+  }).select('_id name client communityKey');
+  const projectIds = new Set(projects.map((project) => String(project._id)));
+  return { projects, tasks: tasks.filter((task) => projectIds.has(String(task.project))) };
+};
 
 const buildEmployeeTaskScopeQuery = async (employee, permission, selectedCommunity) => {
   const communityKey = { $in: getAuthorizedCommunities(employee, selectedCommunity) };
@@ -946,15 +1009,44 @@ router.get('/development/daily-reports', async (req, res) => {
   try {
     if (!getPermission(req.effectivePermissions, 'daily_reports', 'view'))
       return res.status(403).json({ message: 'Access denied: daily_reports.view required' });
-    const communityKey =
-      req.selectedCommunity || req.user.primaryCommunity || getAuthorizedCommunities(req.user)[0];
-    if (!getAuthorizedCommunities(req.user).includes(communityKey))
-      return res.status(403).json({ message: 'Community access denied' });
-    const reports = await DevelopmentDailyReport.find({
-      user: req.user.id,
-      communityKey,
-    }).sort({ reportDate: -1, updatedAt: -1 });
-    return res.json(reports);
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const query = { communityKey: { $in: communities } };
+    if (req.user.role !== 'admin') {
+      query.user = req.user.id;
+    }
+    const reports = await DevelopmentDailyReport.find(query)
+      .populate('user', 'name email role roleKey team officeModule')
+      .populate('project', 'name client')
+      .sort({ reportDate: -1, updatedAt: -1 });
+    return res.json(req.user.role === 'admin'
+      ? reports.filter((report) => report.user?.role !== 'admin')
+      : reports);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.get('/development/report-options', async (req, res) => {
+  try {
+    if (req.user.role === 'admin')
+      return res.status(403).json({ message: 'Administrators review reports; employees submit them' });
+    if (!getPermission(req.effectivePermissions, 'daily_reports', 'view'))
+      return res.status(403).json({ message: 'Access denied: daily_reports.view required' });
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const employee = await User.findById(req.user.id).select('name email');
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    const results = await Promise.all(communities.map((communityKey) => getDailyReportAssignments(employee, communityKey)));
+    const assignments = {
+      projects: results.flatMap((result) => result.projects),
+      tasks: results.flatMap((result) => result.tasks),
+    };
+    const reportingOnly =
+      !getPermission(req.effectivePermissions, 'projects', 'view') &&
+      !getPermission(req.effectivePermissions, 'tasks', 'view');
+    return res.json({
+      ...assignments,
+      allowGeneralReporting: reportingOnly && assignments.projects.length === 0,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -989,6 +1081,20 @@ router.get('/development/assignees', async (req, res) => {
   }
 });
 
+router.get('/development/project-members', async (req, res) => {
+  try {
+    const permission = getPermission(req.effectivePermissions, 'projects', 'create') ||
+      getPermission(req.effectivePermissions, 'tasks', 'assign');
+    if (!permission)
+      return res.status(403).json({ message: 'Access denied: project creation or task assignment required' });
+    const communities = getAuthorizedCommunities(req.user, req.selectedCommunity);
+    const query = buildDevelopmentMemberQuery(req.user, permission, communities);
+    return res.json(await User.find(query).select('_id name email team communities').sort({ name: 1 }));
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
 router.get('/development/workload-tasks', async (req, res) => {
   try {
     const permission = getPermission(req.effectivePermissions, 'team_workload', 'view');
@@ -1013,6 +1119,8 @@ router.get('/development/workload-tasks', async (req, res) => {
 
 router.put('/development/daily-reports/:date', async (req, res) => {
   try {
+    if (req.user.role === 'admin')
+      return res.status(403).json({ message: 'Administrators can review reports only' });
     const reportDate = String(req.params.date || '');
     const parsedDate = new Date(`${reportDate}T00:00:00Z`);
     const todayInIndia = new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
@@ -1033,46 +1141,126 @@ router.put('/development/daily-reports/:date', async (req, res) => {
     if (!getAuthorizedCommunities(req.user).includes(communityKey))
       return res.status(403).json({ message: 'Community access denied' });
     const reportKey = { communityKey, user: req.user.id, reportDate };
-    const existing = await DevelopmentDailyReport.exists(reportKey);
+    const existing = await DevelopmentDailyReport.findOne(reportKey);
+    if (existing && existing.status !== 'draft')
+      return res.status(409).json({ message: 'This report is submitted and cannot be edited' });
     const action = existing ? 'update' : 'create';
     if (!getPermission(req.effectivePermissions, 'daily_reports', action))
       return res.status(403).json({ message: `Access denied: daily_reports.${action} required` });
-    const completedWork = String(req.body.completedWork || '').trim();
-    const hoursWorked = Number(req.body.hoursWorked || 0);
-    if (
-      !completedWork ||
-      completedWork.length > 5000 ||
-      !Number.isFinite(hoursWorked) ||
-      hoursWorked < 0 ||
-      hoursWorked > 24
-    )
-      return res.status(400).json({ message: 'Completed work and valid hours are required' });
-    const taskIds = Array.isArray(req.body.taskIds) ? req.body.taskIds : [];
-    if (taskIds.length > 100 || taskIds.some((id) => !mongoose.isValidObjectId(id)))
-      return res.status(400).json({ message: 'Invalid task selection' });
+    const status = req.body.status === 'draft' ? 'draft' : 'submitted';
+    const rawEntries = Array.isArray(req.body.entries) ? req.body.entries : [];
+    if (!rawEntries.length || rawEntries.length > 30)
+      return res.status(400).json({ message: 'Add at least one work entry (maximum 30)' });
+    const additionalNotes = String(req.body.additionalNotes || '').trim();
+    if (additionalNotes.length > 3000)
+      return res.status(400).json({ message: 'Additional notes are too long' });
     const reportOwner = await User.findById(req.user.id).select('name email');
-    const assignedTasks = await BusinessProjectTask.find({
-      _id: { $in: taskIds },
-      communityKey,
-      ...buildAssignedTaskQuery(reportOwner),
-    }).select('_id');
-    if (assignedTasks.length !== new Set(taskIds.map(String)).size)
-      return res.status(400).json({ message: 'Select only your accessible tasks' });
-    const payload = {
-      taskIds,
-      completedWork,
-      blockers: String(req.body.blockers || '').trim(),
-      nextPlan: String(req.body.nextPlan || '').trim(),
-      hoursWorked,
-    };
-    const report = await DevelopmentDailyReport.findOneAndUpdate(
-      reportKey,
-      { $set: payload },
-      { upsert: true, new: true, runValidators: true },
-    );
-    return res.json({ message: 'Daily report saved', item: report });
+    if (!reportOwner) return res.status(404).json({ message: 'Employee not found' });
+    const assignments = await getDailyReportAssignments(reportOwner, communityKey);
+    const generalReportingAllowed =
+      assignments.projects.length === 0 &&
+      !getPermission(req.effectivePermissions, 'projects', 'view') &&
+      !getPermission(req.effectivePermissions, 'tasks', 'view');
+    const entries = [];
+    let totalHours = 0;
+    for (const raw of rawEntries) {
+      const projectId = String(raw.project || '');
+      const taskId = String(raw.task || '');
+      const workType = String(raw.workType || '');
+      const workSummary = String(raw.workSummary || '').trim();
+      const hoursSpent = Number(raw.hoursSpent);
+      if ((!projectId && !generalReportingAllowed) || (projectId && !mongoose.isValidObjectId(projectId)))
+        return res.status(400).json({ message: 'Select an assigned project for each entry' });
+      const project = assignments.projects.find((item) => String(item._id) === projectId);
+      if (projectId && !project) return res.status(403).json({ message: 'Project is not assigned to you' });
+      if (taskId && !mongoose.isValidObjectId(taskId))
+        return res.status(400).json({ message: 'Invalid task selection' });
+      const task = assignments.tasks.find((item) => String(item._id) === taskId && String(item.project) === projectId);
+      if (taskId && !task)
+        return res.status(400).json({ message: 'Select only assigned tasks from this project' });
+      if (!['Development', 'Testing', 'Meeting', 'Others'].includes(workType) ||
+          !workSummary || workSummary.length > 5000 ||
+          !Number.isFinite(hoursSpent) || hoursSpent < 0.25 || hoursSpent > 24)
+        return res.status(400).json({ message: 'Each entry needs a work type, summary and valid hours' });
+      totalHours += hoursSpent;
+      entries.push({ project: project?._id || null, projectName: project?.name || 'General work',
+        task: task?._id || null, taskName: task?.name || '', workType, workSummary, hoursSpent });
+    }
+    if (totalHours > 24) return res.status(400).json({ message: 'Daily hours cannot exceed 24' });
+    const payload = { entries, additionalNotes, status, hoursWorked: totalHours,
+      submittedAt: status === 'submitted' ? new Date() : null };
+    const report = existing
+      ? await DevelopmentDailyReport.findOneAndUpdate({ ...reportKey, status: 'draft' }, { $set: payload }, { new: true, runValidators: true })
+      : await DevelopmentDailyReport.create({ ...reportKey, ...payload });
+    if (!report) return res.status(409).json({ message: 'This report is submitted and cannot be edited' });
+    return res.json({ message: status === 'draft' ? 'Draft saved' : 'Daily report submitted', item: report });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ message: 'A report already exists for this date' });
     return res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+router.post('/development/daily-reports/:date/attachments', (req, res, next) => {
+  reportUpload.array('files', 3)(req, res, (error) => {
+    if (error) return res.status(400).json({ message: error.code === 'LIMIT_FILE_SIZE' ? 'Each file must be 2 MB or smaller' : 'Select up to three valid files' });
+    next();
+  });
+}, async (req, res) => {
+  const written = [];
+  try {
+    if (req.user.role === 'admin') return res.status(403).json({ message: 'Employees may attach files to their drafts' });
+    if (!getPermission(req.effectivePermissions, 'daily_reports', 'update'))
+      return res.status(403).json({ message: 'Access denied: daily_reports.update required' });
+    const communityKey = String(req.body.communityKey || '').toLowerCase();
+    if (!getAuthorizedCommunities(req.user).includes(communityKey))
+      return res.status(403).json({ message: 'Community access denied' });
+    const report = await DevelopmentDailyReport.findOne({ communityKey, user: req.user.id, reportDate: req.params.date });
+    if (!report || report.status !== 'draft')
+      return res.status(409).json({ message: 'Attachments can only be added to a draft report' });
+    const files = req.files || [];
+    if (!files.length || (report.attachments?.length || 0) + files.length > 3)
+      return res.status(400).json({ message: 'Select up to three files per report' });
+    if (files.some((file) => !validReportFile(file)))
+      return res.status(400).json({ message: 'Only PNG, JPG and PDF files are supported' });
+    await fs.mkdir(reportFilesDirectory, { recursive: true });
+    const attachments = [];
+    for (const file of files) {
+      const storageName = `${randomUUID()}${reportFileTypes[file.mimetype]}`;
+      await fs.writeFile(path.join(reportFilesDirectory, storageName), file.buffer, { flag: 'wx' });
+      written.push(storageName);
+      attachments.push({ name: String(file.originalname).split(/[\\/]/).pop().replace(/[\x00-\x1f]/g, '').slice(0, 180), mimeType: file.mimetype,
+        size: file.size, storageName });
+    }
+    const updated = await DevelopmentDailyReport.findOneAndUpdate(
+      { _id: report._id, status: 'draft', $expr: { $lte: [{ $size: { $ifNull: ['$attachments', []] } }, 3 - attachments.length] } },
+      { $push: { attachments: { $each: attachments } } },
+      { new: true, runValidators: true },
+    );
+    if (!updated) {
+      await Promise.all(written.map((name) => fs.unlink(path.join(reportFilesDirectory, name)).catch(() => {})));
+      return res.status(409).json({ message: 'This report has already been submitted' });
+    }
+    return res.json({ item: updated });
+  } catch (error) {
+    await Promise.all(written.map((name) => fs.unlink(path.join(reportFilesDirectory, name)).catch(() => {})));
+    return res.status(500).json({ message: error.message || 'Unable to upload attachments' });
+  }
+});
+
+router.get('/development/daily-reports/:id/attachments/:attachmentId', async (req, res) => {
+  try {
+    if (!getPermission(req.effectivePermissions, 'daily_reports', 'view'))
+      return res.status(403).json({ message: 'Access denied: daily_reports.view required' });
+    if (!mongoose.isValidObjectId(req.params.id) || !mongoose.isValidObjectId(req.params.attachmentId))
+      return res.status(404).json({ message: 'Attachment not found' });
+    const query = { _id: req.params.id, communityKey: { $in: getAuthorizedCommunities(req.user, req.selectedCommunity) } };
+    if (req.user.role !== 'admin') query.user = req.user.id;
+    const report = await DevelopmentDailyReport.findOne(query);
+    const attachment = report?.attachments?.id(req.params.attachmentId);
+    if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
+    return res.download(path.join(reportFilesDirectory, attachment.storageName), attachment.name);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Unable to download attachment' });
   }
 });
 
@@ -1093,6 +1281,19 @@ router.get('/:resource', async (req, res) => {
       const employee = await User.findById(req.user.id).select('name email team communities role');
       if (!employee) return res.status(404).json({ message: 'Employee not found' });
       query = await buildEmployeeTaskScopeQuery(employee, permission, req.selectedCommunity);
+    }
+    if (req.params.resource === 'projects' && req.user.role === 'employee') {
+      const employee = await User.findById(req.user.id).select('name email communities');
+      if (!employee) return res.status(404).json({ message: 'Employee not found' });
+      const communities = getAuthorizedCommunities(employee, req.selectedCommunity);
+      const assignedTasks = await BusinessProjectTask.find({
+        communityKey: { $in: communities },
+        ...buildAssignedTaskQuery(employee),
+      }).select('project');
+      query = {
+        communityKey: { $in: communities },
+        ...buildProjectMembershipQuery(employee, assignedTasks.map((task) => task.project).filter(Boolean)),
+      };
     }
 
     const items = await config.model.find(query).sort(config.sort);
@@ -1120,36 +1321,62 @@ router.post('/:resource', async (req, res) => {
     if (req.user.roleKey !== 'super_admin' && !req.user.communities.includes(requestedCommunity))
       return res.status(403).json({ message: 'Community access denied' });
     const input = { ...req.body, communityKey: requestedCommunity };
+    if (req.params.resource === 'projects' && ['Development', 'Projects'].includes(input.officeModule || 'Projects')) {
+      const permission = getPermission(req.effectivePermissions, 'projects', 'create');
+      const members = await getDevelopmentProjectMembers(
+        input.memberUserIds,
+        requestedCommunity,
+        req.user,
+        permission,
+      );
+      if (!members)
+        return res.status(400).json({ message: 'Select at least one development team member in this community' });
+      input.memberUserIds = members.map((member) => member._id);
+      input.assignedTeam = members.map((member) => ({ name: member.name, email: member.email }));
+    }
     if (req.params.resource === 'projects' && req.user.role === 'employee') {
       input.team = req.user.team;
       input.ownerUser = req.user.id;
       input.owner = req.user.name;
       input.ownerEmail = req.user.email;
     }
-    if (req.params.resource === 'project-tasks' && req.user.role === 'employee') {
-      const requestedEmail = String(input.assigneeEmail || '')
-        .trim()
-        .toLowerCase();
-      const requestedName = String(input.assignee || '').trim();
-      const selfAssigned =
-        (!requestedEmail && !requestedName) ||
-        (requestedEmail && requestedEmail === req.user.email) ||
-        (!requestedEmail && requestedName === req.user.name);
-      let assignee = req.user;
-      if (!selfAssigned) {
-        const assignmentPermission = getPermission(req.effectivePermissions, 'tasks', 'assign');
-        if (!assignmentPermission)
-          return res.status(403).json({ message: 'Access denied: tasks.assign required' });
-        assignee = await User.findOne({
-          ...buildDevelopmentMemberQuery(req.user, assignmentPermission, [requestedCommunity]),
-          ...(requestedEmail ? { email: requestedEmail } : { name: requestedName }),
-        });
-        if (!assignee)
-          return res.status(400).json({ message: 'Select an assignee in your access scope' });
-      }
+    if (req.params.resource === 'project-tasks' && !mongoose.isValidObjectId(input.project))
+      return res.status(400).json({ message: 'Select a project before creating a task' });
+    const taskProject = req.params.resource === 'project-tasks' && mongoose.isValidObjectId(input.project)
+      ? await BusinessProject.findOne({ _id: input.project, communityKey: requestedCommunity })
+      : null;
+    if (req.params.resource === 'project-tasks' && !taskProject)
+      return res.status(404).json({ message: 'Project not found' });
+    if (
+      req.params.resource === 'project-tasks' &&
+      (input.officeModule === 'Development' || ['Development', 'Projects'].includes(taskProject?.officeModule))
+    ) {
+      if (!mongoose.isValidObjectId(input.project))
+        return res.status(400).json({ message: 'Select a development project first' });
+      const project = taskProject;
+      if (!project || !['Development', 'Projects'].includes(project.officeModule))
+        return res.status(404).json({ message: 'Project not found' });
+      if (!mongoose.isValidObjectId(input.assigneeUser))
+        return res.status(400).json({ message: 'Select a project member as assignee' });
+      if (!project.memberUserIds?.some((id) => String(id) === String(input.assigneeUser)))
+        return res.status(400).json({ message: 'Assignee must be a project member' });
+      if (
+        req.user.role === 'employee' &&
+        String(input.assigneeUser) !== req.user.id &&
+        !getPermission(req.effectivePermissions, 'tasks', 'assign')
+      )
+        return res.status(403).json({ message: 'Access denied: tasks.assign required' });
+      const assignee = await User.findOne({
+        _id: input.assigneeUser,
+        role: 'employee',
+        isDeleted: { $ne: true },
+        communities: requestedCommunity,
+      }).select('_id name email');
+      if (!assignee) return res.status(400).json({ message: 'Project member is unavailable' });
       input.assigneeUser = assignee._id;
       input.assignee = assignee.name;
       input.assigneeEmail = assignee.email;
+      input.projectName = project.name;
     }
     const payload = config.beforeCreate ? await config.beforeCreate(input) : input;
     const item = await config.model.create({ ...payload, createdBy: req.user.id });
@@ -1172,13 +1399,19 @@ router.patch('/:resource/:id', async (req, res) => {
   try {
     const config = resourceConfig[req.params.resource];
     if (!config) return res.status(404).json({ message: 'Resource not found' });
-
-    await ensureDefaults(req.user.id);
-
     if (!getPermission(req.effectivePermissions, config.permissionResource, 'update'))
       return res
         .status(403)
         .json({ message: `Access denied: ${config.permissionResource}.update required` });
+
+    if (
+      req.params.resource === 'project-tasks' &&
+      req.user.role === 'admin' &&
+      (req.body.status !== undefined || req.body.progress !== undefined)
+    )
+      return res.status(403).json({ message: 'Assigned employees update task status and progress' });
+
+    await ensureDefaults(req.user.id);
 
     if (req.user.role !== 'admin') {
       if (req.params.resource !== 'project-tasks' || req.user.role !== 'employee') {
@@ -1208,11 +1441,8 @@ router.patch('/:resource/:id', async (req, res) => {
       const item = await BusinessProjectTask.findOneAndUpdate(
         {
           _id: req.params.id,
-          ...(await buildEmployeeTaskScopeQuery(
-            employee,
-            getPermission(req.effectivePermissions, 'tasks', 'update'),
-            req.selectedCommunity,
-          )),
+          communityKey: { $in: getAuthorizedCommunities(employee, req.selectedCommunity) },
+          ...buildAssignedTaskQuery(employee),
         },
         payload,
         {
@@ -1235,7 +1465,58 @@ router.patch('/:resource/:id', async (req, res) => {
       !req.user.communities.includes(req.body.communityKey)
     )
       return res.status(403).json({ message: 'Community access denied' });
-    const payload = config.beforeCreate ? await config.beforeCreate(req.body) : req.body;
+    const input = { ...req.body };
+    if (
+      req.params.resource === 'projects' &&
+      ['Development', 'Projects'].includes(current.officeModule) &&
+      ((input.communityKey && input.communityKey !== current.communityKey) ||
+        (input.officeModule && input.officeModule !== current.officeModule))
+    ) return res.status(400).json({ message: 'Project work area and module cannot be changed' });
+    if (
+      req.params.resource === 'project-tasks' &&
+      ['Development', 'Projects'].includes(current.officeModule) &&
+      ((input.communityKey && input.communityKey !== current.communityKey) ||
+        (input.project && String(input.project) !== String(current.project)) ||
+        (input.officeModule && input.officeModule !== current.officeModule))
+    ) return res.status(400).json({ message: 'Task project, work area and module cannot be changed' });
+    if (req.params.resource === 'projects' && input.memberUserIds !== undefined) {
+      const members = await getDevelopmentProjectMembers(
+        input.memberUserIds,
+        current.communityKey,
+        req.user,
+        permission,
+      );
+      if (!members)
+        return res.status(400).json({ message: 'Select at least one development team member' });
+      const selectedIds = new Set(members.map((member) => String(member._id)));
+      const removedIds = (current.memberUserIds || []).filter((id) => !selectedIds.has(String(id)));
+      if (removedIds.length && await BusinessProjectTask.exists({
+        project: current._id,
+        assigneeUser: { $in: removedIds },
+        status: { $ne: 'Complete' },
+      }))
+        return res.status(400).json({ message: 'Reassign open tasks before removing a project member' });
+      input.memberUserIds = members.map((member) => member._id);
+      input.assignedTeam = members.map((member) => ({ name: member.name, email: member.email }));
+    }
+    if (req.params.resource === 'project-tasks' && input.assigneeUser !== undefined) {
+      const project = await BusinessProject.findOne({
+        _id: current.project,
+        communityKey: current.communityKey,
+      });
+      if (!project?.memberUserIds?.some((id) => String(id) === String(input.assigneeUser)))
+        return res.status(400).json({ message: 'Assignee must be a project member' });
+      const assignee = await User.findOne({
+        _id: input.assigneeUser,
+        role: 'employee',
+        isDeleted: { $ne: true },
+        communities: current.communityKey,
+      }).select('name email');
+      if (!assignee) return res.status(400).json({ message: 'Project member is unavailable' });
+      input.assignee = assignee.name;
+      input.assigneeEmail = assignee.email;
+    }
+    const payload = config.beforeCreate ? await config.beforeCreate(input) : input;
     const item = await config.model.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,

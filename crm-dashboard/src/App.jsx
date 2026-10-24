@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import DashboardLayout from './components/DashboardLayout';
 import Clients from './pages/Clients';
@@ -26,9 +27,32 @@ import LiveEnquiries from './pages/LiveEnquiries';
 import WebsiteEnquiryComingSoon from './pages/WebsiteEnquiryComingSoon';
 import TeamWorkload from './pages/TeamWorkload';
 import DevelopmentDailyReporting from './pages/DevelopmentDailyReporting';
+import DevelopmentDashboard from './pages/DevelopmentDashboard';
+import { getMyProfile } from './services/businessApi';
 import { getAuthenticatedRole, isSalesSession } from './utils/auth';
 
-const DashboardHome = () => (isSalesSession() ? <SalesDashboard /> : <AdminDashboardHome />);
+const EmployeeDashboardHome = () => {
+  const [profile, setProfile] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    getMyProfile()
+      .then((user) => { if (active) setProfile(user); })
+      .catch(() => { if (active) setError('Unable to load your dashboard'); });
+    return () => { active = false; };
+  }, []);
+  if (error) return <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>;
+  if (!profile) return <div className="h-40 animate-pulse rounded-xl bg-white" />;
+  return profile.officeModule === 'Development'
+    ? <DevelopmentDashboard profile={profile} />
+    : <AdminDashboardHome />;
+};
+
+const DashboardHome = () => {
+  if (getAuthenticatedRole() === 'admin') return <AdminDashboardHome />;
+  if (isSalesSession()) return <SalesDashboard />;
+  return <EmployeeDashboardHome />;
+};
 
 const AppRoutes = () => {
   // Re-render the auth gates after login/logout navigation. Reading the role in
