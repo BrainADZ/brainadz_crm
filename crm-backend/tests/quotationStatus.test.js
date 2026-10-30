@@ -18,9 +18,24 @@ const setup = ({
   pdfFailure = false,
   deleteFailure = false,
   deletedCount = 1,
+  validBackup = true,
 } = {}) => {
   const routes = {};
-  const calls = { saved: 0, email: 0, audit: [], queries: [], deleted: [] };
+  const calls = {
+    saved: 0,
+    email: 0,
+    audit: [],
+    queries: [],
+    deleted: [],
+    created: [],
+    counts: [],
+  };
+  const unit = { _id: '507f1f77bcf86cd799439013', legacyCommunityKey: 'live' };
+  const department = {
+    _id: '507f1f77bcf86cd799439014',
+    name: 'Sales',
+    businessUnitIds: [unit._id],
+  };
   const quotation = {
     _id: quotationId,
     quotationNumber: 'TEST-001',
@@ -30,6 +45,8 @@ const setup = ({
     sentAt: null,
     sentBy: null,
     emailMessageId: '',
+    businessUnitId: unit._id,
+    departmentId: department._id,
     async save() {
       calls.saved += 1;
     },
@@ -56,6 +73,15 @@ const setup = ({
     express: { Router: () => router },
     '../models/Quotation': {
       schema: Quotation.schema,
+      countDocuments: async (filter) => {
+        calls.counts.push(filter);
+        return 2;
+      },
+      create: async (value) => {
+        calls.created.push(value);
+        Object.assign(quotation, value);
+        return quotation;
+      },
       findById: () => query(missing ? null : quotation),
       findOne: (filter) => {
         calls.queries.push(filter);
@@ -67,9 +93,21 @@ const setup = ({
         return { deletedCount };
       },
     },
-    '../models/BusinessUnit': { find: () => ({ sort: () => ({ lean: async () => [] }) }) },
-    '../models/Department': { find: () => ({ sort: () => ({ lean: async () => [] }) }) },
+    '../models/Counter': { findOneAndUpdate: async () => ({ value: 1 }) },
+    '../models/User': {
+      exists: async () => validBackup,
+      find: () => ({ select: () => ({ sort: () => ({ lean: async () => [] }) }) }),
+    },
+    '../models/BusinessUnit': {
+      findOne: async () => unit,
+      find: () => ({ sort: () => ({ lean: async () => [] }) }),
+    },
+    '../models/Department': {
+      findOne: async () => department,
+      find: () => ({ sort: () => ({ lean: async () => [] }) }),
+    },
     '../models/UserAccessAssignment': {
+      exists: async () => validBackup,
       find: () => ({ select: () => ({ lean: async () => [] }) }),
     },
     '../services/quotationPdfService': { generateQuotationPdf: generatePdf },
@@ -259,7 +297,8 @@ test('own scope is applied and inaccessible quotation cannot be changed', async 
     },
   );
   assert.equal(result.statusCode, 404);
-  assert.equal(calls.queries[0].createdBy, actorId);
+  assert.equal(calls.queries[0].$or[0].createdBy, actorId);
+  assert.equal(calls.queries[0].$or[1].backupEmployee, actorId);
   assert.equal(calls.saved, 0);
 });
 
@@ -294,3 +333,104 @@ for (const failure of ['emailFailure', 'pdfFailure']) {
     assert.equal(calls.email, failure === 'emailFailure' ? 1 : 0);
   });
 }
+
+const validBody = {
+  businessUnitId: '507f1f77bcf86cd799439013',
+  departmentId: '507f1f77bcf86cd799439014',
+  clientName: 'Test client',
+  quotationDate: '2026-10-30',
+  validUntil: '2026-11-14',
+  items: [{ description: 'Service', quantity: 1, unitRate: 100, taxRate: 18 }],
+};
+const employee = { user: { _id: actorId, roleKey: 'employee' } };
+const otherId = '507f1f77bcf86cd799439015';
+
+for (const status of ['Sale', 'Accepted']) {
+  for (const route of ['put /:id', 'patch /:id/status', 'post /:id/send']) {
+    test(status + ' blocks ' + route + ' even for admins', async () => {
+      const { request, quotation, calls } = setup();
+      quotation.status = status;
+      const result = await request(route, { ...validBody, status: 'Draft' });
+      assert.equal(result.error?.status, 409);
+      assert.equal(quotation.status, status);
+      assert.equal(calls.saved, 0);
+      assert.equal(calls.email, 0);
+    });
+  }
+}
+
+test('sale is credited to the employee marking it, including a backup employee', async () => {
+  const { request, quotation, calls } = setup();
+  quotation.createdBy = otherId;
+  quotation.backupEmployee = actorId;
+  const result = await request('patch /:id/status', { status: 'Sale' }, employee);
+  assert.equal(result.statusCode, 200);
+  assert.equal(quotation.soldBy, actorId);
+  assert.ok(quotation.soldAt);
+  assert.equal(calls.saved, 1);
+});
+
+test('conversion endpoint counts only the current employee sales', async () => {
+  const { request, calls } = setup();
+  const result = await request(
+    'get /my-conversions',
+    {},
+    { ...employee, effectivePermissions: [] },
+  );
+  assert.equal(result.body.converted, 2);
+  assert.equal(calls.counts[0].soldBy, actorId);
+  assert.equal(calls.counts[0].status, 'Sale');
+});
+
+for (const route of ['put /:id', 'patch /:id/status', 'post /:id/send']) {
+  test('unassigned employee cannot mutate via ' + route, async () => {
+    const { request, quotation, calls } = setup();
+    quotation.createdBy = otherId;
+    const result = await request(route, { ...validBody, status: 'Sent' }, employee);
+    assert.equal(result.error?.status, 403);
+    assert.equal(calls.saved, 0);
+    assert.equal(calls.email, 0);
+  });
+}
+
+test('creation saves the selected backup without treating creation as a revision', async () => {
+  const { request, quotation, calls } = setup();
+  const result = await request('post /', { ...validBody, backupEmployee: otherId }, employee);
+  assert.equal(result.statusCode, 201);
+  assert.equal(calls.created[0].backupEmployee, otherId);
+  assert.equal(quotation.lastRevisedAt, undefined);
+});
+
+test('invalid or out-of-organization backup assignment is rejected', async () => {
+  for (const backupEmployee of ['invalid-id', otherId]) {
+    const { request, calls } = setup({ validBackup: false });
+    const result = await request('post /', { ...validBody, backupEmployee });
+    assert.equal(result.error?.status, 400);
+    assert.equal(calls.created.length, 0);
+  }
+});
+
+test('backup employee can revise and the server records the latest revision time', async () => {
+  const { request, quotation, calls } = setup();
+  quotation.createdBy = otherId;
+  quotation.backupEmployee = actorId;
+  quotation.lastRevisedAt = new Date('2026-01-01');
+  const result = await request(
+    'put /:id',
+    { ...validBody, backupEmployee: actorId, lastRevisedAt: '2000-01-01' },
+    employee,
+  );
+  assert.equal(result.statusCode, 200);
+  assert.equal(calls.saved, 1);
+  assert.ok(quotation.lastRevisedAt.getTime() > new Date('2026-01-01').getTime());
+  assert.equal(quotation.backupEmployee, actorId);
+});
+
+test('backup employee cannot reassign the quotation', async () => {
+  const { request, quotation, calls } = setup();
+  quotation.createdBy = otherId;
+  quotation.backupEmployee = actorId;
+  const result = await request('put /:id', { ...validBody, backupEmployee: otherId }, employee);
+  assert.equal(result.statusCode, 403);
+  assert.equal(calls.saved, 0);
+});

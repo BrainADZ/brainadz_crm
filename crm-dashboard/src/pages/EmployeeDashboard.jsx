@@ -58,6 +58,7 @@ const StatCard = ({ label, value, note, tone, icon }) => (
 
 const EmployeeDashboard = () => {
   const [employee, setEmployee] = useState(null);
+  const [quotationConversions, setQuotationConversions] = useState(0);
   const [assignedRows, setAssignedRows] = useState([]);
   const [assignedDatasets, setAssignedDatasets] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -84,14 +85,17 @@ const EmployeeDashboard = () => {
         datasetsResponse,
         meetingsResponse,
         projectTaskResponse,
+        conversionResponse,
       ] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/employees/me`, { headers }),
         axios.get(`${API_BASE_URL}/api/tasks/employee/assigned-rows`, { headers }),
         axios.get(`${API_BASE_URL}/api/client-datasets/assigned/me`, { headers }),
         axios.get(`${API_BASE_URL}/api/tasks/meetings/me`, { headers }),
         axios.get(`${API_BASE_URL}/api/business/project-tasks`, { headers }),
+        axios.get(`${API_BASE_URL}/api/quotations/my-conversions`, { headers }),
       ]);
 
+      setQuotationConversions(Number(conversionResponse.data.converted || 0));
       setEmployee(employeeResponse.data);
       setAssignedRows(rowsResponse.data);
       setAssignedDatasets(datasetsResponse.data);
@@ -199,7 +203,7 @@ const EmployeeDashboard = () => {
         </p>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Assigned rows"
           value={assignedRows.length}
@@ -212,6 +216,13 @@ const EmployeeDashboard = () => {
               <path d="M10 4v16" />
             </>
           }
+        />
+        <StatCard
+          label="Converted"
+          value={(statusCounts.Converted || 0) + quotationConversions}
+          note={`${quotationConversions} quotation sales`}
+          tone="bg-emerald-50 text-emerald-600"
+          icon={<path d="m5 12 4 4L19 6" />}
         />
         <StatCard
           label="My open tasks"

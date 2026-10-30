@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Quotation = require('../models/Quotation');
+const User = require('../models/User');
 const Counter = require('../models/Counter');
 const BusinessUnit = require('../models/BusinessUnit');
 const Department = require('../models/Department');
@@ -40,7 +41,8 @@ const populateQuotation = (query) =>
     .populate('businessUnitId', 'name slug legacyCommunityKey')
     .populate('departmentId', 'name slug')
     .populate('createdBy', 'name email employeeId position')
-    .populate('sentBy', 'name email');
+    .populate('sentBy', 'name email')
+    .populate('backupEmployee', 'name email employeeId');
 
 const accessOrganization = async (user) => {
   if (user.roleKey === 'super_admin') {
@@ -215,6 +217,46 @@ const assertOrganizationAccess = async (req, businessUnitId, departmentId) => {
   return { unit, department };
 };
 
+const idOf = (value) => String(value?._id || value || '');
+const locked = (quotation) => ['Sale', 'Accepted'].includes(quotation.status);
+const canEditQuotation = (req, quotation) =>
+  req.user.roleKey === 'super_admin' ||
+  [idOf(quotation.createdBy), idOf(quotation.backupEmployee)].includes(idOf(req.user));
+const assertEditable = (req, quotation) => {
+  if (locked(quotation))
+    throw Object.assign(
+      new Error('Sale and Accepted quotations are locked and cannot be updated'),
+      { status: 409 },
+    );
+  if (!canEditQuotation(req, quotation))
+    throw Object.assign(
+      new Error('Only the creator, assigned backup employee or admin can update this quotation'),
+      { status: 403 },
+    );
+};
+const validateBackupEmployee = async (value, unit, department) => {
+  if (!value) return null;
+  if (!mongoose.isValidObjectId(value))
+    throw Object.assign(new Error('Select a valid backup employee'), { status: 400 });
+  const [employee, assignment] = await Promise.all([
+    User.exists({ _id: value, userType: 'employee', accountStatus: 'active', isDeleted: false }),
+    UserAccessAssignment.exists({
+      userId: value,
+      businessUnitIds: unit._id,
+      departmentId: department._id,
+      status: 'active',
+      startDate: { $lte: new Date() },
+      $or: [{ endDate: null }, { endDate: { $gte: new Date() } }],
+    }),
+  ]);
+  if (!employee || !assignment)
+    throw Object.assign(
+      new Error('Backup employee must be active and assigned to this Business Unit and Department'),
+      { status: 400 },
+    );
+  return value;
+};
+
 const findAccessibleQuotation = async (req, quotationId) => {
   if (!mongoose.isValidObjectId(quotationId)) return null;
   if (req.user.roleKey === 'super_admin') return populateQuotation(Quotation.findById(quotationId));
@@ -224,16 +266,50 @@ const findAccessibleQuotation = async (req, quotationId) => {
   ];
   const permission = req.effectivePermissions.find((item) => item.resource === 'quotations');
   const scopeQuery = ['OWN', 'ASSIGNED', 'self', 'assigned'].includes(permission?.scope)
-    ? { createdBy: req.user._id }
+    ? { $or: [{ createdBy: req.user._id }, { backupEmployee: req.user._id }] }
     : { businessUnitId: { $in: businessUnitIds } };
   return populateQuotation(Quotation.findOne({ _id: quotationId, ...scopeQuery }));
 };
 
+// Authenticated users may read only their own conversion count, regardless of module permissions.
+router.get('/my-conversions', async (req, res, next) => {
+  try {
+    const converted = await Quotation.countDocuments({ status: 'Sale', soldBy: req.user._id });
+    return res.json({ converted });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/options', requirePermission('quotations', 'view'), async (req, res, next) => {
   try {
     const organization = await accessOrganization(req.user);
+    const assignments = await UserAccessAssignment.find({
+      businessUnitIds: { $in: organization.businessUnits.map((unit) => unit._id) },
+      departmentId: { $in: organization.departments.map((department) => department._id) },
+      status: 'active',
+      startDate: { $lte: new Date() },
+      $or: [{ endDate: null }, { endDate: { $gte: new Date() } }],
+    })
+      .select('userId businessUnitIds departmentId')
+      .lean();
+    const employees = await User.find({
+      _id: { $in: assignments.map((assignment) => assignment.userId) },
+      userType: 'employee',
+      accountStatus: 'active',
+      isDeleted: false,
+    })
+      .select('name email employeeId')
+      .sort({ name: 1 })
+      .lean();
     return res.json({
       ...organization,
+      currentUserId: req.user._id,
+      isAdmin: req.user.roleKey === 'super_admin',
+      backupEmployees: employees.map((employee) => ({
+        ...employee,
+        assignments: assignments.filter((assignment) => idOf(assignment.userId) === idOf(employee)),
+      })),
       canDelete:
         req.user.roleKey === 'super_admin' &&
         Boolean(getPermission(req.effectivePermissions, 'quotations', 'delete')),
@@ -256,7 +332,7 @@ router.get('/', requirePermission('quotations', 'view'), async (req, res, next) 
       ];
       const permission = req.effectivePermissions.find((item) => item.resource === 'quotations');
       query = ['OWN', 'ASSIGNED', 'self', 'assigned'].includes(permission?.scope)
-        ? { createdBy: req.user._id }
+        ? { $or: [{ createdBy: req.user._id }, { backupEmployee: req.user._id }] }
         : { businessUnitId: { $in: businessUnitIds } };
     }
     const quotations = await populateQuotation(Quotation.find(query).sort({ createdAt: -1 }));
@@ -289,9 +365,7 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
     )
       return res.status(400).json({ message: 'Select valid quotation and expiry dates' });
     const quotationMode =
-      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental'
-        ? 'rental'
-        : 'sale';
+      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental' ? 'rental' : 'sale';
     const totals = calculateTotals(
       req.body.items,
       req.body.discountType,
@@ -299,6 +373,7 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       quotationMode,
     );
     const customFields = normalizeCustomFields(req.body.customFields);
+    const backupEmployee = await validateBackupEmployee(req.body.backupEmployee, unit, department);
     const quotationNumber = await nextQuotationNumber(unit.legacyCommunityKey);
     const quotation = await Quotation.create({
       quotationNumber,
@@ -306,9 +381,12 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       departmentId: department._id,
       communityKey: unit.legacyCommunityKey,
       createdBy: req.user._id,
+      backupEmployee,
       clientName: String(req.body.clientName).trim(),
       clientCompany: String(req.body.clientCompany || '').trim(),
-      clientGstin: String(req.body.clientGstin || '').trim().toUpperCase(),
+      clientGstin: String(req.body.clientGstin || '')
+        .trim()
+        .toUpperCase(),
       clientEmail,
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
@@ -335,7 +413,7 @@ router.post('/', requirePermission('quotations', 'create'), async (req, res, nex
       action: 'quotation_created',
       resource: 'quotations',
       resourceId: quotation._id,
-      newValue: { quotationNumber, clientEmail, grandTotal: totals.grandTotal },
+      newValue: { quotationNumber, clientEmail, grandTotal: totals.grandTotal, backupEmployee },
     });
     return res.status(201).json({
       message: `${quotationNumber} created successfully`,
@@ -350,6 +428,7 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
   try {
     const quotation = await findAccessibleQuotation(req, req.params.id);
     if (!quotation) return res.status(404).json({ message: 'Quotation not found' });
+    assertEditable(req, quotation);
     const { unit, department } = await assertOrganizationAccess(
       req,
       req.body.businessUnitId,
@@ -371,27 +450,58 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
     )
       return res.status(400).json({ message: 'Select valid quotation and expiry dates' });
     const quotationMode =
-      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental'
-        ? 'rental'
-        : 'sale';
+      unit.legacyCommunityKey === 'live' && req.body.quotationMode === 'rental' ? 'rental' : 'sale';
     const totals = calculateTotals(
       req.body.items,
       req.body.discountType,
       req.body.discountValue,
       quotationMode,
     );
+    const isOwnerOrAdmin =
+      req.user.roleKey === 'super_admin' || idOf(quotation.createdBy) === idOf(req.user);
+    if (
+      !isOwnerOrAdmin &&
+      (idOf(quotation.businessUnitId) !== idOf(unit) ||
+        idOf(quotation.departmentId) !== idOf(department))
+    )
+      return res
+        .status(403)
+        .json({
+          message: 'Backup employees cannot change the quotation Business Unit or Department',
+        });
+    const backupEmployee = await validateBackupEmployee(
+      req.body.backupEmployee === undefined
+        ? idOf(quotation.backupEmployee)
+        : req.body.backupEmployee,
+      unit,
+      department,
+    );
+    if (
+      idOf(backupEmployee) !== idOf(quotation.backupEmployee) &&
+      req.user.roleKey !== 'super_admin' &&
+      idOf(quotation.createdBy) !== idOf(req.user)
+    )
+      return res
+        .status(403)
+        .json({ message: 'Only the creator or admin can change the backup employee' });
     const previousValue = {
       clientEmail: quotation.clientEmail,
       grandTotal: quotation.grandTotal,
       status: quotation.status,
+      backupEmployee: idOf(quotation.backupEmployee),
+      lastRevisedAt: quotation.lastRevisedAt,
     };
     Object.assign(quotation, {
+      backupEmployee,
+      lastRevisedAt: new Date(),
       businessUnitId: unit._id,
       departmentId: department._id,
       communityKey: unit.legacyCommunityKey,
       clientName: String(req.body.clientName).trim(),
       clientCompany: String(req.body.clientCompany || '').trim(),
-      clientGstin: String(req.body.clientGstin || '').trim().toUpperCase(),
+      clientGstin: String(req.body.clientGstin || '')
+        .trim()
+        .toUpperCase(),
       clientEmail,
       clientPhone: String(req.body.clientPhone || '').trim(),
       clientAddress: String(req.body.clientAddress || '').trim(),
@@ -424,7 +534,13 @@ router.put('/:id', requirePermission('quotations', 'update'), async (req, res, n
       resource: 'quotations',
       resourceId: quotation._id,
       previousValue,
-      newValue: { clientEmail, grandTotal: totals.grandTotal, status: 'Draft' },
+      newValue: {
+        clientEmail,
+        grandTotal: totals.grandTotal,
+        status: 'Draft',
+        backupEmployee,
+        lastRevisedAt: quotation.lastRevisedAt,
+      },
     });
     return res.json({
       message: `${quotation.quotationNumber} updated successfully`,
@@ -471,10 +587,15 @@ router.patch('/:id/status', requirePermission('quotations', 'update'), async (re
     }
     const quotation = await findAccessibleQuotation(req, req.params.id);
     if (!quotation) return res.status(404).json({ message: 'Quotation not found' });
+    assertEditable(req, quotation);
     const previousStatus = quotation.status;
     if (previousStatus !== status) {
       // Manual status changes do not send email or replace actual delivery metadata.
       quotation.status = status;
+      if (status === 'Sale') {
+        quotation.soldBy = req.user._id;
+        quotation.soldAt = new Date();
+      }
       await quotation.save();
       await writeAuditLog({
         req,
@@ -511,11 +632,7 @@ router.post('/:id/send', requirePermission('quotations', 'create'), async (req, 
   try {
     const quotation = await findAccessibleQuotation(req, req.params.id);
     if (!quotation) return res.status(404).json({ message: 'Quotation not found' });
-    if (
-      req.user.roleKey !== 'super_admin' &&
-      String(quotation.createdBy?._id || quotation.createdBy) !== String(req.user._id)
-    )
-      return res.status(403).json({ message: 'You can send only quotations created by you' });
+    assertEditable(req, quotation);
     if (!quotation.clientEmail)
       return res.status(400).json({ message: 'Add a client email before sending the quotation' });
     const pdf = await generateDocumentPdf(quotation);

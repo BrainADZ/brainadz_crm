@@ -39,6 +39,7 @@ const UNIT_OPTIONS = ['Unit', 'Square Feet', 'Meter', 'Lot'];
 const STATUS_STYLES = {
   Draft: 'bg-amber-50 text-amber-700',
   Sent: 'bg-blue-50 text-blue-700',
+  Sale: 'bg-emerald-50 text-emerald-700',
   Accepted: 'bg-emerald-50 text-emerald-700',
   Rejected: 'bg-red-50 text-red-700',
   Expired: 'bg-slate-100 text-slate-600',
@@ -54,6 +55,7 @@ const MARKETING_SERVICES = [
 const blankForm = () => ({
   businessUnitId: '',
   departmentId: '',
+  backupEmployee: '',
   clientName: '',
   clientCompany: '',
   clientGstin: '',
@@ -332,6 +334,27 @@ const Quotations = () => {
     [quotations, search, statusFilter],
   );
 
+  const isLocked = (quotation) => ['Sale', 'Accepted'].includes(quotation.status);
+  const canEdit = (quotation) =>
+    !isLocked(quotation) &&
+    options.actions.includes('update') &&
+    (options.isAdmin ||
+      [idOf(quotation.createdBy), idOf(quotation.backupEmployee)].includes(
+        idOf(options.currentUserId),
+      ));
+  const editingQuotation = quotations.find((quotation) => quotation._id === editingId);
+  const canAssignBackup =
+    !editingId ||
+    options.isAdmin ||
+    idOf(editingQuotation?.createdBy) === idOf(options.currentUserId);
+  const backupEmployees = (options.backupEmployees || []).filter((employee) =>
+    employee.assignments.some(
+      (assignment) =>
+        idOf(assignment.departmentId) === form.departmentId &&
+        assignment.businessUnitIds.map(idOf).includes(form.businessUnitId),
+    ),
+  );
+
   const openCreate = () => {
     const unit = options.businessUnits[0];
     const department =
@@ -344,11 +367,13 @@ const Quotations = () => {
     setModalOpen(true);
   };
   const openEdit = (quotation) => {
+    if (!canEdit(quotation)) return;
     setEditingId(quotation._id);
     setForm({
       ...blankForm(),
       businessUnitId: idOf(quotation.businessUnitId),
       departmentId: idOf(quotation.departmentId),
+      backupEmployee: idOf(quotation.backupEmployee),
       clientName: quotation.clientName || '',
       clientCompany: quotation.clientCompany || '',
       clientGstin: quotation.clientGstin || '',
@@ -608,7 +633,7 @@ const Quotations = () => {
             {options.actions.includes('update') && (
               <p className="mt-1 text-xs text-slate-500">
                 Change status in the table. Use Send to email the client and mark it Sent
-                automatically.
+                automatically. Sale and Accepted quotations are locked.
               </p>
             )}
           </div>
@@ -634,6 +659,8 @@ const Quotations = () => {
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Business Unit</th>
                 <th className="px-4 py-3">Created by</th>
+                <th className="px-4 py-3">Backup employee</th>
+                <th className="px-4 py-3">Last revised</th>
                 <th className="px-4 py-3">Validity</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3">Status</th>
@@ -664,6 +691,16 @@ const Quotations = () => {
                     <p className="text-xs text-slate-500">{quotation.createdBy?.employeeId}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">
+                    {quotation.backupEmployee?.name ||
+                      quotation.backupEmployee?.email ||
+                      'Not assigned'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {quotation.lastRevisedAt
+                      ? new Date(quotation.lastRevisedAt).toLocaleString('en-IN')
+                      : 'Not revised'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
                     {quotation.quotationDate}
                     <span className="block">to {quotation.validUntil}</span>
                   </td>
@@ -671,7 +708,7 @@ const Quotations = () => {
                     {money(quotation.grandTotal)}
                   </td>
                   <td className="px-4 py-3">
-                    {options.actions.includes('update') ? (
+                    {canEdit(quotation) ? (
                       <div>
                         <select
                           aria-label={`Status for ${quotation.quotationNumber}`}
@@ -702,7 +739,7 @@ const Quotations = () => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
-                      {options.actions.includes('update') && (
+                      {canEdit(quotation) && (
                         <button
                           type="button"
                           title="Edit quotation"
@@ -727,7 +764,14 @@ const Quotations = () => {
                         onClick={() => sendQuotation(quotation)}
                         disabled={
                           Boolean(sendingId || updatingStatusId || deletingId) ||
-                          !options.actions.includes('create')
+                          !options.actions.includes('create') ||
+                          isLocked(quotation) ||
+                          !(
+                            options.isAdmin ||
+                            [idOf(quotation.createdBy), idOf(quotation.backupEmployee)].includes(
+                              idOf(options.currentUserId),
+                            )
+                          )
                         }
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
                       >
@@ -753,7 +797,7 @@ const Quotations = () => {
               ))}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan="8" className="px-4 py-16 text-center">
+                  <td colSpan="10" className="px-4 py-16 text-center">
                     <FileText size={30} className="mx-auto text-slate-300" />
                     <p className="mt-3 font-semibold text-slate-600">No quotations found</p>
                   </td>
@@ -761,7 +805,7 @@ const Quotations = () => {
               )}
               {loading && (
                 <tr>
-                  <td colSpan="8" className="px-4 py-16 text-center text-slate-500">
+                  <td colSpan="10" className="px-4 py-16 text-center text-slate-500">
                     Loading quotations...
                   </td>
                 </tr>
@@ -832,6 +876,7 @@ const Quotations = () => {
                     <span className={labelClass}>Business Unit *</span>
                     <select
                       required
+                      disabled={!canAssignBackup}
                       value={form.businessUnitId}
                       onChange={(event) => {
                         const businessUnitId = event.target.value;
@@ -844,6 +889,7 @@ const Quotations = () => {
                         updateForm({
                           businessUnitId,
                           departmentId: idOf(department),
+                          backupEmployee: '',
                           quotationMode:
                             unit?.legacyCommunityKey === 'live' ? form.quotationMode : 'sale',
                         });
@@ -910,6 +956,32 @@ const Quotations = () => {
                   </label>
                 </div>
               </section>
+              <section className="rounded-xl border border-slate-200 p-4">
+                <label>
+                  <span className={labelClass}>Backup employee (can update in your absence)</span>
+                  <select
+                    value={form.backupEmployee}
+                    disabled={!canAssignBackup}
+                    onChange={(event) => updateForm({ backupEmployee: event.target.value })}
+                    className={inputClass}
+                  >
+                    <option value="">No backup employee</option>
+                    {form.backupEmployee &&
+                      !backupEmployees.some(
+                        (employee) => idOf(employee) === form.backupEmployee,
+                      ) && <option value={form.backupEmployee}>Current backup employee</option>}
+                    {backupEmployees.map((employee) => (
+                      <option key={employee._id} value={employee._id}>
+                        {employee.name || employee.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="mt-2 text-xs text-slate-500">
+                  Select an employee from this Business Unit and Department. Only the creator or
+                  admin can change this assignment.
+                </p>
+              </section>
               <ProposalOptions active={marketingDepartment} form={form} setForm={setForm} />
               <section>
                 <h3 className="mb-3 text-sm font-semibold text-slate-900">Client details</h3>
@@ -953,7 +1025,9 @@ const Quotations = () => {
                     <input
                       maxLength={15}
                       value={form.clientGstin}
-                      onChange={(event) => updateForm({ clientGstin: event.target.value.toUpperCase() })}
+                      onChange={(event) =>
+                        updateForm({ clientGstin: event.target.value.toUpperCase() })
+                      }
                       placeholder="Enter client GSTIN"
                       className={inputClass}
                     />

@@ -64,6 +64,7 @@ const summaryFor = (dataset) => {
 
 const SalesDashboard = () => {
   const [datasets, setDatasets] = useState([]);
+  const [quotationConversions, setQuotationConversions] = useState(0);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,10 +74,12 @@ const SalesDashboard = () => {
     setError('');
     try {
       const headers = getAdminHeaders();
-      const [datasetResponse, meetingResponse] = await Promise.all([
+      const [datasetResponse, meetingResponse, conversionResponse] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/client-datasets`, { headers }),
         axios.get(`${API_BASE_URL}/api/meetings`, { headers }),
+        axios.get(`${API_BASE_URL}/api/quotations/my-conversions`, { headers }),
       ]);
+      setQuotationConversions(Number(conversionResponse.data.converted || 0));
       setDatasets(Array.isArray(datasetResponse.data) ? datasetResponse.data : []);
       setMeetings(Array.isArray(meetingResponse.data) ? meetingResponse.data : []);
     } catch (requestError) {
@@ -143,8 +146,8 @@ const SalesDashboard = () => {
     },
     {
       label: 'Converted',
-      value: totals.convertedRows,
-      note: 'Closed successfully',
+      value: totals.convertedRows + quotationConversions,
+      note: `${quotationConversions} quotation sales + ${totals.convertedRows} converted leads`,
       icon: CheckCircle2,
       tone: 'bg-emerald-50 text-emerald-700',
     },
@@ -212,8 +215,12 @@ const SalesDashboard = () => {
             className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
           >
             <div className="flex items-start justify-between">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}><Icon size={17} /></span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Live</span>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}>
+                <Icon size={17} />
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Live
+              </span>
             </div>
             {loading ? (
               <div className="mt-4 h-8 w-16 animate-pulse rounded bg-slate-200" />
@@ -232,13 +239,23 @@ const SalesDashboard = () => {
           <DonutChart items={pipelineItems} centerValue={totals.totalRows} centerLabel="Leads" />
         </Panel>
         <Panel title="Wins by account list" subtitle="Converted leads across recent lists">
-          <BarChart items={listPerformance.length ? listPerformance : [{ label: 'No conversions yet', value: 0 }]} />
+          <BarChart
+            items={
+              listPerformance.length ? listPerformance : [{ label: 'No conversions yet', value: 0 }]
+            }
+          />
         </Panel>
         <Panel title="Conversion health" subtitle="Overall sales efficiency">
           <ConversionGauge value={conversionRate} />
           <div className="grid grid-cols-2 border-t border-slate-100 text-center">
-            <div className="p-3"><p className="text-lg font-bold text-blue-700">{totals.interestedRows}</p><p className="text-[10px] uppercase text-slate-400">Interested</p></div>
-            <div className="border-l border-slate-100 p-3"><p className="text-lg font-bold text-red-500">{totals.lostRows}</p><p className="text-[10px] uppercase text-slate-400">Lost</p></div>
+            <div className="p-3">
+              <p className="text-lg font-bold text-blue-700">{totals.interestedRows}</p>
+              <p className="text-[10px] uppercase text-slate-400">Interested</p>
+            </div>
+            <div className="border-l border-slate-100 p-3">
+              <p className="text-lg font-bold text-red-500">{totals.lostRows}</p>
+              <p className="text-[10px] uppercase text-slate-400">Lost</p>
+            </div>
           </div>
         </Panel>
       </section>

@@ -94,15 +94,24 @@ const quotationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Draft', 'Sent', 'Accepted', 'Rejected', 'Expired'],
+      enum: ['Draft', 'Sent', 'Sale', 'Accepted', 'Rejected', 'Expired'],
       default: 'Draft',
       index: true,
     },
+    backupEmployee: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    lastRevisedAt: { type: Date, default: null },
+    soldBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    soldAt: { type: Date, default: null },
     sentAt: { type: Date, default: null },
     sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     emailMessageId: { type: String, default: '' },
   },
-  { timestamps: true },
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 quotationSchema.index({ businessUnitId: 1, createdAt: -1 });
